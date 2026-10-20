@@ -1,0 +1,8 @@
+name = "sistema-mae-encomendas"
+compatibility_date = "2026-10-20"
+pages_build_output_dir = "dist"
+
+[env.production]
+routes = [
+  { pattern = "app.encomendasfarmacia.com.br/*", zone_name = "encomendasfarmacia.com.br" }
+]
