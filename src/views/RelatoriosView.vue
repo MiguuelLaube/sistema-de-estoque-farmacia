@@ -147,7 +147,7 @@ function exportarRelatorioFinanceiro() {
       <button
         v-if="activeRelatorioTab === 'financeiro'"
         @click="exportarRelatorioFinanceiro"
-        class="btn btn-secondary"
+        class="btn-outline-emerald"
         id="btn-exportar-relatorio"
       >
         <FileSpreadsheet :size="16" />
@@ -156,31 +156,19 @@ function exportarRelatorioFinanceiro() {
     </div>
 
     <!-- Navigation Tabs -->
-    <div style="display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 1.5rem;">
+    <div class="sub-tabs-container" style="margin-bottom: 1.5rem;">
       <button
         @click="activeRelatorioTab = 'financeiro'"
-        class="btn btn-sm"
-        :style="{
-          background: activeRelatorioTab === 'financeiro' ? 'var(--color-primary)' : 'transparent',
-          color: activeRelatorioTab === 'financeiro' ? '#ffffff' : 'var(--text-muted)',
-          fontWeight: 600,
-          border: 'none',
-          padding: '0.6rem 1rem'
-        }"
+        class="sub-tab-btn"
+        :class="{ active: activeRelatorioTab === 'financeiro' }"
       >
         Valores a Receber por Cliente
       </button>
 
       <button
         @click="activeRelatorioTab = 'produtos'"
-        class="btn btn-sm"
-        :style="{
-          background: activeRelatorioTab === 'produtos' ? 'var(--color-primary)' : 'transparent',
-          color: activeRelatorioTab === 'produtos' ? '#ffffff' : 'var(--text-muted)',
-          fontWeight: 600,
-          border: 'none',
-          padding: '0.6rem 1rem'
-        }"
+        class="sub-tab-btn"
+        :class="{ active: activeRelatorioTab === 'produtos' }"
       >
         Curva de Medicamentos Mais Pedidos
       </button>
@@ -188,14 +176,8 @@ function exportarRelatorioFinanceiro() {
       <button
         v-if="authStore.isAdmin"
         @click="activeRelatorioTab = 'auditoria'"
-        class="btn btn-sm"
-        :style="{
-          background: activeRelatorioTab === 'auditoria' ? 'var(--color-primary)' : 'transparent',
-          color: activeRelatorioTab === 'auditoria' ? '#ffffff' : 'var(--text-muted)',
-          fontWeight: 600,
-          border: 'none',
-          padding: '0.6rem 1rem'
-        }"
+        class="sub-tab-btn"
+        :class="{ active: activeRelatorioTab === 'auditoria' }"
       >
         Trilha de Auditoria & LGPD
       </button>

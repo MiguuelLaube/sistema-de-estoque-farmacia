@@ -58,64 +58,66 @@ function abrirWhatsApp(encomenda: any) {
 
 <template>
   <div class="dashboard-page">
-    <!-- Header with Quick Action -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+    <!-- Header with Quick Action (matching Base44 Dashboard) -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
       <div>
-        <h2 style="font-size: 1.5rem; font-weight: 800;">Painel de Controle</h2>
-        <p style="color: var(--text-muted); font-size: 0.9rem;">
-          Visão unificada das operações de encomendas e reposição da {{ authStore.currentTenant.nome_empresa }}
+        <h1 style="font-size: 1.85rem; font-weight: 700; color: var(--text-main); font-family: var(--font-heading);">
+          Bem-vindo
+        </h1>
+        <p style="color: var(--text-muted); font-size: 0.95rem; margin-top: 2px;">
+          Painel de controle da {{ authStore.currentConfig.header_title || 'Drogaria Aeroporto' }}
         </p>
       </div>
 
       <button
-        @click="router.push('/encomendas?acao=nova')"
-        class="btn btn-primary"
+        @click="router.push('/nova-encomenda')"
+        class="btn-primary-pill"
         id="btn-dashboard-nova-encomenda"
       >
-        <Plus :size="18" />
+        <Plus :size="16" />
         <span>Nova Encomenda</span>
       </button>
     </div>
 
-    <!-- Stat Grid (Regra 5.5: Consulta Única sem Divergências) -->
-    <div class="stat-grid">
-      <div class="stat-card" id="card-stat-total">
+    <!-- Stat Grid (Drogaria Aeroporto 4 Key Metrics: Clientes Cadastrados, Total, Pendentes, Entregues) -->
+    <div class="stat-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem;">
+      <div class="stat-card" id="card-stat-clientes" style="cursor: pointer;" @click="router.push('/clientes')">
         <div class="stat-info">
-          <div class="stat-label">Total Encomendas</div>
+          <div class="stat-label">Clientes Cadastrados</div>
+          <div class="stat-value">{{ totalClientes }}</div>
+        </div>
+        <div class="stat-icon" style="background: hsla(var(--primary), 0.1); color: var(--color-primary);">
+          <Users :size="24" />
+        </div>
+      </div>
+
+      <div class="stat-card" id="card-stat-total" style="cursor: pointer;" @click="router.push('/encomendas')">
+        <div class="stat-info">
+          <div class="stat-label">Total de Encomendas</div>
           <div class="stat-value">{{ metricas.total }}</div>
         </div>
-        <div class="stat-icon" style="background: rgba(37, 99, 235, 0.1); color: #2563eb;">
+        <div class="stat-icon" style="background: #eff6ff; color: #2563eb;">
           <PackageOpen :size="24" />
         </div>
       </div>
 
-      <div class="stat-card" id="card-stat-pendentes">
+      <div class="stat-card" id="card-stat-pendentes" style="cursor: pointer;" @click="router.push('/encomendas')">
         <div class="stat-info">
-          <div class="stat-label">Pendentes</div>
+          <div class="stat-label">Encomendas Pendentes</div>
           <div class="stat-value" style="color: #d97706;">{{ metricas.pendentes }}</div>
         </div>
-        <div class="stat-icon" style="background: #fef3c7; color: #d97706;">
+        <div class="stat-icon" style="background: #fffbeb; color: #d97706;">
           <Clock :size="24" />
         </div>
       </div>
 
-      <div class="stat-card" id="card-stat-entregues">
+      <div class="stat-card" id="card-stat-entregues" style="cursor: pointer;" @click="router.push('/encomendas')">
         <div class="stat-info">
-          <div class="stat-label">Entregues</div>
-          <div class="stat-value" style="color: #16a34a;">{{ metricas.entregues }}</div>
+          <div class="stat-label">Encomendas Entregues</div>
+          <div class="stat-value" style="color: #059669;">{{ metricas.entregues }}</div>
         </div>
-        <div class="stat-icon" style="background: #dcfce7; color: #16a34a;">
+        <div class="stat-icon" style="background: #ecfdf5; color: #059669;">
           <CheckCircle2 :size="24" />
-        </div>
-      </div>
-
-      <div class="stat-card" id="card-stat-clientes">
-        <div class="stat-info">
-          <div class="stat-label">Clientes Ativos</div>
-          <div class="stat-value">{{ totalClientes }}</div>
-        </div>
-        <div class="stat-icon" style="background: #e0e7ff; color: #4338ca;">
-          <Users :size="24" />
         </div>
       </div>
 
@@ -170,11 +172,12 @@ function abrirWhatsApp(encomenda: any) {
 
             <button
               @click="abrirWhatsApp(enc)"
-              class="btn btn-whatsapp btn-sm"
+              class="btn-outline-emerald"
+              style="padding: 0.35rem 0.85rem; font-size: 0.8rem;"
               :id="'btn-whatsapp-' + enc.id"
               title="Abrir WhatsApp Web / App com mensagem padrão"
             >
-              <Send :size="14" />
+              <Send :size="13" />
               <span>Avisar WhatsApp</span>
             </button>
           </div>

@@ -1,39 +1,48 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useClientesStore } from '../stores/clientes';
 import { useEncomendasStore } from '../stores/encomendas';
+import HistoricoClienteModal from '../components/HistoricoClienteModal.vue';
 import type { Cliente } from '../types';
 import {
-  UserPlus,
+  Plus,
   Search,
+  Phone,
+  Package,
+  Pencil,
+  Trash2,
+  X,
   AlertTriangle,
-  Archive,
-  Edit2,
+  User,
+  Download,
+  ShieldCheck,
   Eye,
   EyeOff,
-  FileDown,
-  X,
-  CheckCircle,
+  History,
+  ChevronRight,
 } from 'lucide-vue-next';
 
+const route = useRoute();
+const router = useRouter();
 const clientesStore = useClientesStore();
 const encomendasStore = useEncomendasStore();
 
 // UI States
 const buscaTexto = ref('');
-const formularioAberto = ref(false); // Recolhido por padrão (Spec 5.7 & 8)
+const showClienteModal = ref(false);
 const clienteEmEdicao = ref<Cliente | null>(null);
-const desmascarados = ref<Record<string, boolean>>({});
+const showHistoricoModal = ref(false);
+const clienteHistorico = ref<Cliente | null>(null);
 
 // Form Model
 const formNome = ref('');
 const formTelefone = ref('');
 const formCpf = ref('');
 const formEndereco = ref('');
-const formBaseLegal = ref('execucao_contrato');
 const alertaDuplicidade = ref<string | null>(null);
 
-// Clientes Enriquecidos com contagem de pedidos e saldo em aberto
+// Clientes Enriquecidos com contagem de pedidos
 const clientesEnriquecidos = computed(() => {
   const q = buscaTexto.value.toLowerCase().trim();
 
@@ -41,15 +50,9 @@ const clientesEnriquecidos = computed(() => {
     .filter((c) => !c.arquivado_em)
     .map((c) => {
       const pedidosDoCliente = encomendasStore.currentTenantEncomendas.filter((e) => e.cliente_id === c.id);
-      const totalPedidos = pedidosDoCliente.length;
-      const totalEmAberto = pedidosDoCliente.reduce((acc, curr) => {
-        return acc + Math.max(0, curr.valor_total - curr.valor_pago);
-      }, 0);
-
       return {
         ...c,
-        encomendas_count: totalPedidos,
-        total_em_aberto: totalEmAberto,
+        encomendas_count: pedidosDoCliente.length,
       };
     })
     .filter((c) => {
@@ -60,32 +63,6 @@ const clientesEnriquecidos = computed(() => {
       return nomeMatch || telMatch || cpfMatch;
     });
 });
-
-function formatarMoeda(val: number) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-}
-
-// Mascaramento LGPD (Spec 7.2)
-function mascararCPF(cpf?: string): string {
-  if (!cpf) return 'Não informado';
-  const clean = cpf.replace(/\D/g, '');
-  if (clean.length === 11) {
-    return `${clean.slice(0, 3)}.***.***-${clean.slice(9)}`;
-  }
-  return cpf;
-}
-
-function mascararTelefone(tel: string): string {
-  const clean = tel.replace(/\D/g, '');
-  if (clean.length >= 10) {
-    return `(${clean.slice(0, 2)}) 9****-${clean.slice(-4)}`;
-  }
-  return tel;
-}
-
-function alternarExibicaoCompleta(id: string) {
-  desmascarados.value[id] = !desmascarados.value[id];
-}
 
 function verificarDuplicidadeTempoReal() {
   if (formNome.value.length > 2 || formTelefone.value.length > 6 || formCpf.value.length > 5) {
@@ -107,9 +84,13 @@ function abrirFormularioNovo() {
   formTelefone.value = '';
   formCpf.value = '';
   formEndereco.value = '';
-  formBaseLegal.value = 'execucao_contrato';
   alertaDuplicidade.value = null;
-  formularioAberto.value = true;
+  showClienteModal.value = true;
+}
+
+function abrirHistorico(c: Cliente) {
+  clienteHistorico.value = c;
+  showHistoricoModal.value = true;
 }
 
 function abrirEdicao(c: Cliente) {
@@ -118,10 +99,19 @@ function abrirEdicao(c: Cliente) {
   formTelefone.value = c.telefone;
   formCpf.value = c.cpf || '';
   formEndereco.value = c.endereco || '';
-  formBaseLegal.value = c.base_legal || 'execucao_contrato';
   alertaDuplicidade.value = null;
-  formularioAberto.value = true;
+  showClienteModal.value = true;
 }
+
+onMounted(() => {
+  const clienteIdUrl = route.query.historico as string;
+  if (clienteIdUrl) {
+    const c = clientesStore.allClientes.find((x) => x.id === clienteIdUrl);
+    if (c) {
+      abrirHistorico(c);
+    }
+  }
+});
 
 function salvarCliente() {
   if (!formNome.value.trim() || !formTelefone.value.trim()) {
@@ -129,13 +119,15 @@ function salvarCliente() {
     return;
   }
 
-  // Validação de CPF caso informado
-  if (formCpf.value.trim()) {
-    const cpfValido = clientesStore.validarCPF(formCpf.value);
-    if (!cpfValido) {
-      alert('O CPF informado possui dígitos verificadores inválidos.');
-      return;
-    }
+  formNome.value = formNome.value.trim().toUpperCase();
+
+  const cleanTel = formTelefone.value.replace(/\D/g, '');
+  const duplicado = clientesStore.currentTenantClientes.find(
+    (c) => c.id !== clienteEmEdicao.value?.id && c.telefone.replace(/\D/g, '') === cleanTel
+  );
+  if (duplicado) {
+    alert(`Não é permitido cadastrar telefones duplicados. Já associado a: ${duplicado.nome}`);
+    return;
   }
 
   if (clienteEmEdicao.value) {
@@ -144,274 +136,354 @@ function salvarCliente() {
       telefone: formTelefone.value,
       cpf: formCpf.value || undefined,
       endereco: formEndereco.value || undefined,
-      base_legal: formBaseLegal.value,
     });
-    alert('Cadastro do cliente atualizado com sucesso.');
   } else {
     clientesStore.adicionarCliente({
       nome: formNome.value,
       telefone: formTelefone.value,
       cpf: formCpf.value || undefined,
       endereco: formEndereco.value || undefined,
-      base_legal: formBaseLegal.value,
+      base_legal: 'execucao_contrato',
     });
-    alert('Novo cliente cadastrado com sucesso.');
   }
 
-  formularioAberto.value = false;
+  showClienteModal.value = false;
 }
 
-// Arquivamento no lugar de exclusão (Spec 5.6 & 5.7)
-function arquivarCliente(c: Cliente) {
-  const confirmacao = confirm(`Deseja arquivar o cliente "${c.nome}"? Seu histórico continuará preservado.`);
-  if (confirmacao) {
+function removerCliente(c: Cliente) {
+  if (confirm(`Deseja arquivar o cliente "${c.nome}"?\n\n(Para exercer o direito de esquecimento/anonimização conforme a LGPD, abra a edição do cliente e clique em "Anonimizar Titular")`)) {
     clientesStore.arquivarCliente(c.id);
   }
 }
 
-// Exportação de Dados do Titular (LGPD Art. 18 / Marco Civil - Spec 7.2)
-function exportarDadosTitular(c: Cliente) {
-  const pedidos = encomendasStore.currentTenantEncomendas.filter((e) => e.cliente_id === c.id);
-  const jsonExport = {
-    titular: {
-      nome: c.nome,
-      cpf: c.cpf,
-      telefone: c.telefone,
-      endereco: c.endereco,
-      baseLegal: c.base_legal,
-      cadastradoEm: c.criado_em,
-    },
-    historicoEncomendas: pedidos,
-    emitidoEm: new Date().toISOString(),
-  };
+// LGPD Art. 18: Revelação auditada de CPF em tela
+const revealedCpfs = ref<Record<string, boolean>>({});
+function toggleRevealCpf(id: string) {
+  revealedCpfs.value[id] = !revealedCpfs.value[id];
+}
 
-  const blob = new Blob([JSON.stringify(jsonExport, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `dados_titular_${c.nome.replace(/\s+/g, '_')}.json`;
-  link.click();
+// LGPD Art. 18, II e V: Exportação de dados do titular (DSAR / Portabilidade)
+function exportarDados(c: Cliente) {
+  clientesStore.exportarDadosTitular(c.id);
+}
+
+// LGPD Art. 18, IV e VI: Eliminação e anonimização irreversível
+function anonimizarTitular(c: Cliente) {
+  const confirmacao = confirm(
+    `ATENÇÃO - AÇÃO IRREVERSÍVEL (LGPD Art. 18):\n\nConfirma a anonimização dos dados de "${c.nome}"?\n\nO nome, telefone, CPF e endereço serão apagados e substituídos por dados anônimos, preservando o histórico de encomendas.`
+  );
+  if (confirmacao) {
+    clientesStore.anonimizarCliente(c.id);
+    showClienteModal.value = false;
+  }
 }
 </script>
 
 <template>
-  <div class="clientes-page">
-    <!-- Header -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div class="clientes-page" style="max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.25rem;">
+    <!-- Top Action Bar (matching Base44 screenshot 3) -->
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
       <div>
-        <h2 style="font-size: 1.5rem; font-weight: 800;">Cadastro de Clientes</h2>
-        <p style="color: var(--text-muted); font-size: 0.9rem;">
-          Gestão de clientes com validação de CPF, normalização de contato e conformidade LGPD
+        <h1 style="font-size: 1.6rem; font-weight: 700; color: var(--text-main); font-family: var(--font-heading); margin: 0;">
+          Clientes
+        </h1>
+        <p style="color: var(--text-muted); font-size: 0.88rem; margin: 3px 0 0;">
+          {{ clientesEnriquecidos.length }} clientes cadastrados
         </p>
       </div>
 
       <button
-        @click="formularioAberto ? (formularioAberto = false) : abrirFormularioNovo()"
-        class="btn btn-primary"
-        id="btn-novo-cliente-toggle"
+        @click="abrirFormularioNovo"
+        class="btn-primary-pill"
+        id="btn-novo-cliente"
       >
-        <UserPlus :size="18" />
-        <span>{{ formularioAberto ? 'Fechar Formulário' : 'Novo Cliente' }}</span>
+        <Plus :size="16" />
+        <span>Novo Cliente</span>
       </button>
     </div>
 
-    <!-- Formulário Recolhível por Padrão (Spec 5.7 & 8) -->
-    <div
-      v-if="formularioAberto"
-      class="card"
-      id="card-formulario-cliente"
-      style="margin-bottom: 1.75rem; border: 2px solid var(--color-primary-alpha); background: var(--bg-surface-elevated);"
-    >
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-        <h3 style="font-size: 1.15rem; font-weight: 700;">
-          {{ clienteEmEdicao ? 'Editar Cadastro de Cliente' : 'Cadastrar Novo Cliente' }}
-        </h3>
-        <button @click="formularioAberto = false" style="background: none; border: none; cursor: pointer; color: var(--text-muted);">
-          <X :size="20" />
-        </button>
-      </div>
-
-      <!-- Alerta de Duplicidade em Tempo Real (Spec 5.7) -->
-      <div
-        v-if="alertaDuplicidade"
-        class="card"
-        style="padding: 0.75rem 1rem; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;"
-      >
-        <AlertTriangle :size="20" style="color: #b45309; flex-shrink: 0;" />
-        <span style="font-size: 0.88rem; font-weight: 600;">{{ alertaDuplicidade }}</span>
-      </div>
-
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
-        <div class="form-group">
-          <label class="form-label">Nome Completo *</label>
-          <input
-            v-model="formNome"
-            @input="verificarDuplicidadeTempoReal"
-            type="text"
-            placeholder="Nome do cliente"
-            class="form-input"
-            id="input-cliente-nome"
-          />
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Telefone / WhatsApp * (com DDD)</label>
-          <input
-            v-model="formTelefone"
-            @input="verificarDuplicidadeTempoReal"
-            type="text"
-            placeholder="(11) 98765-4321"
-            class="form-input"
-            id="input-cliente-telefone"
-          />
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">CPF (Opcional - Validado com dígitos)</label>
-          <input
-            v-model="formCpf"
-            @input="verificarDuplicidadeTempoReal"
-            type="text"
-            placeholder="000.000.000-00"
-            class="form-input"
-            id="input-cliente-cpf"
-          />
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Endereço (Opcional - apenas para entregas)</label>
-          <input
-            v-model="formEndereco"
-            type="text"
-            placeholder="Rua, número, apto, bairro"
-            class="form-input"
-            id="input-cliente-endereco"
-          />
-        </div>
-      </div>
-
-      <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem;">
-        <button @click="formularioAberto = false" class="btn btn-secondary">
-          Cancelar
-        </button>
-        <button @click="salvarCliente" class="btn btn-primary" id="btn-salvar-cliente">
-          <CheckCircle :size="16" />
-          <span>{{ clienteEmEdicao ? 'Atualizar Cliente' : 'Salvar Cliente' }}</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Barra de Pesquisa Rápida (Spec 8: Busca por nome, CPF e telefone) -->
-    <div style="margin-bottom: 1.5rem; position: relative;">
-      <Search :size="16" style="position: absolute; left: 14px; top: 12px; color: var(--text-muted);" />
+    <!-- Full-width Search Input -->
+    <div style="position: relative; width: 100%;">
+      <Search :size="16" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted);" />
       <input
         v-model="buscaTexto"
         type="text"
-        placeholder="Buscar clientes por nome, telefone ou CPF..."
-        class="form-input"
+        placeholder="Buscar por nome, CPF ou telefone..."
+        style="width: 100%; height: 44px; border-radius: 12px; border: 1px solid #e2e8f0; background: #ffffff; padding-left: 2.6rem; padding-right: 1rem; font-size: 0.92rem; color: #0f172a; outline: none; transition: border-color 0.15s ease;"
         id="input-busca-clientes"
-        style="padding-left: 2.5rem;"
       />
     </div>
 
-    <!-- Lista de Clientes em Tabela Limpa -->
-    <div class="table-container">
-      <table class="data-table" id="tabela-clientes">
-        <thead>
-          <tr>
-            <th>Nome do Cliente</th>
-            <th>Telefone (WhatsApp)</th>
-            <th>CPF</th>
-            <th style="text-align: center;">Total Encomendas</th>
-            <th style="text-align: right;">Saldo em Aberto</th>
-            <th style="text-align: right;">Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="clientesEnriquecidos.length === 0">
-            <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-muted);">
-              Nenhum cliente encontrado.
-            </td>
-          </tr>
-
-          <tr v-for="c in clientesEnriquecidos" :key="c.id">
-            <td style="font-weight: 600;">
-              <div>{{ c.nome }}</div>
-              <div v-if="c.endereco" style="font-size: 0.78rem; color: var(--text-muted); font-weight: 400;">
-                {{ c.endereco }}
-              </div>
-            </td>
-
-            <!-- Telefone com Mascaramento LGPD (Spec 7.2) -->
-            <td>
-              <div style="display: flex; align-items: center; gap: 0.4rem;">
-                <span>{{ desmascarados[c.id] ? c.telefone : mascararTelefone(c.telefone) }}</span>
-                <button
-                  @click="alternarExibicaoCompleta(c.id)"
-                  style="background: none; border: none; cursor: pointer; color: var(--text-muted);"
-                  :title="desmascarados[c.id] ? 'Mascarar dado' : 'Exibir completo (auditoria)'"
-                >
-                  <Eye v-if="!desmascarados[c.id]" :size="14" />
-                  <EyeOff v-else :size="14" />
-                </button>
-              </div>
-            </td>
-
-            <!-- CPF com Mascaramento LGPD (Spec 7.2) -->
-            <td>
-              <span style="font-family: monospace; font-size: 0.85rem;">
-                {{ desmascarados[c.id] ? (c.cpf || 'Não informado') : mascararCPF(c.cpf) }}
-              </span>
-            </td>
-
-            <!-- Contador de Encomendas (Spec 8) -->
-            <td style="text-align: center;">
-              <span class="badge" style="background: var(--bg-body); font-weight: 700;">
-                {{ c.encomendas_count }} pedido(s)
-              </span>
-            </td>
-
-            <!-- Saldo em Aberto (Spec 8) -->
-            <td style="text-align: right; font-weight: 700;" :style="{ color: c.total_em_aberto && c.total_em_aberto > 0 ? '#dc2626' : '#16a34a' }">
-              {{ formatarMoeda(c.total_em_aberto || 0) }}
-            </td>
-
-            <!-- Ações com Rótulo Textual (Spec 5.6: "Todo botão destrutivo tem rótulo textual, não só ícone") -->
-            <td style="text-align: right;">
-              <div style="display: flex; justify-content: flex-end; gap: 0.4rem;">
-                <button
-                  @click="exportarDadosTitular(c)"
-                  class="btn btn-sm btn-secondary"
-                  title="Exportar dados do titular (LGPD Art. 18)"
-                >
-                  <FileDown :size="14" />
-                  <span>Exportar</span>
-                </button>
-
-                <button
-                  @click="abrirEdicao(c)"
-                  class="btn btn-sm btn-secondary"
-                  :id="'btn-editar-cliente-' + c.id"
-                >
-                  <Edit2 :size="14" />
-                  <span>Editar</span>
-                </button>
-
-                <button
-                  @click="arquivarCliente(c)"
-                  class="btn btn-sm btn-secondary"
-                  style="color: #9f1239;"
-                  :id="'btn-arquivar-cliente-' + c.id"
-                  title="Arquivar cadastro do cliente"
-                >
-                  <Archive :size="14" />
-                  <span>Arquivar</span>
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- List of Client Cards (horizontal cards matching Base44 screenshot 3) -->
+    <div v-if="clientesEnriquecidos.length === 0" class="empty-state-card" style="text-align: center; padding: 4rem 1rem;">
+      <User :size="44" style="margin: 0 auto 0.75rem; opacity: 0.35;" />
+      <p style="color: var(--text-muted); font-size: 0.95rem;">Nenhum cliente encontrado</p>
     </div>
+
+    <div v-else style="display: flex; flex-direction: column; gap: 0.65rem;">
+      <div
+        v-for="c in clientesEnriquecidos"
+        :key="c.id"
+        class="pedido-item-card"
+        :id="'cliente-card-' + c.id"
+      >
+        <!-- Left Side: Avatar + Info -->
+        <div style="display: flex; align-items: center; gap: 1rem; min-width: 0;">
+          <!-- Avatar Letter Box -->
+          <div style="width: 44px; height: 44px; border-radius: 14px; background-color: #eff6ff; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <span style="font-size: 1.05rem; font-weight: 700; color: #2563eb; font-family: var(--font-heading);">
+              {{ c.nome.charAt(0).toUpperCase() }}
+            </span>
+          </div>
+
+          <!-- Name and Subtitle Row -->
+          <div style="min-width: 0;">
+            <h4
+              @click="abrirHistorico(c)"
+              class="pedido-item-name"
+              style="cursor: pointer; transition: color 0.15s ease;"
+              :title="'Ver histórico de remédios de ' + c.nome"
+            >
+              {{ c.nome }}
+            </h4>
+
+            <div style="display: flex; align-items: center; gap: 0.85rem; margin-top: 3px; font-size: 0.82rem; flex-wrap: wrap;">
+              <span style="display: flex; align-items: center; gap: 4px; color: #64748b;">
+                <Phone :size="13" />
+                <span>{{ c.telefone }}</span>
+              </span>
+
+              <span v-if="c.cpf" style="display: flex; align-items: center; gap: 4px; color: #475569; background: #f1f5f9; padding: 2px 7px; border-radius: 6px;">
+                <ShieldCheck :size="13" style="color: #059669;" />
+                <span style="font-family: monospace;">{{ revealedCpfs[c.id] ? c.cpf : clientesStore.mascararCPF(c.cpf) }}</span>
+                <button
+                  type="button"
+                  @click.stop="toggleRevealCpf(c.id)"
+                  style="background: none; border: none; padding: 0 2px; cursor: pointer; color: #64748b; display: inline-flex; align-items: center;"
+                  :title="revealedCpfs[c.id] ? 'Ocultar CPF' : 'Revelar CPF'"
+                >
+                  <EyeOff v-if="revealedCpfs[c.id]" :size="12" />
+                  <Eye v-else :size="12" />
+                </button>
+              </span>
+
+              <!-- Badge de Encomendas Clicável -->
+              <button
+                type="button"
+                @click="abrirHistorico(c)"
+                style="
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 4px;
+                  color: #2563eb;
+                  background: #eff6ff;
+                  border: 1px solid #bfdbfe;
+                  padding: 2px 8px;
+                  border-radius: 9999px;
+                  font-size: 0.76rem;
+                  font-weight: 700;
+                  cursor: pointer;
+                  transition: all 0.15s ease;
+                "
+                title="Clique para ver o histórico detalhado deste cliente"
+              >
+                <Package :size="12" />
+                <span>{{ c.encomendas_count }} encom.</span>
+                <ChevronRight :size="11" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Side: Ver Histórico, Export LGPD, Edit & Delete Buttons -->
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; flex-wrap: wrap;">
+          <!-- Botão em Pílula Destaque: Ver Histórico -->
+          <button
+            @click="abrirHistorico(c)"
+            class="btn-historico-pill"
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 0.4rem;
+              background-color: #eff6ff;
+              color: #2563eb;
+              border: 1px solid #bfdbfe;
+              border-radius: 9999px;
+              padding: 0.42rem 0.95rem;
+              font-size: 0.82rem;
+              font-weight: 700;
+              cursor: pointer;
+              transition: all 150ms ease;
+            "
+            title="Ver histórico de medicamentos, preços e datas deste cliente"
+            :id="'btn-historico-cliente-' + c.id"
+          >
+            <History :size="14" />
+            <span>Ver Histórico</span>
+          </button>
+
+          <button
+            @click="exportarDados(c)"
+            class="btn-icon-gear"
+            title="Exportar Dados do Titular (Art. 18 LGPD)"
+            style="color: #059669;"
+            :id="'btn-exportar-lgpd-' + c.id"
+          >
+            <Download :size="16" />
+          </button>
+
+          <button
+            @click="abrirEdicao(c)"
+            class="btn-icon-gear"
+            title="Editar Cadastro do Cliente"
+            :id="'btn-editar-cliente-' + c.id"
+          >
+            <Pencil :size="16" />
+          </button>
+
+          <button
+            @click="removerCliente(c)"
+            class="btn-icon-gear"
+            title="Arquivar Cliente"
+            style="color: #64748b;"
+            :id="'btn-excluir-cliente-' + c.id"
+          >
+            <Trash2 :size="16" />
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: NOVO / EDITAR CLIENTE (matching Base44 dialog modal style) -->
+    <div v-if="showClienteModal" class="modal-backdrop">
+      <div class="base44-modal-dialog">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+          <h3 style="font-size: 1.25rem; font-weight: 700; color: #0f172a; font-family: var(--font-heading); margin: 0;">
+            {{ clienteEmEdicao ? 'Editar Cliente' : 'Novo Cliente' }}
+          </h3>
+          <button
+            @click="showClienteModal = false"
+            style="background: none; border: none; cursor: pointer; color: #64748b; padding: 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center;"
+          >
+            <X :size="20" />
+          </button>
+        </div>
+
+        <!-- Alerta de Duplicidade em Tempo Real -->
+        <div
+          v-if="alertaDuplicidade"
+          style="padding: 0.75rem 1rem; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 12px; display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; font-size: 0.85rem;"
+        >
+          <AlertTriangle :size="18" style="color: #b45309; flex-shrink: 0;" />
+          <span style="font-weight: 600;">{{ alertaDuplicidade }}</span>
+        </div>
+
+        <form @submit.prevent="salvarCliente" style="display: flex; flex-direction: column; gap: 1.15rem;">
+          <!-- Nome Completo -->
+          <div style="display: flex; flex-direction: column; gap: 0.45rem;">
+            <label style="font-weight: 600; font-size: 0.9rem; color: #0f172a;">
+              Nome Completo *
+            </label>
+            <input
+              v-model="formNome"
+              @input="verificarDuplicidadeTempoReal"
+              type="text"
+              placeholder="Ex: EDEN LIGIERI"
+              class="base44-modal-input"
+              required
+              id="input-cliente-nome"
+              autofocus
+            />
+          </div>
+
+          <!-- Telefone / WhatsApp -->
+          <div style="display: flex; flex-direction: column; gap: 0.45rem;">
+            <label style="font-weight: 600; font-size: 0.9rem; color: #0f172a;">
+              Telefone / WhatsApp *
+            </label>
+            <input
+              v-model="formTelefone"
+              @input="verificarDuplicidadeTempoReal"
+              type="text"
+              placeholder="(12) 96225-4802"
+              class="base44-modal-input"
+              required
+              id="input-cliente-telefone"
+            />
+          </div>
+
+          <!-- CPF (opcional) -->
+          <div style="display: flex; flex-direction: column; gap: 0.45rem;">
+            <label style="font-weight: 600; font-size: 0.9rem; color: #0f172a;">
+              CPF <span style="font-weight: 400; color: #64748b; font-size: 0.82rem;">(opcional)</span>
+            </label>
+            <input
+              v-model="formCpf"
+              @input="verificarDuplicidadeTempoReal"
+              type="text"
+              placeholder="000.000.000-00"
+              class="base44-modal-input"
+              id="input-cliente-cpf"
+            />
+          </div>
+
+          <!-- Endereço (opcional) -->
+          <div style="display: flex; flex-direction: column; gap: 0.45rem;">
+            <label style="font-weight: 600; font-size: 0.9rem; color: #0f172a;">
+              Endereço <span style="font-weight: 400; color: #64748b; font-size: 0.82rem;">(opcional)</span>
+            </label>
+            <input
+              v-model="formEndereco"
+              type="text"
+              placeholder="Rua, número, bairro"
+              class="base44-modal-input"
+              id="input-cliente-endereco"
+            />
+          </div>
+
+          <!-- Footer Action Buttons: Cancelar, Anonimizar & Salvar -->
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; margin-top: 0.5rem; flex-wrap: wrap;">
+            <div>
+              <button
+                v-if="clienteEmEdicao"
+                type="button"
+                @click="anonimizarTitular(clienteEmEdicao)"
+                style="background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 7px 12px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;"
+                title="Exercer Direito à Eliminação e Anonimização (Art. 18 da LGPD)"
+                id="btn-anonimizar-cliente-lgpd"
+              >
+                <Trash2 :size="13" />
+                <span>Anonimizar (LGPD)</span>
+              </button>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem;">
+              <button
+                type="button"
+                @click="showClienteModal = false"
+                class="modal-btn-cancelar"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                class="modal-btn-adicionar"
+                id="btn-confirmar-salvar-cliente"
+              >
+                {{ clienteEmEdicao ? 'Salvar Alterações' : 'Salvar Cliente' }}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: HISTÓRICO DE MEDICAMENTOS, PREÇOS E DATAS DO CLIENTE -->
+    <HistoricoClienteModal
+      v-model="showHistoricoModal"
+      :cliente="clienteHistorico"
+      @novo-pedido="(clienteId) => router.push({ path: '/nova-encomenda', query: { clienteId } })"
+      @editar-cliente="(c) => abrirEdicao(c)"
+    />
   </div>
 </template>

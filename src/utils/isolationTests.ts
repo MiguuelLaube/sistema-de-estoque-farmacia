@@ -41,18 +41,26 @@ export function executarTestesIsolamentoMultiTenant(): TestResult[] {
   });
 
   // 3. Teste de Regra de Negócio: Status Derivado da Encomenda (Regra 5.2)
-  const enc1 = initialEncomendas.find((e) => e.id === 'e0000000-0000-0000-0000-000000000001');
-  let regraStatusValida = false;
-  if (enc1 && enc1.itens) {
-    const hasAguardando = enc1.itens.some((i) => i.status_item === 'Aguardando');
-    regraStatusValida = hasAguardando && enc1.status === 'Aguardando';
+  const encComItens = initialEncomendas.filter((e) => e.itens && e.itens.length > 0);
+  let regraStatusValida = encComItens.length > 0;
+  for (const enc of encComItens) {
+    const hasAguardando = enc.itens!.some((i) => i.status_item === 'Aguardando');
+    const hasPedidoFeito = enc.itens!.some((i) => i.status_item === 'Pedido Feito');
+    if (hasAguardando && enc.status !== 'Aguardando') {
+      regraStatusValida = false;
+      break;
+    }
+    if (!hasAguardando && hasPedidoFeito && enc.status !== 'Pedido Feito' && enc.status !== 'Cancelada') {
+      regraStatusValida = false;
+      break;
+    }
   }
 
   resultados.push({
     nome: 'Regra de Status Derivado (5.2)',
     descricao: 'O status da encomenda é sempre o menor estágio entre seus itens',
     passou: regraStatusValida,
-    detalhe: `Encomenda ENC-2026-001 possui 1 item em 'Pedido Feito' e 1 item em 'Aguardando' => Status geral é 'Aguardando'.`,
+    detalhe: `Validada derivação hierárquica em ${encComItens.length} encomendas: Aguardando < Pedido Feito < Chegou.`,
   });
 
   // 4. Teste de Regra Financeira: Situação de Pagamento (Regra 5.4)

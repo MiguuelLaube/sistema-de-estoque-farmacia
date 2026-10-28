@@ -29,6 +29,51 @@ export interface ConfigTenant {
   base_legal_padrao: string;
   bloquear_entrega_com_saldo: boolean;
   dias_retencao_arquivamento: number;
+  ocultar_medicamentos_notificacao?: boolean;
+  // Integração Evolution API (Disparo Automático de WhatsApp)
+  evolution_api_ativo?: boolean;
+  evolution_api_url?: string;
+  evolution_api_key?: string;
+  evolution_api_instance?: string;
+  // Campos de PrintTemplate (Documento Seção 2)
+  header_title?: string;
+  header_subtitle?: string;
+  footer_text?: string;
+  show_phone?: boolean;
+  show_payment?: boolean;
+  show_status?: boolean;
+  font_size?: number;
+}
+
+export interface Funcionario {
+  id: string;
+  tenant_id: string;
+  nome: string;
+  cargo?: string;
+  criado_em: string;
+}
+
+export interface ReservaItem {
+  id: string;
+  tenant_id: string;
+  reserva_id: string;
+  name: string;
+  quantity: number;
+  price: number;
+}
+
+export interface Reserva {
+  id: string;
+  tenant_id: string;
+  customer_name: string;
+  phone?: string;
+  medications: Array<{ name: string; quantity: number; price: number }>;
+  total: number;
+  amount_paid: number;
+  paid: boolean;
+  notes?: string;
+  criado_em: string;
+  atualizado_em: string;
 }
 
 export interface Usuario {
@@ -143,6 +188,7 @@ export interface Encomenda {
   cliente?: Cliente;
   itens?: EncomendaItem[];
   pagamentos?: Pagamento[];
+  historico?: Array<{ employee_name: string; action: string; timestamp: string }>;
 }
 
 export interface Pagamento {

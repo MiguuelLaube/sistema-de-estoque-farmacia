@@ -5,11 +5,14 @@ import { initialEncomendas } from '../data/mockData';
 import { useAuthStore } from './auth';
 import { useComprasStore } from './compras';
 import { useClientesStore } from './clientes';
+import { useMedicamentosMemoriaStore } from './medicamentosMemoria';
+import { enviarMensagemEvolutionApi, formatarMensagemNotificacao } from '../services/evolutionApi';
 
 export const useEncomendasStore = defineStore('encomendas', () => {
   const authStore = useAuthStore();
   const comprasStore = useComprasStore();
   const clientesStore = useClientesStore();
+  const memoriaStore = useMedicamentosMemoriaStore();
 
   const allEncomendas = ref<Encomenda[]>(initialEncomendas);
   const showArchived = ref<boolean>(false);
@@ -108,9 +111,52 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     } else if (allChegou) {
       // Se todos chegaram e já estava marcada como Entregue, mantém
       if (encomenda.status !== 'Entregue') {
+        const eraOutroStatus = encomenda.status !== 'Chegou';
         encomenda.status = 'Chegou';
+        if (eraOutroStatus) {
+          dispararNotificacaoChegadaEvolution(encomenda);
+        }
       }
     }
+  }
+
+  // Disparo automático via Evolution API quando o status passa para Chegou
+  async function dispararNotificacaoChegadaEvolution(encomenda: Encomenda) {
+    const cfg = authStore.currentConfig;
+    if (!cfg || !cfg.evolution_api_ativo) return;
+
+    const cliente = clientesStore.allClientes.find((c) => c.id === encomenda.cliente_id);
+    if (!cliente || !cliente.telefone) return;
+
+    const itensDesc = encomenda.itens?.map((i) => i.descricao).join(', ') || '';
+    const saldo = Math.max(0, encomenda.valor_total - encomenda.valor_pago);
+    const mensagem = formatarMensagemNotificacao(
+      cfg.mensagem_whatsapp,
+      cliente.nome,
+      itensDesc,
+      saldo,
+      cfg.ocultar_medicamentos_notificacao
+    );
+
+    const resultado = await enviarMensagemEvolutionApi(
+      {
+        ativo: true,
+        apiUrl: cfg.evolution_api_url || '',
+        apiKey: cfg.evolution_api_key || '',
+        instanceName: cfg.evolution_api_instance || '',
+      },
+      cliente.telefone,
+      mensagem
+    );
+
+    if (!encomenda.historico) encomenda.historico = [];
+    encomenda.historico.push({
+      employee_name: 'Robô Evolution API',
+      action: resultado.sucesso
+        ? `disparou WhatsApp automático de chegada para ${cliente.nome}`
+        : `falha no envio automático do WhatsApp: ${resultado.mensagem}`,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   // Hook called when a purchase item changes status
@@ -138,6 +184,7 @@ export const useEncomendasStore = defineStore('encomendas', () => {
   function criarEncomenda(dados: {
     clienteId: string;
     observacao?: string;
+    funcionarioNome?: string;
     itens: Array<{
       descricao: string;
       quantidade: number;
@@ -152,6 +199,9 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     const trackingCode = `ENC-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
 
     const itensCriados: EncomendaItem[] = dados.itens.map((it) => {
+      // Registra na memória de medicamentos mais pedidos (Documento Pág. 10)
+      memoriaStore.registrarMedicamento(it.descricao, it.precoUnitario);
+
       // Procura ou cria o item na lista de compras da farmácia
       const compraItem = comprasStore.encontrarOuCriarCompraItem(
         it.descricao,
@@ -197,6 +247,13 @@ export const useEncomendasStore = defineStore('encomendas', () => {
       atualizado_em: new Date().toISOString(),
       itens: itensCriados,
       pagamentos: [],
+      historico: [
+        {
+          employee_name: dados.funcionarioNome || authStore.currentUser.nome,
+          action: 'Criou a encomenda (status: Aguardando)',
+          timestamp: new Date().toISOString(),
+        },
+      ],
     };
 
     recalcularStatus(novaEncomenda);
@@ -208,7 +265,7 @@ export const useEncomendasStore = defineStore('encomendas', () => {
   function alterarStatus(
     encomendaId: string,
     novoStatus: StatusEncomenda,
-    options?: { autorizacaoAdmin?: boolean; entregaComSaldo?: boolean }
+    options?: { autorizacaoAdmin?: boolean; entregaComSaldo?: boolean; funcionarioNome?: string }
   ): { sucesso: boolean; mensagem?: string } {
     const enc = allEncomendas.value.find((e) => e.id === encomendaId);
     if (!enc) return { sucesso: false, mensagem: 'Encomenda não encontrada.' };
@@ -248,8 +305,22 @@ export const useEncomendasStore = defineStore('encomendas', () => {
       }
     }
 
+    const eraOutroStatus = enc.status !== novoStatus;
     enc.status = novoStatus;
     enc.atualizado_em = new Date().toISOString();
+
+    if (novoStatus === 'Chegou' && eraOutroStatus) {
+      dispararNotificacaoChegadaEvolution(enc);
+    }
+
+    // Registra no histórico (Documento Seção 3 / Pág. 7)
+    if (!enc.historico) enc.historico = [];
+    enc.historico.push({
+      employee_name: options?.funcionarioNome || authStore.currentUser.nome,
+      action: `alterou status para: ${novoStatus}`,
+      timestamp: new Date().toISOString(),
+    });
+
     return { sucesso: true };
   }
 
@@ -260,6 +331,7 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     forma: FormaPagamento;
     tipo?: 'pagamento' | 'estorno';
     motivoEstorno?: string;
+    funcionarioNome?: string;
   }) {
     const enc = allEncomendas.value.find((e) => e.id === dados.encomendaId);
     if (!enc) return;
@@ -291,6 +363,14 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     } else {
       enc.situacao_pagamento = 'Não pago';
     }
+
+    // Registra no histórico (Documento Seção 3 / Pág. 7)
+    if (!enc.historico) enc.historico = [];
+    enc.historico.push({
+      employee_name: dados.funcionarioNome || authStore.currentUser.nome,
+      action: `registrou ${dados.tipo || 'pagamento'} de R$ ${Math.abs(dados.valor).toFixed(2)} (${dados.forma})`,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   // Archive delivered orders in batch (Spec 5.6: "Arquivar Entregues")
@@ -306,13 +386,37 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     return count;
   }
 
+  // Gera texto de aviso de chegada para a área de transferência (Documento Seção 3 / Pág. 8 & LGPD Art. 11)
+  function obterTextoAvisoChegada(encomenda: Encomenda): string {
+    const cliente = clientesStore.allClientes.find((c) => c.id === encomenda.cliente_id);
+    const primeiroNome = cliente ? cliente.nome.split(' ')[0] : 'Cliente';
+    const ocultarMedicamentos = authStore.currentConfig?.ocultar_medicamentos_notificacao;
+    const medicamentos = ocultarMedicamentos
+      ? 'sua encomenda'
+      : (encomenda.itens?.map((i) => i.descricao).join(', ') || 'seu medicamento');
+    const saldo = Math.max(0, encomenda.valor_total - encomenda.valor_pago);
+    const textoSaldo = saldo > 0 ? ` Saldo restante a pagar: R$ ${saldo.toFixed(2)}.` : ' Pedido 100% pago.';
+    return `Olá, ${primeiroNome}! Seu pedido de ${medicamentos} já chegou na drogaria e está pronto para retirada.${textoSaldo} Obrigado pela preferência!`;
+  }
+
+  // Gera resumo da encomenda para a área de transferência (Documento Seção 3 / Pág. 8)
+  function obterResumoEncomenda(encomenda: Encomenda): string {
+    const cliente = clientesStore.allClientes.find((c) => c.id === encomenda.cliente_id);
+    const itensStr = encomenda.itens?.map((i) => `• ${i.quantidade}x ${i.descricao} - R$ ${i.subtotal.toFixed(2)}`).join('\n') || '';
+    const saldo = Math.max(0, encomenda.valor_total - encomenda.valor_pago);
+    return `📋 RESUMO DA ENCOMENDA [${encomenda.codigo_rastreio}]\nCliente: ${cliente?.nome || 'N/A'}\nTelefone: ${cliente?.telefone || 'N/A'}\n\nItens:\n${itensStr}\n\nTotal: R$ ${encomenda.valor_total.toFixed(2)}\nValor Pago: R$ ${encomenda.valor_pago.toFixed(2)}\nSaldo a Cobrar: R$ ${saldo.toFixed(2)}\nStatus: ${encomenda.status}`;
+  }
+
   // Generate WhatsApp wa.me link with template interpolation (Spec 2.4, 5.1 & 8)
   function gerarLinkWhatsApp(encomenda: Encomenda): string {
     const cliente = clientesStore.allClientes.find((c) => c.id === encomenda.cliente_id);
     if (!cliente || !cliente.telefone) return '';
 
     const template = authStore.currentConfig.mensagem_whatsapp;
-    const medicamentos = encomenda.itens?.map((i) => i.descricao).join(', ') || 'seu medicamento';
+    const ocultarMedicamentos = authStore.currentConfig?.ocultar_medicamentos_notificacao;
+    const medicamentos = ocultarMedicamentos
+      ? 'sua encomenda'
+      : (encomenda.itens?.map((i) => i.descricao).join(', ') || 'seu medicamento');
 
     const mensagem = template
       .replace('{cliente}', cliente.nome.split(' ')[0])
@@ -321,6 +425,98 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     const telLimpo = cliente.telefone.replace(/\D/g, '');
     const numComDdd = telLimpo.startsWith('55') ? telLimpo : `55${telLimpo}`;
     return `https://wa.me/${numComDdd}?text=${encodeURIComponent(mensagem)}`;
+  }
+
+  // Delete single order
+  function removerEncomenda(encomendaId: string) {
+    const idx = allEncomendas.value.findIndex((e) => e.id === encomendaId);
+    if (idx !== -1) {
+      allEncomendas.value.splice(idx, 1);
+    }
+  }
+
+  // Update order details (medications, notes, etc.)
+  function atualizarEncomenda(
+    encomendaId: string,
+    dados: Partial<Encomenda> & {
+      itensNovos?: Array<{ descricao: string; quantidade: number; precoUnitario: number }>;
+      funcionarioNome?: string;
+    }
+  ) {
+    const enc = allEncomendas.value.find((e) => e.id === encomendaId);
+    if (!enc) return;
+
+    if (dados.cliente_id) enc.cliente_id = dados.cliente_id;
+    if (dados.observacao !== undefined) enc.observacao = dados.observacao;
+    if (dados.status) enc.status = dados.status;
+
+    if (dados.itensNovos) {
+      enc.itens = dados.itensNovos.map((it) => {
+        memoriaStore.registrarMedicamento(it.descricao, it.precoUnitario);
+        return {
+          id: 'i' + Math.random().toString(36).substr(2, 9),
+          tenant_id: enc.tenant_id,
+          encomenda_id: enc.id,
+          descricao: it.descricao.trim(),
+          quantidade: it.quantidade,
+          preco_unitario: it.precoUnitario,
+          subtotal: it.quantidade * it.precoUnitario,
+          controlado: false,
+          urgente: false,
+          status_item: enc.status === 'Entregue' ? 'Chegou' : (enc.status === 'Chegou' ? 'Chegou' : 'Pedido Feito'),
+          atributos: {},
+          criado_em: new Date().toISOString(),
+        };
+      });
+      enc.valor_total = enc.itens.reduce((acc, curr) => acc + curr.subtotal, 0);
+    }
+
+    if (dados.valor_pago !== undefined) {
+      enc.valor_pago = dados.valor_pago;
+      enc.situacao_pagamento = enc.valor_pago >= enc.valor_total && enc.valor_total > 0 ? 'Pago' : (enc.valor_pago > 0 ? 'Parcial' : 'Não pago');
+    }
+
+    enc.atualizado_em = new Date().toISOString();
+
+    if (dados.funcionarioNome) {
+      if (!enc.historico) enc.historico = [];
+      enc.historico.push({
+        employee_name: dados.funcionarioNome,
+        action: 'editou a encomenda',
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
+  // Toggle paid status directly
+  function alternarPago(encomendaId: string, pago: boolean, funcionarioNome?: string) {
+    const enc = allEncomendas.value.find((e) => e.id === encomendaId);
+    if (!enc) return;
+
+    if (pago) {
+      enc.valor_pago = enc.valor_total;
+      enc.situacao_pagamento = 'Pago';
+    } else {
+      enc.valor_pago = 0;
+      enc.situacao_pagamento = 'Não pago';
+    }
+
+    if (!enc.historico) enc.historico = [];
+    enc.historico.push({
+      employee_name: funcionarioNome || authStore.currentUser.nome,
+      action: pago ? 'marcou como pago' : 'marcou como não pago',
+      timestamp: new Date().toISOString(),
+    });
+
+    enc.atualizado_em = new Date().toISOString();
+  }
+
+  // Definitively delete delivered orders (matching "Apagar Entregues" button in Base44)
+  function apagarEntreguesDefinitivo(): number {
+    const tenantId = authStore.activeTenantId;
+    const initialLen = allEncomendas.value.length;
+    allEncomendas.value = allEncomendas.value.filter((e) => !(e.tenant_id === tenantId && e.status === 'Entregue'));
+    return initialLen - allEncomendas.value.length;
   }
 
   return {
@@ -338,6 +534,13 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     alterarStatus,
     registrarPagamento,
     arquivarEntregues,
+    apagarEntreguesDefinitivo,
+    removerEncomenda,
+    atualizarEncomenda,
+    alternarPago,
     gerarLinkWhatsApp,
+    obterTextoAvisoChegada,
+    obterResumoEncomenda,
+    dispararNotificacaoChegadaEvolution,
   };
 });

@@ -1,803 +1,1200 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useEncomendasStore } from '../stores/encomendas';
 import { useClientesStore } from '../stores/clientes';
-import type { Encomenda, StatusEncomenda, FormaPagamento } from '../types';
+import type { Encomenda, StatusEncomenda, Funcionario } from '../types';
 import {
-  Plus,
-  Search,
-  Send,
-  Printer,
-  DollarSign,
-  Archive,
+  Package,
+  Clock,
   CheckCircle,
+  CheckCircle2,
   Trash2,
-  X,
-  UserPlus,
+  ArrowUpDown,
+  Search,
+  User,
+  Pill,
+  DollarSign,
+  XCircle,
+  Pencil,
+  Printer,
+  Copy,
+  AlertTriangle,
+  Plus,
+  History,
 } from 'lucide-vue-next';
+import HistoricoClienteModal from '../components/HistoricoClienteModal.vue';
+import type { Cliente } from '../types';
 
-const route = useRoute();
+const router = useRouter();
 const authStore = useAuthStore();
 const encomendasStore = useEncomendasStore();
 const clientesStore = useClientesStore();
 
-// Modals State
-const showNovaModal = ref(false);
-const showPagamentoModal = ref(false);
-const showCupomModal = ref(false);
-const showArquivarConfirmModal = ref(false);
+// Status Tabs & Filter
+type TabKey = 'Aguardando' | 'Pedido Feito' | 'Chegou' | 'Entregue' | 'Pesquisa';
+const activeTab = ref<TabKey>('Pedido Feito');
+const sortAlphabetical = ref<boolean>(false);
+
+// Search Tab State
+const searchMode = ref<'medication' | 'customer'>('medication');
+const searchQuery = ref<string>('');
+
+const showApagarEntreguesModal = ref<boolean>(false);
+const showCupomModal = ref<boolean>(false);
+const showEditModal = ref<boolean>(false);
+const showEmployeeModal = ref<boolean>(false);
+const showHistoricoModal = ref<boolean>(false);
+const clienteHistorico = ref<Cliente | null>(null);
 
 const selectedEncomenda = ref<Encomenda | null>(null);
+const cupomEncomenda = ref<Encomenda | null>(null);
 
-// Form State: Nova Encomenda
-const novoClienteModo = ref(false);
-const novoClienteNome = ref('');
-const novoClienteTelefone = ref('');
-const clienteSelecionadoId = ref('');
-const observacaoNova = ref('');
-const itensNova = ref<Array<{
-  descricao: string;
-  quantidade: number;
-  precoUnitario: number;
-  classificacaoId?: string;
-  controlado: boolean;
-  urgente: boolean;
-}>>([
-  {
-    descricao: '',
-    quantidade: 1,
-    precoUnitario: 0,
-    controlado: false,
-    urgente: false,
-  },
-]);
-
-// Form State: Pagamento
-const valorPagamento = ref<number>(0);
-const formaPagamento = ref<FormaPagamento>('pix');
-const isEstorno = ref(false);
-const motivoEstorno = ref('');
-
-onMounted(() => {
-  if (route.query.acao === 'nova') {
-    abrirNovaEncomendaModal();
-  }
-});
-
-function formatarMoeda(val: number) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-}
-
-function abrirNovaEncomendaModal() {
-  novoClienteModo.value = false;
-  novoClienteNome.value = '';
-  novoClienteTelefone.value = '';
-  clienteSelecionadoId.value = clientesStore.currentTenantClientes[0]?.id || '';
-  observacaoNova.value = '';
-  itensNova.value = [
-    {
-      descricao: '',
-      quantidade: 1,
-      precoUnitario: 0,
-      controlado: false,
-      urgente: false,
-    },
-  ];
-  showNovaModal.value = true;
-}
-
-function adicionarItemLinha() {
-  itensNova.value.push({
-    descricao: '',
-    quantidade: 1,
-    precoUnitario: 0,
-    controlado: false,
-    urgente: false,
-  });
-}
-
-function removerItemLinha(index: number) {
-  if (itensNova.value.length > 1) {
-    itensNova.value.splice(index, 1);
+function abrirHistoricoCliente(clienteId?: string) {
+  if (!clienteId) return;
+  const c = clientesStore.allClientes.find((x) => x.id === clienteId);
+  if (c) {
+    clienteHistorico.value = c;
+    showHistoricoModal.value = true;
   }
 }
 
-const totalNovaCalculado = computed(() => {
-  return itensNova.value.reduce((acc, curr) => acc + (curr.quantidade * curr.precoUnitario || 0), 0);
-});
+// Employee Action Pending State
+interface PendingAction {
+  type: 'status' | 'togglePaid' | 'delete';
+  orderId: string;
+  statusTarget?: StatusEncomenda;
+  paidTarget?: boolean;
+}
+const pendingAction = ref<PendingAction | null>(null);
 
-function salvarNovaEncomenda() {
-  let clienteId = clienteSelecionadoId.value;
+// Edit Order Form State
+const editClienteId = ref<string>('');
+const editObservacao = ref<string>('');
+const editItens = ref<Array<{ descricao: string; quantidade: number; precoUnitario: number }>>([]);
 
-  if (novoClienteModo.value) {
-    if (!novoClienteNome.value.trim() || !novoClienteTelefone.value.trim()) {
-      alert('Preencha o nome e o telefone do novo cliente.');
-      return;
-    }
-    const novo = clientesStore.adicionarCliente({
-      nome: novoClienteNome.value,
-      telefone: novoClienteTelefone.value,
+// Formats
+function formatBRL(val: number): string {
+  return 'R$ ' + (Number(val) || 0).toFixed(2).replace('.', ',');
+}
+
+function formatDate(isoStr?: string): string {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  const day = d.getDate().toString().padStart(2, '0');
+  const month = (d.getMonth() + 1).toString().padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+function formatHistoryDate(isoStr?: string): string {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  const hours = d.getHours().toString().padStart(2, '0');
+  const minutes = d.getMinutes().toString().padStart(2, '0');
+  const day = d.getDate().toString().padStart(2, '0');
+  const month = (d.getMonth() + 1).toString().padStart(2, '0');
+  return `às ${hours}:${minutes} de ${day}/${month}`;
+}
+
+// All tenant orders enriched
+const currentOrders = computed(() => {
+  let list = encomendasStore.currentTenantEncomendas;
+  if (sortAlphabetical.value) {
+    list = [...list].sort((a, b) => {
+      const nameA = a.cliente?.nome || '';
+      const nameB = b.cliente?.nome || '';
+      return nameA.localeCompare(nameB, 'pt-BR');
     });
-    clienteId = novo.id;
   }
+  return list;
+});
 
-  if (!clienteId) {
-    alert('Selecione ou cadastre um cliente.');
-    return;
-  }
+// Counts for tabs
+const counts = computed(() => {
+  const list = encomendasStore.currentTenantEncomendas;
+  return {
+    Aguardando: list.filter((e) => e.status === 'Aguardando').length,
+    'Pedido Feito': list.filter((e) => e.status === 'Pedido Feito').length,
+    Chegou: list.filter((e) => e.status === 'Chegou').length,
+    Entregue: list.filter((e) => e.status === 'Entregue').length,
+    Total: list.length,
+  };
+});
 
-  const itensValidos = itensNova.value.filter((i) => i.descricao.trim().length > 0);
-  if (itensValidos.length === 0) {
-    alert('Adicione pelo menos um medicamento ou item na encomenda.');
-    return;
-  }
+// Filtered list for current tab
+const tabOrders = computed(() => {
+  if (activeTab.value === 'Pesquisa') return [];
+  return currentOrders.value.filter((e) => e.status === activeTab.value);
+});
 
-  encomendasStore.criarEncomenda({
-    clienteId,
-    observacao: observacaoNova.value,
-    itens: itensValidos,
+// Search results
+const searchOrders = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase();
+  if (!q) return [];
+  return currentOrders.value.filter((e) => {
+    if (searchMode.value === 'medication') {
+      return e.itens?.some((i) => i.descricao.toLowerCase().includes(q));
+    } else {
+      return e.cliente?.nome.toLowerCase().includes(q) || e.cliente?.telefone.includes(q);
+    }
   });
+});
 
-  showNovaModal.value = false;
+// Status Badge Config (ui-design-padrao-farmacia)
+function getStatusBadge(status: StatusEncomenda) {
+  switch (status) {
+    case 'Aguardando':
+      return { label: 'Aguardando', icon: Clock, bg: '#fffbeb', color: '#d97706', border: '#fde68a' };
+    case 'Pedido Feito':
+      return { label: 'Pedido Feito', icon: CheckCircle, bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' };
+    case 'Chegou':
+      return { label: 'Chegou', icon: Package, bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' };
+    case 'Entregue':
+      return { label: 'Entregue', icon: CheckCircle2, bg: '#f8fafc', color: '#334155', border: '#cbd5e1' };
+    default:
+      return { label: status, icon: Clock, bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' };
+  }
 }
 
-function abrirModalPagamento(enc: Encomenda) {
-  selectedEncomenda.value = enc;
-  const saldoRestante = Math.max(0, enc.valor_total - enc.valor_pago);
-  valorPagamento.value = saldoRestante > 0 ? saldoRestante : 0;
-  formaPagamento.value = 'pix';
-  isEstorno.value = false;
-  motivoEstorno.value = '';
-  showPagamentoModal.value = true;
+// Order Status Changer Click
+function requestStatusChange(orderId: string, novoStatus: StatusEncomenda) {
+  pendingAction.value = {
+    type: 'status',
+    orderId,
+    statusTarget: novoStatus,
+  };
+  showEmployeeModal.value = true;
 }
 
-function confirmarPagamento() {
+// Payment Status Toggle Click
+function requestTogglePaid(order: Encomenda) {
+  const targetPaid = order.situacao_pagamento !== 'Pago';
+  pendingAction.value = {
+    type: 'togglePaid',
+    orderId: order.id,
+    paidTarget: targetPaid,
+  };
+  showEmployeeModal.value = true;
+}
+
+// Delete Order Click
+function requestDeleteOrder(orderId: string) {
+  if (confirm('Tem certeza que deseja apagar esta encomenda?')) {
+    encomendasStore.removerEncomenda(orderId);
+  }
+}
+
+// Confirm action with employee
+function confirmEmployeeAction(employee: Funcionario) {
+  if (!pendingAction.value) return;
+
+  const { type, orderId, statusTarget, paidTarget } = pendingAction.value;
+
+  if (type === 'status' && statusTarget) {
+    encomendasStore.alterarStatus(orderId, statusTarget, {
+      autorizacaoAdmin: true,
+      funcionarioNome: employee.nome,
+    });
+  } else if (type === 'togglePaid' && paidTarget !== undefined) {
+    encomendasStore.alternarPago(orderId, paidTarget, employee.nome);
+  }
+
+  showEmployeeModal.value = false;
+  pendingAction.value = null;
+}
+
+// Edit Order
+function openEditOrder(order: Encomenda) {
+  selectedEncomenda.value = order;
+  editClienteId.value = order.cliente_id;
+  editObservacao.value = order.observacao || '';
+  editItens.value = (order.itens || []).map((i) => ({
+    descricao: i.descricao,
+    quantidade: i.quantidade,
+    precoUnitario: i.preco_unitario,
+  }));
+  showEditModal.value = true;
+}
+
+function saveEditOrder() {
   if (!selectedEncomenda.value) return;
-
-  if (valorPagamento.value <= 0 && !isEstorno.value) {
-    alert('Informe um valor de pagamento válido.');
-    return;
-  }
-
-  if (isEstorno.value && !motivoEstorno.value.trim()) {
-    alert('Para estorno, informe obrigatoriamente o motivo.');
-    return;
-  }
-
-  encomendasStore.registrarPagamento({
-    encomendaId: selectedEncomenda.value.id,
-    valor: valorPagamento.value,
-    forma: formaPagamento.value,
-    tipo: isEstorno.value ? 'estorno' : 'pagamento',
-    motivoEstorno: motivoEstorno.value,
+  encomendasStore.atualizarEncomenda(selectedEncomenda.value.id, {
+    cliente_id: editClienteId.value,
+    observacao: editObservacao.value,
+    itensNovos: editItens.value,
+    funcionarioNome: authStore.currentUser.nome,
   });
-
-  showPagamentoModal.value = false;
+  showEditModal.value = false;
+  selectedEncomenda.value = null;
 }
 
-function abrirCupom(enc: Encomenda) {
-  selectedEncomenda.value = enc;
+// Cupom Thermal Print
+function openCupom(order: Encomenda) {
+  cupomEncomenda.value = order;
   showCupomModal.value = true;
 }
 
-function imprimirCupom() {
+function printCupom() {
   window.print();
 }
 
-function executarArquivarEntregues() {
-  const qtd = encomendasStore.arquivarEntregues();
-  showArquivarConfirmModal.value = false;
-  alert(`${qtd} encomenda(s) entregue(s) foram arquivadas do painel operacional com sucesso.`);
+// Delete Delivered Orders in Batch
+function confirmApagarEntregues() {
+  encomendasStore.apagarEntreguesDefinitivo();
+  showApagarEntreguesModal.value = false;
 }
 
-function mudarStatus(enc: Encomenda, novoStatus: StatusEncomenda) {
-  const res = encomendasStore.alterarStatus(enc.id, novoStatus);
-  if (!res.sucesso) {
-    alert(res.mensagem);
-  }
+// Clipboard Actions
+function copyArrivalMessage(order: Encomenda) {
+  const text = encomendasStore.obterTextoAvisoChegada(order);
+  navigator.clipboard.writeText(text);
+  alert('Mensagem copiada para a área de transferência!');
 }
 
-function abrirWhatsApp(enc: Encomenda) {
-  const url = encomendasStore.gerarLinkWhatsApp(enc);
-  if (url) {
-    window.open(url, '_blank');
-  }
+function copyOrderSummary(order: Encomenda) {
+  const text = encomendasStore.obterResumoEncomenda(order);
+  navigator.clipboard.writeText(text);
+  alert('Resumo copiado para a área de transferência!');
 }
 </script>
 
 <template>
-  <div class="encomendas-page">
-    <!-- Top Action Bar -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div style="max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 3rem;">
+    <!-- PAGE HEADER (matching Screenshot 1) -->
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
       <div>
-        <h2 style="font-size: 1.5rem; font-weight: 800;">Gestão de Encomendas</h2>
-        <p style="color: var(--text-muted); font-size: 0.9rem;">
-          Fluxo operacional de pedidos de clientes, situação de compra e entrega
+        <h1 style="font-size: 1.6rem; font-weight: 700; color: #0f172a; margin: 0; font-family: var(--font-heading);">
+          Encomendas
+        </h1>
+        <p style="font-size: 0.88rem; color: #64748b; margin: 3px 0 0;">
+          {{ counts.Total }} encomendas no total
         </p>
       </div>
 
-      <div style="display: flex; gap: 0.75rem; align-items: center;">
+      <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+        <!-- Button: Apagar Entregues (emerald outline pill button) -->
         <button
-          @click="showArquivarConfirmModal = true"
-          class="btn btn-secondary"
-          id="btn-arquivar-entregues"
-          title="Arquivar pedidos entregues da visualização padrão"
+          @click="showApagarEntreguesModal = true"
+          class="btn-outline-emerald"
+          id="btn-apagar-entregues"
+          title="Apagar encomendas entregues"
         >
-          <Archive :size="16" />
-          <span>Arquivar Entregues</span>
+          <Trash2 :size="16" />
+          <span>Apagar Entregues</span>
         </button>
 
+        <!-- Button: A–Z (outline neutral / active blue pill button) -->
         <button
-          @click="abrirNovaEncomendaModal"
-          class="btn btn-primary"
-          id="btn-nova-encomenda"
+          @click="sortAlphabetical = !sortAlphabetical"
+          class="btn-outline-neutral"
+          :style="{
+            borderColor: sortAlphabetical ? '#2563eb' : '#cbd5e1',
+            backgroundColor: sortAlphabetical ? '#eff6ff' : '#ffffff',
+            color: sortAlphabetical ? '#2563eb' : '#334155',
+          }"
+          id="btn-sort-alfabetico"
         >
-          <Plus :size="18" />
+          <ArrowUpDown :size="15" />
+          <span>A–Z</span>
+        </button>
+
+        <!-- Button: Nova Encomenda (primary pill button) -->
+        <button
+          @click="router.push('/nova-encomenda')"
+          class="btn-primary-pill"
+          id="btn-nova-encomenda-top"
+        >
+          <Plus :size="16" />
           <span>Nova Encomenda</span>
         </button>
       </div>
     </div>
 
-    <!-- Status Tabs (Spec 8: Aguardando, Pedido Feito, Chegou, Entregue, Todas) -->
-    <div style="display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 1.5rem; overflow-x: auto; padding-bottom: 2px;">
+    <!-- TABS BAR (matching Screenshot 1: rounded gray pill bar with 5 items) -->
+    <div
+      style="
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        background: #f1f5f9;
+        padding: 4px;
+        border-radius: 12px;
+        gap: 4px;
+      "
+    >
       <button
-        v-for="tab in (['Todas', 'Aguardando', 'Pedido Feito', 'Chegou', 'Entregue'] as const)"
-        :key="tab"
-        @click="encomendasStore.activeTab = tab"
-        class="btn btn-sm"
-        :id="'tab-' + tab.toLowerCase().replace(' ', '-')"
+        @click="activeTab = 'Aguardando'"
         :style="{
-          background: encomendasStore.activeTab === tab ? 'var(--color-primary)' : 'transparent',
-          color: encomendasStore.activeTab === tab ? '#ffffff' : 'var(--text-muted)',
-          fontWeight: 600,
-          border: 'none',
-          borderRadius: 'var(--radius-md) var(--radius-md) 0 0',
-          padding: '0.6rem 1rem'
+          background: activeTab === 'Aguardando' ? '#ffffff' : 'transparent',
+          color: activeTab === 'Aguardando' ? '#0f172a' : '#64748b',
+          boxShadow: activeTab === 'Aguardando' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+          fontWeight: activeTab === 'Aguardando' ? 600 : 500,
         }"
+        style="padding: 0.65rem 0.5rem; border-radius: 8px; border: none; font-size: 0.85rem; cursor: pointer; transition: all 0.15s ease;"
       >
-        {{ tab }}
+        Aguardando <span style="font-size: 0.76rem; opacity: 0.7;">({{ counts.Aguardando }})</span>
+      </button>
+
+      <button
+        @click="activeTab = 'Pedido Feito'"
+        :style="{
+          background: activeTab === 'Pedido Feito' ? '#ffffff' : 'transparent',
+          color: activeTab === 'Pedido Feito' ? '#0f172a' : '#64748b',
+          boxShadow: activeTab === 'Pedido Feito' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+          fontWeight: activeTab === 'Pedido Feito' ? 600 : 500,
+        }"
+        style="padding: 0.65rem 0.5rem; border-radius: 8px; border: none; font-size: 0.85rem; cursor: pointer; transition: all 0.15s ease;"
+      >
+        Pedido Feito <span style="font-size: 0.76rem; opacity: 0.7;">({{ counts['Pedido Feito'] }})</span>
+      </button>
+
+      <button
+        @click="activeTab = 'Chegou'"
+        :style="{
+          background: activeTab === 'Chegou' ? '#ffffff' : 'transparent',
+          color: activeTab === 'Chegou' ? '#0f172a' : '#64748b',
+          boxShadow: activeTab === 'Chegou' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+          fontWeight: activeTab === 'Chegou' ? 600 : 500,
+        }"
+        style="padding: 0.65rem 0.5rem; border-radius: 8px; border: none; font-size: 0.85rem; cursor: pointer; transition: all 0.15s ease;"
+      >
+        Chegou <span style="font-size: 0.76rem; opacity: 0.7;">({{ counts.Chegou }})</span>
+      </button>
+
+      <button
+        @click="activeTab = 'Entregue'"
+        :style="{
+          background: activeTab === 'Entregue' ? '#ffffff' : 'transparent',
+          color: activeTab === 'Entregue' ? '#0f172a' : '#64748b',
+          boxShadow: activeTab === 'Entregue' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+          fontWeight: activeTab === 'Entregue' ? 600 : 500,
+        }"
+        style="padding: 0.65rem 0.5rem; border-radius: 8px; border: none; font-size: 0.85rem; cursor: pointer; transition: all 0.15s ease;"
+      >
+        Entregue <span style="font-size: 0.76rem; opacity: 0.7;">({{ counts.Entregue }})</span>
+      </button>
+
+      <button
+        @click="activeTab = 'Pesquisa'"
+        :style="{
+          background: activeTab === 'Pesquisa' ? '#ffffff' : 'transparent',
+          color: activeTab === 'Pesquisa' ? '#0f172a' : '#64748b',
+          boxShadow: activeTab === 'Pesquisa' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+          fontWeight: activeTab === 'Pesquisa' ? 600 : 500,
+        }"
+        style="padding: 0.65rem 0.5rem; border-radius: 8px; border: none; font-size: 0.85rem; cursor: pointer; transition: all 0.15s ease;"
+      >
+        Pesquisa
       </button>
     </div>
 
-    <!-- Search & Filters -->
-    <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: center;">
-      <div style="position: relative; flex: 1; min-width: 260px;">
-        <Search :size="16" style="position: absolute; left: 12px; top: 11px; color: var(--text-muted);" />
-        <input
-          v-model="encomendasStore.searchQuery"
-          type="text"
-          placeholder="Buscar por cliente, telefone, medicamento ou código..."
-          class="form-input"
-          id="input-busca-encomendas"
-          style="padding-left: 2.3rem;"
-        />
-      </div>
-
-      <div style="display: flex; align-items: center; gap: 0.5rem;">
-        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">Pagamento:</span>
-        <select
-          v-model="encomendasStore.paymentFilter"
-          class="form-select"
-          id="select-filtro-pagamento"
-          style="width: auto; padding: 0.5rem 0.75rem;"
-        >
-          <option value="todos">Todos</option>
-          <option value="Pago">Pago</option>
-          <option value="Parcial">Parcial</option>
-          <option value="Não pago">Não pago</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- Empty State -->
-    <div
-      v-if="encomendasStore.filteredEncomendas.length === 0"
-      class="card"
-      style="padding: 3rem; text-align: center; color: var(--text-muted);"
-    >
-      <PackageOpen :size="48" style="margin: 0 auto 1rem; opacity: 0.5;" />
-      <h3>Nenhuma encomenda encontrada</h3>
-      <p style="font-size: 0.9rem; margin-top: 0.5rem;">
-        Alterne a aba de status ou clique em "Nova Encomenda" para registrar uma nova solicitação.
-      </p>
-    </div>
-
-    <!-- Orders Cards Grid / List -->
-    <div v-else style="display: flex; flex-direction: column; gap: 1rem;">
-      <div
-        v-for="enc in encomendasStore.filteredEncomendas"
-        :key="enc.id"
-        class="card"
-        :id="'card-encomenda-' + enc.id"
-        style="padding: 1.25rem 1.5rem;"
-      >
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1rem;">
-          <div>
-            <div style="display: flex; align-items: center; gap: 0.75rem;">
-              <span style="font-weight: 700; font-size: 1.1rem; color: var(--text-main);">
-                {{ enc.cliente?.nome || 'Cliente não identificado' }}
-              </span>
-              <span style="font-size: 0.82rem; color: var(--text-muted); font-weight: 500;">
-                {{ enc.cliente?.telefone }}
-              </span>
-              <span v-if="enc.codigo_rastreio" style="font-size: 0.75rem; background: var(--bg-body); padding: 2px 6px; border-radius: 4px; font-family: monospace; border: 1px solid var(--border-color);">
-                {{ enc.codigo_rastreio }}
-              </span>
-            </div>
-            <div v-if="enc.observacao" style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.25rem;">
-              Nota: {{ enc.observacao }}
-            </div>
-          </div>
-
-          <!-- Badges & Situacao -->
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <!-- Badge de Status Derivado -->
-            <span
-              class="badge"
-              :class="{
-                'badge-aguardando': enc.status === 'Aguardando',
-                'badge-pedido-feito': enc.status === 'Pedido Feito',
-                'badge-chegou': enc.status === 'Chegou',
-                'badge-entregue': enc.status === 'Entregue',
-                'badge-cancelada': enc.status === 'Cancelada',
-              }"
-            >
-              {{ enc.status }}
-            </span>
-
-            <!-- Badge de Pagamento (Clicável abre modal de pagamento - Regra 5.4) -->
-            <button
-              @click="abrirModalPagamento(enc)"
-              class="badge"
-              :class="{
-                'badge-pago': enc.situacao_pagamento === 'Pago',
-                'badge-parcial': enc.situacao_pagamento === 'Parcial',
-                'badge-nao-pago': enc.situacao_pagamento === 'Não pago',
-              }"
-              style="cursor: pointer; border: none;"
-              title="Clique para registrar pagamento ou visualizar recibo"
-            >
-              {{ enc.situacao_pagamento }} ({{ formatarMoeda(enc.valor_pago) }} / {{ formatarMoeda(enc.valor_total) }})
-            </button>
-          </div>
-        </div>
-
-        <!-- Items Table inside Order -->
-        <div style="margin-bottom: 1rem;">
-          <table style="width: 100%; font-size: 0.88rem; border-collapse: collapse;">
-            <thead>
-              <tr style="color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">
-                <th style="text-align: left; padding: 4px 0;">Item / Medicamento</th>
-                <th style="text-align: center; padding: 4px 8px;">Qtd</th>
-                <th style="text-align: right; padding: 4px 8px;">Preço Un.</th>
-                <th style="text-align: right; padding: 4px 8px;">Subtotal</th>
-                <th style="text-align: right; padding: 4px 0;">Status Compra</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in enc.itens" :key="item.id" style="border-top: 1px dashed var(--border-color);">
-                <td style="padding: 6px 0; font-weight: 500;">
-                  <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span>{{ item.descricao }}</span>
-                    <!-- Alerta de medicamento controlado (Spec 5.9) -->
-                    <span v-if="item.controlado" class="badge badge-controlado" title="Medicamento de controle especial - Portaria 344/98">
-                      Controlado
-                    </span>
-                    <span v-if="item.urgente" class="badge badge-urgente">
-                      Urgente
-                    </span>
-                  </div>
-                </td>
-                <td style="text-align: center; padding: 6px 8px;">{{ item.quantidade }}</td>
-                <td style="text-align: right; padding: 6px 8px;">{{ formatarMoeda(item.preco_unitario) }}</td>
-                <td style="text-align: right; padding: 6px 8px; font-weight: 600;">{{ formatarMoeda(item.subtotal) }}</td>
-                <td style="text-align: right; padding: 6px 0;">
-                  <span
-                    class="badge"
-                    :class="{
-                      'badge-aguardando': item.status_item === 'Aguardando',
-                      'badge-pedido-feito': item.status_item === 'Pedido Feito',
-                      'badge-chegou': item.status_item === 'Chegou',
-                    }"
-                    style="font-size: 0.72rem;"
-                  >
-                    {{ item.status_item }}
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Actions Footer -->
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
-          <div style="display: flex; gap: 0.4rem; align-items: center;">
-            <!-- Marcar como Entregue (se Chegou) -->
-            <button
-              v-if="enc.status === 'Chegou'"
-              @click="mudarStatus(enc, 'Entregue')"
-              class="btn btn-sm btn-primary"
-              :id="'btn-entregar-' + enc.id"
-            >
-              <CheckCircle :size="14" />
-              <span>Marcar Entregue</span>
-            </button>
-
-            <!-- Retrocesso / Admin Override -->
-            <button
-              v-if="authStore.isAdmin && enc.status === 'Entregue'"
-              @click="mudarStatus(enc, 'Chegou')"
-              class="btn btn-sm btn-secondary"
-              title="Admin: retroceder status para Chegou"
-            >
-              <span>Reabrir</span>
-            </button>
-
-            <!-- Cancelar Encomenda -->
-            <button
-              v-if="enc.status !== 'Entregue' && enc.status !== 'Cancelada'"
-              @click="mudarStatus(enc, 'Cancelada')"
-              class="btn btn-sm btn-secondary"
-              style="color: #9f1239;"
-              :id="'btn-cancelar-' + enc.id"
-            >
-              <span>Cancelar Encomenda</span>
-            </button>
-          </div>
-
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <!-- Avisar WhatsApp (quando Chegou) -->
-            <button
-              v-if="enc.status === 'Chegou'"
-              @click="abrirWhatsApp(enc)"
-              class="btn btn-whatsapp btn-sm"
-              :id="'btn-whatsapp-enc-' + enc.id"
-            >
-              <Send :size="14" />
-              <span>Avisar no WhatsApp</span>
-            </button>
-
-            <!-- Pagamento -->
-            <button
-              @click="abrirModalPagamento(enc)"
-              class="btn btn-secondary btn-sm"
-              :id="'btn-pagamento-' + enc.id"
-            >
-              <DollarSign :size="14" />
-              <span>Pagamento</span>
-            </button>
-
-            <!-- Imprimir Cupom -->
-            <button
-              @click="abrirCupom(enc)"
-              class="btn btn-secondary btn-sm"
-              :id="'btn-cupom-' + enc.id"
-            >
-              <Printer :size="14" />
-              <span>Cupom</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODAL: NOVA ENCOMENDA -->
-    <div v-if="showNovaModal" class="modal-backdrop">
-      <div class="modal-content" style="max-width: 650px;">
-        <div class="modal-header">
-          <h3 style="font-size: 1.15rem;">Nova Encomenda</h3>
-          <button @click="showNovaModal = false" style="background: none; border: none; cursor: pointer;">
-            <X :size="20" />
+    <!-- VIEW: PESQUISA -->
+    <div v-if="activeTab === 'Pesquisa'" style="display: flex; flex-direction: column; gap: 1rem;">
+      <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+        <!-- Toggle Medicamento / Cliente -->
+        <div style="display: flex; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;">
+          <button
+            @click="searchMode = 'medication'"
+            :style="{
+              background: searchMode === 'medication' ? '#2563eb' : '#ffffff',
+              color: searchMode === 'medication' ? '#ffffff' : '#64748b',
+            }"
+            style="padding: 0.55rem 1rem; border: none; font-size: 0.88rem; font-weight: 600; cursor: pointer;"
+          >
+            Medicamento
+          </button>
+          <button
+            @click="searchMode = 'customer'"
+            :style="{
+              background: searchMode === 'customer' ? '#2563eb' : '#ffffff',
+              color: searchMode === 'customer' ? '#ffffff' : '#64748b',
+            }"
+            style="padding: 0.55rem 1rem; border: none; font-size: 0.88rem; font-weight: 600; cursor: pointer;"
+          >
+            Cliente
           </button>
         </div>
 
-        <div class="modal-body">
-          <!-- Cliente Selection or Fast Creation -->
-          <div class="form-group">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
-              <label class="form-label" style="margin-bottom: 0;">Cliente</label>
+        <!-- Search Input -->
+        <div style="position: relative; flex: 1; min-width: 260px;">
+          <Search :size="16" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #94a3b8;" />
+          <input
+            v-model="searchQuery"
+            type="text"
+            :placeholder="searchMode === 'medication' ? 'Buscar por medicamento...' : 'Buscar por cliente...'"
+            style="
+              width: 100%;
+              height: 42px;
+              border-radius: 10px;
+              border: 1px solid #e2e8f0;
+              background: #ffffff;
+              padding-left: 2.5rem;
+              padding-right: 1rem;
+              font-size: 0.9rem;
+              color: #0f172a;
+              outline: none;
+            "
+          />
+        </div>
+      </div>
+
+      <!-- Search Results -->
+      <div v-if="searchOrders.length === 0" style="text-align: center; padding: 4rem 1rem;">
+        <Search :size="40" style="margin: 0 auto 0.75rem; color: #94a3b8; opacity: 0.4;" />
+        <p style="color: #64748b; font-size: 0.95rem;">Nenhuma encomenda encontrada</p>
+      </div>
+
+      <div v-else style="display: flex; flex-direction: column; gap: 0.65rem;">
+        <div
+          v-for="ord in searchOrders"
+          :key="ord.id"
+          class="encomenda-search-card-block"
+          :id="'search-order-card-' + ord.id"
+        >
+          <div style="min-width: 0;">
+            <p style="font-weight: 600; font-size: 0.92rem; color: #0f172a; margin: 0; text-transform: uppercase;">
+              {{ ord.itens?.map((i) => i.descricao).join(', ') || 'Sem medicamento' }}
+            </p>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 3px;">
+              <span style="font-size: 0.78rem; color: #64748b;">
+                {{ ord.cliente?.nome || 'Cliente' }}
+              </span>
               <button
+                v-if="ord.cliente_id"
                 type="button"
-                @click="novoClienteModo = !novoClienteModo"
-                style="background: none; border: none; color: var(--color-primary); font-size: 0.82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;"
+                @click.stop="abrirHistoricoCliente(ord.cliente_id)"
+                style="display: inline-flex; align-items: center; gap: 3px; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; padding: 1px 6px; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; cursor: pointer;"
+                title="Ver histórico de remédios deste cliente"
               >
-                <UserPlus :size="14" />
-                <span>{{ novoClienteModo ? 'Selecionar existente' : '+ Novo cliente rápido' }}</span>
+                <History :size="11" />
+                <span>Histórico</span>
               </button>
-            </div>
-
-            <div v-if="!novoClienteModo">
-              <select v-model="clienteSelecionadoId" class="form-select" id="select-cliente-encomenda">
-                <option v-for="c in clientesStore.currentTenantClientes" :key="c.id" :value="c.id">
-                  {{ c.nome }} ({{ c.telefone }})
-                </option>
-              </select>
-            </div>
-
-            <div v-else style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; background: var(--bg-body); padding: 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-              <div>
-                <label class="form-label">Nome Completo</label>
-                <input v-model="novoClienteNome" type="text" placeholder="Nome do cliente" class="form-input" />
-              </div>
-              <div>
-                <label class="form-label">Telefone / WhatsApp</label>
-                <input v-model="novoClienteTelefone" type="text" placeholder="(11) 99999-9999" class="form-input" />
-              </div>
             </div>
           </div>
 
-          <!-- Itens da Encomenda -->
-          <div class="form-group">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <label class="form-label" style="margin-bottom: 0;">Itens / Medicamentos Solicitados</label>
+          <div style="display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0;">
+            <span style="font-size: 0.92rem; font-weight: 700; color: #2563eb;">
+              {{ formatBRL(ord.valor_total) }}
+            </span>
+
+            <span
+              :style="{
+                background: getStatusBadge(ord.status).bg,
+                color: getStatusBadge(ord.status).color,
+                borderColor: getStatusBadge(ord.status).border,
+              }"
+              style="padding: 0.25rem 0.65rem; border-radius: 9999px; font-size: 0.74rem; font-weight: 600; border: 1px solid;"
+            >
+              {{ ord.status }}
+            </span>
+
+            <button
+              @click="openCupom(ord)"
+              style="width: 32px; height: 32px; border-radius: 8px; border: none; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; cursor: pointer;"
+              title="Imprimir Cupom"
+            >
+              <Printer :size="15" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW: STATUS TABS (Aguardando / Pedido Feito / Chegou / Entregue) -->
+    <div v-else>
+      <!-- Empty state -->
+      <div v-if="tabOrders.length === 0" style="text-align: center; padding: 4.5rem 1rem;">
+        <Package :size="44" style="margin: 0 auto 0.75rem; color: #94a3b8; opacity: 0.4;" />
+        <p style="color: #64748b; font-size: 0.95rem;">Nenhuma encomenda nesta categoria</p>
+      </div>
+
+      <!-- 3-Column Grid of Order Cards (whe matching Screenshot 1) -->
+      <div
+        v-else
+        style="
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+          gap: 1rem;
+        "
+      >
+        <div
+          v-for="order in tabOrders"
+          :key="order.id"
+          class="encomenda-card-block"
+          :id="'order-card-' + order.id"
+        >
+          <!-- Card Header: Status Badge, Date & Edit Pencil -->
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <!-- Status Badge -->
+            <span
+              :style="{
+                background: getStatusBadge(order.status).bg,
+                color: getStatusBadge(order.status).color,
+                borderColor: getStatusBadge(order.status).border,
+              }"
+              style="
+                display: inline-flex;
+                align-items: center;
+                gap: 0.35rem;
+                padding: 0.3rem 0.75rem;
+                border-radius: 9999px;
+                font-size: 0.76rem;
+                font-weight: 600;
+                border: 1px solid;
+              "
+            >
+              <component :is="getStatusBadge(order.status).icon" :size="13" />
+              <span>{{ getStatusBadge(order.status).label }}</span>
+            </span>
+
+            <!-- Date & Edit Icon -->
+            <div style="display: flex; align-items: center; gap: 0.45rem;">
+              <span style="font-size: 0.76rem; color: #94a3b8;">
+                {{ formatDate(order.criado_em) }}
+              </span>
+
               <button
-                type="button"
-                @click="adicionarItemLinha"
-                class="btn btn-secondary btn-sm"
+                @click="openEditOrder(order)"
+                style="
+                  width: 28px;
+                  height: 28px;
+                  border-radius: 6px;
+                  border: none;
+                  background: none;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  color: #94a3b8;
+                  cursor: pointer;
+                  transition: color 0.15s ease;
+                "
+                onmouseover="this.style.color='#2563eb'"
+                onmouseout="this.style.color='#94a3b8'"
+                title="Editar Encomenda"
+                :id="'btn-edit-order-' + order.id"
               >
-                + Adicionar Item
+                <Pencil :size="14" />
               </button>
             </div>
+          </div>
 
-            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <!-- Customer Name & History Button -->
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; font-size: 0.92rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; min-width: 0;">
+              <User :size="15" style="color: #94a3b8; flex-shrink: 0;" />
+              <span style="font-weight: 700; color: #0f172a; text-transform: uppercase;">
+                {{ order.cliente?.nome || 'CLIENTE' }}
+              </span>
+            </div>
+
+            <button
+              v-if="order.cliente_id"
+              type="button"
+              @click.stop="abrirHistoricoCliente(order.cliente_id)"
+              style="
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                background: #eff6ff;
+                color: #2563eb;
+                border: 1px solid #bfdbfe;
+                padding: 2px 8px;
+                border-radius: 9999px;
+                font-size: 0.73rem;
+                font-weight: 700;
+                cursor: pointer;
+                transition: all 0.15s ease;
+                flex-shrink: 0;
+              "
+              title="Ver histórico de remédios pedidos deste cliente"
+            >
+              <History :size="12" />
+              <span>Histórico</span>
+            </button>
+          </div>
+
+          <!-- Medications List -->
+          <div style="display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.88rem;">
+            <Pill :size="15" style="color: #94a3b8; flex-shrink: 0; margin-top: 2px;" />
+            <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
               <div
-                v-for="(item, index) in itensNova"
-                :key="index"
-                style="display: grid; grid-template-columns: 2fr 70px 100px 40px; gap: 0.5rem; align-items: center; background: var(--bg-body); padding: 0.5rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);"
+                v-for="(it, iIdx) in (order.itens || [])"
+                :key="iIdx"
+                style="display: flex; align-items: center; gap: 4px; text-transform: uppercase;"
               >
-                <div>
-                  <input
-                    v-model="item.descricao"
-                    type="text"
-                    placeholder="Descrição do medicamento..."
-                    class="form-input"
-                    style="font-size: 0.85rem;"
-                  />
-                  <div style="display: flex; gap: 0.75rem; margin-top: 4px; font-size: 0.75rem;">
-                    <label style="display: flex; align-items: center; gap: 3px; cursor: pointer;">
-                      <input type="checkbox" v-model="item.controlado" />
-                      <span>Controlado</span>
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 3px; cursor: pointer; color: #dc2626;">
-                      <input type="checkbox" v-model="item.urgente" />
-                      <span>Urgente</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div>
-                  <input
-                    v-model.number="item.quantidade"
-                    type="number"
-                    min="1"
-                    placeholder="Qtd"
-                    class="form-input"
-                    style="text-align: center; font-size: 0.85rem;"
-                  />
-                </div>
-
-                <div>
-                  <input
-                    v-model.number="item.precoUnitario"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="R$ Un."
-                    class="form-input"
-                    style="text-align: right; font-size: 0.85rem;"
-                  />
-                </div>
-
-                <div style="text-align: center;">
-                  <button
-                    type="button"
-                    @click="removerItemLinha(index)"
-                    style="background: none; border: none; color: #ef4444; cursor: pointer;"
-                    title="Remover linha"
-                  >
-                    <Trash2 :size="16" />
-                  </button>
-                </div>
+                <span style="font-weight: 700; color: #2563eb;">{{ it.quantidade }}x</span>
+                <span style="color: #1e293b; font-weight: 500;">{{ it.descricao }}</span>
               </div>
-            </div>
-
-            <div style="text-align: right; margin-top: 0.75rem; font-weight: 700; font-size: 1.05rem;">
-              Total: {{ formatarMoeda(totalNovaCalculado) }}
             </div>
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Observações / Instruções</label>
+          <!-- Price -->
+          <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem;">
+            <DollarSign :size="15" style="color: #2563eb; flex-shrink: 0;" />
+            <span style="font-weight: 700; color: #2563eb;">
+              {{ formatBRL(order.valor_total) }}
+            </span>
+          </div>
+
+          <!-- Payment Status Toggle Button -->
+          <button
+            type="button"
+            @click="requestTogglePaid(order)"
+            style="
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              width: 100%;
+              background: none;
+              border: none;
+              padding: 0;
+              cursor: pointer;
+              font-size: 0.86rem;
+            "
+            :id="'btn-toggle-paid-' + order.id"
+          >
+            <div style="display: flex; align-items: center; gap: 0.45rem;">
+              <CheckCircle
+                v-if="order.situacao_pagamento === 'Pago'"
+                :size="15"
+                style="color: #16a34a;"
+              />
+              <XCircle
+                v-else
+                :size="15"
+                style="color: #ef4444;"
+              />
+              <span
+                :style="{
+                  color: order.situacao_pagamento === 'Pago' ? '#16a34a' : '#ef4444',
+                  fontWeight: 600,
+                }"
+              >
+                {{ order.situacao_pagamento === 'Pago' ? 'Pago' : 'Não pago' }}
+              </span>
+            </div>
+
+            <span style="font-size: 0.75rem; color: #94a3b8;">
+              clique para alterar
+            </span>
+          </button>
+
+          <!-- Price Summary Box (Preço a cobrar / Valor já pago) -->
+          <div
+            style="
+              display: flex;
+              flex-direction: column;
+              gap: 0.25rem;
+              background: #f8fafc;
+              border: 1px solid #e2e8f0;
+              border-radius: 8px;
+              padding: 0.5rem 0.75rem;
+              font-size: 0.78rem;
+            "
+          >
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: #64748b;">Preço a cobrar</span>
+              <span style="font-weight: 700; color: #0f172a;">
+                {{ formatBRL(Math.max(0, order.valor_total - order.valor_pago)) }}
+              </span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: #64748b;">Valor já pago</span>
+              <span style="font-weight: 700; color: #16a34a;">
+                {{ formatBRL(order.valor_pago) }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Direct Status Selector Pills (Aguardando / Pedido Feito / Chegou / Entregue) -->
+          <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;">
+            <button
+              v-for="st in (['Aguardando', 'Pedido Feito', 'Chegou', 'Entregue'] as StatusEncomenda[])"
+              :key="st"
+              @click="requestStatusChange(order.id, st)"
+              :style="{
+                background: order.status === st ? '#2563eb' : '#ffffff',
+                color: order.status === st ? '#ffffff' : '#64748b',
+                borderColor: order.status === st ? '#2563eb' : '#e2e8f0',
+                fontWeight: order.status === st ? 600 : 500,
+              }"
+              style="
+                padding: 0.25rem 0.6rem;
+                border-radius: 8px;
+                border: 1px solid;
+                font-size: 0.74rem;
+                cursor: pointer;
+                transition: all 0.15s ease;
+              "
+              :id="'btn-status-' + st.replace(' ', '-').toLowerCase() + '-' + order.id"
+            >
+              {{ st }}
+            </button>
+          </div>
+
+          <!-- History Log Entries (matching Screenshot 1) -->
+          <div
+            v-if="order.historico && order.historico.length > 0"
+            style="
+              margin-top: 0.35rem;
+              padding-top: 0.65rem;
+              border-top: 1px solid #f1f5f9;
+              display: flex;
+              flex-direction: column;
+              gap: 0.35rem;
+            "
+          >
+            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: #64748b; font-weight: 600;">
+              <Clock :size="12" />
+              <span>Histórico</span>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <div
+                v-for="(hist, hIdx) in [...order.historico].reverse().slice(0, 3)"
+                :key="hIdx"
+                style="font-size: 0.73rem; color: #64748b; line-height: 1.3;"
+              >
+                <strong style="color: #1e293b;">{{ hist.employee_name }}</strong>
+                <span> {{ hist.action }}</span>
+                <span style="opacity: 0.7;"> {{ formatHistoryDate(hist.timestamp) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Action Buttons: Imprimir Cupom & Trash Delete -->
+          <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.35rem; padding-top: 0.65rem; border-top: 1px solid #f1f5f9;">
+            <!-- Copiar Msg de Chegada / Pedido se aplicável -->
+            <button
+              v-if="order.status === 'Chegou'"
+              type="button"
+              @click="copyArrivalMessage(order)"
+              style="
+                width: 100%;
+                height: 34px;
+                border-radius: 8px;
+                border: 1px solid #93c5fd;
+                background: #eff6ff;
+                color: #2563eb;
+                font-size: 0.78rem;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 0.35rem;
+                cursor: pointer;
+              "
+            >
+              <Copy :size="13" />
+              <span>Copiar msg chegada</span>
+            </button>
+
+            <button
+              v-if="order.status === 'Aguardando'"
+              type="button"
+              @click="copyOrderSummary(order)"
+              style="
+                width: 100%;
+                height: 34px;
+                border-radius: 8px;
+                border: 1px solid #93c5fd;
+                background: #eff6ff;
+                color: #2563eb;
+                font-size: 0.78rem;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 0.35rem;
+                cursor: pointer;
+              "
+            >
+              <Copy :size="13" />
+              <span>Copiar msg de pedido</span>
+            </button>
+
+            <!-- Outline Blue: Imprimir Cupom -->
+            <button
+              type="button"
+              @click="openCupom(order)"
+              style="
+                width: 100%;
+                height: 36px;
+                border-radius: 8px;
+                border: 1px solid #bfdbfe;
+                background: #ffffff;
+                color: #2563eb;
+                font-size: 0.82rem;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 0.45rem;
+                cursor: pointer;
+                transition: all 0.15s ease;
+              "
+              onmouseover="this.style.background='#eff6ff'"
+              onmouseout="this.style.background='#ffffff'"
+              :id="'btn-cupom-' + order.id"
+            >
+              <Printer :size="15" />
+              <span>Imprimir Cupom</span>
+            </button>
+
+            <!-- Outline Red: Trash Button -->
+            <button
+              type="button"
+              @click="requestDeleteOrder(order.id)"
+              style="
+                width: 100%;
+                height: 34px;
+                border-radius: 8px;
+                border: 1px solid #fecaca;
+                background: #ffffff;
+                color: #ef4444;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: all 0.15s ease;
+              "
+              onmouseover="this.style.background='#fef2f2'"
+              onmouseout="this.style.background='#ffffff'"
+              title="Excluir Encomenda"
+              :id="'btn-delete-order-' + order.id"
+            >
+              <Trash2 :size="15" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: Quem está fazendo esta ação? (Employee Action Modal) -->
+    <div v-if="showEmployeeModal" class="modal-backdrop">
+      <div class="base44-modal-dialog" style="max-width: 380px;">
+        <h3 style="font-size: 1.1rem; font-weight: 700; color: #0f172a; margin-bottom: 0.5rem;">
+          Quem está fazendo esta ação?
+        </h3>
+        <p style="font-size: 0.82rem; color: #64748b; margin-bottom: 1rem;">
+          Selecione o atendente responsável pela alteração.
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <button
+            v-for="emp in authStore.tenantFuncionarios"
+            :key="emp.id"
+            @click="confirmEmployeeAction(emp)"
+            style="
+              display: flex;
+              align-items: center;
+              gap: 0.75rem;
+              padding: 0.75rem 1rem;
+              border-radius: 12px;
+              border: 1px solid #e2e8f0;
+              background: #ffffff;
+              text-align: left;
+              cursor: pointer;
+              transition: all 0.15s ease;
+            "
+            onmouseover="this.style.background='#eff6ff'; this.style.borderColor='#2563eb'"
+            onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0'"
+          >
+            <div style="width: 36px; height: 36px; border-radius: 50%; background: #eff6ff; display: flex; align-items: center; justify-content: center; color: #2563eb; flex-shrink: 0;">
+              <User :size="18" />
+            </div>
+            <div>
+              <div style="font-size: 0.9rem; font-weight: 700; color: #0f172a;">{{ emp.nome }}</div>
+              <div v-if="emp.cargo" style="font-size: 0.76rem; color: #64748b;">{{ emp.cargo }}</div>
+            </div>
+          </button>
+        </div>
+
+        <button
+          @click="showEmployeeModal = false"
+          class="modal-btn-cancelar"
+          style="margin-top: 1rem; width: 100%;"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+
+    <!-- MODAL: Apagar Entregues Confirmação -->
+    <div v-if="showApagarEntreguesModal" class="modal-backdrop">
+      <div class="base44-modal-dialog" style="max-width: 400px; text-align: center;">
+        <div style="width: 48px; height: 48px; border-radius: 50%; background: #fee2e2; display: flex; align-items: center; justify-content: center; color: #ef4444; margin: 0 auto 0.75rem;">
+          <AlertTriangle :size="24" />
+        </div>
+        <h3 style="font-size: 1.15rem; font-weight: 700; color: #0f172a; margin-bottom: 0.5rem;">
+          Apagar encomendas entregues
+        </h3>
+        <p style="font-size: 0.86rem; color: #64748b; margin-bottom: 1.25rem;">
+          Isso vai apagar todas as encomendas com status "Entregue". Deseja continuar?
+        </p>
+
+        <div style="display: flex; gap: 0.75rem;">
+          <button
+            @click="showApagarEntreguesModal = false"
+            class="modal-btn-cancelar"
+            style="flex: 1;"
+          >
+            Cancelar
+          </button>
+          <button
+            @click="confirmApagarEntregues"
+            style="
+              flex: 1;
+              height: 40px;
+              border-radius: 10px;
+              border: none;
+              background: #ef4444;
+              color: #ffffff;
+              font-weight: 600;
+              font-size: 0.88rem;
+              cursor: pointer;
+            "
+          >
+            Sim, apagar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: Editar Encomenda -->
+    <div v-if="showEditModal && selectedEncomenda" class="modal-backdrop">
+      <div class="base44-modal-dialog" style="max-width: 500px;">
+        <h3 style="font-size: 1.15rem; font-weight: 700; color: #0f172a; margin-bottom: 1rem;">
+          Editar Encomenda
+        </h3>
+
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <div>
+            <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">Cliente</label>
+            <select
+              v-model="editClienteId"
+              class="base44-modal-input"
+            >
+              <option
+                v-for="c in clientesStore.currentTenantClientes"
+                :key="c.id"
+                :value="c.id"
+              >
+                {{ c.nome }}
+              </option>
+            </select>
+          </div>
+
+          <div>
+            <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">Medicamentos</label>
+            <div
+              v-for="(it, iIdx) in editItens"
+              :key="iIdx"
+              style="display: flex; gap: 0.5rem; margin-top: 0.35rem;"
+            >
+              <input
+                v-model.number="it.quantidade"
+                type="number"
+                min="1"
+                class="base44-modal-input"
+                style="width: 60px;"
+              />
+              <input
+                v-model="it.descricao"
+                type="text"
+                class="base44-modal-input"
+                style="flex: 1; text-transform: uppercase;"
+              />
+              <input
+                v-model.number="it.precoUnitario"
+                type="number"
+                step="0.01"
+                class="base44-modal-input"
+                style="width: 90px;"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">Observações</label>
             <textarea
-              v-model="observacaoNova"
-              class="form-textarea"
+              v-model="editObservacao"
+              class="base44-modal-input"
               rows="2"
-              placeholder="Ex.: Receita retida no balcão, urgência de viagem..."
+              style="resize: none;"
             ></textarea>
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button @click="showNovaModal = false" class="btn btn-secondary">
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem;">
+          <button @click="showEditModal = false" class="modal-btn-cancelar">
             Cancelar
           </button>
-          <button @click="salvarNovaEncomenda" class="btn btn-primary" id="btn-salvar-nova-encomenda">
-            Criar Encomenda
+          <button @click="saveEditOrder" class="modal-btn-adicionar">
+            Salvar Alterações
           </button>
         </div>
       </div>
     </div>
 
-    <!-- MODAL: REGISTRAR PAGAMENTO (Spec 5.4) -->
-    <div v-if="showPagamentoModal && selectedEncomenda" class="modal-backdrop">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3 style="font-size: 1.15rem;">Registro de Pagamento</h3>
-          <button @click="showPagamentoModal = false" style="background: none; border: none; cursor: pointer;">
-            <X :size="20" />
+    <!-- MODAL: Imprimir Cupom Térmico (80mm) -->
+    <div v-if="showCupomModal && cupomEncomenda" class="modal-backdrop">
+      <div class="base44-modal-dialog" style="max-width: 380px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 700; color: #0f172a;">
+            <Printer :size="18" style="color: #2563eb;" />
+            <span>Imprimir Cupom</span>
+          </div>
+          <button @click="showCupomModal = false" style="background: none; border: none; cursor: pointer; color: #94a3b8;">
+            ✕
           </button>
         </div>
 
-        <div class="modal-body">
-          <div style="background: var(--bg-body); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1.25rem;">
-            <div style="display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 4px;">
-              <span>Valor Total da Encomenda:</span>
-              <span style="font-weight: 700;">{{ formatarMoeda(selectedEncomenda.valor_total) }}</span>
+        <!-- Thermal Receipt Container -->
+        <div
+          id="cupom-termico-print"
+          style="
+            background: #fafafa;
+            border: 1px dashed #cbd5e1;
+            border-radius: 8px;
+            padding: 1.25rem 1rem;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.82rem;
+            color: #000000;
+            line-height: 1.4;
+          "
+        >
+          <div style="text-align: center; margin-bottom: 0.75rem;">
+            <div style="font-weight: 700; font-size: 0.95rem;">DROGARIA AEROPORTO</div>
+            <div style="font-size: 0.75rem; color: #475569;">Sistema de Encomendas</div>
+            <div style="margin-top: 4px; border-bottom: 1px dashed #000; padding-bottom: 4px;">
+              {{ formatDate(cupomEncomenda.criado_em) }}
             </div>
-            <div style="display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 4px;">
-              <span>Já Pago pelo Cliente:</span>
-              <span style="color: #16a34a; font-weight: 700;">{{ formatarMoeda(selectedEncomenda.valor_pago) }}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 0.95rem; border-top: 1px dashed var(--border-color); padding-top: 4px; margin-top: 4px;">
-              <span>Saldo em Aberto:</span>
-              <span style="color: #dc2626; font-weight: 800;">
-                {{ formatarMoeda(Math.max(0, selectedEncomenda.valor_total - selectedEncomenda.valor_pago)) }}
-              </span>
+          </div>
+
+          <div style="margin-bottom: 0.5rem;">
+            <div><strong>CLIENTE:</strong> {{ cupomEncomenda.cliente?.nome || 'NÃO INFORMADO' }}</div>
+            <div v-if="cupomEncomenda.cliente?.telefone">
+              <strong>TEL:</strong> {{ cupomEncomenda.cliente?.telefone }}
             </div>
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Valor do Lançamento (R$)</label>
-            <input
-              v-model.number="valorPagamento"
-              type="number"
-              step="0.01"
-              class="form-input"
-              id="input-valor-pagamento"
-            />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Forma de Pagamento</label>
-            <select v-model="formaPagamento" class="form-select" id="select-forma-pagamento">
-              <option value="pix">PIX</option>
-              <option value="cartao_credito">Cartão de Crédito</option>
-              <option value="cartao_debito">Cartão de Débito</option>
-              <option value="dinheiro">Dinheiro</option>
-              <option value="convenio">Convênio</option>
-              <option value="outros">Outros</option>
-            </select>
-          </div>
-
-          <!-- Estorno / Retificação (Spec 5.4: Pagamentos não são apagados, correção por estorno com motivo) -->
-          <div class="form-group" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
-            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; color: #9f1239;">
-              <input type="checkbox" v-model="isEstorno" />
-              <span>Este lançamento é um Estorno / Devolução</span>
-            </label>
-
-            <div v-if="isEstorno" style="margin-top: 0.5rem;">
-              <label class="form-label">Motivo do Estorno (obrigatório para auditoria)</label>
-              <input
-                v-model="motivoEstorno"
-                type="text"
-                placeholder="Ex.: Desistência do medicamento, valor digitado incorreto..."
-                class="form-input"
-              />
+          <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 0.4rem 0; margin-bottom: 0.5rem;">
+            <div style="font-weight: 700; margin-bottom: 2px;">ITENS:</div>
+            <div
+              v-for="(it, iIdx) in (cupomEncomenda.itens || [])"
+              :key="iIdx"
+              style="display: flex; justify-content: space-between;"
+            >
+              <span>{{ it.quantidade }}x {{ it.descricao }}</span>
+              <span>{{ formatBRL(it.subtotal) }}</span>
             </div>
           </div>
-        </div>
 
-        <div class="modal-footer">
-          <button @click="showPagamentoModal = false" class="btn btn-secondary">
-            Cancelar
-          </button>
-          <button @click="confirmarPagamento" class="btn btn-primary" id="btn-confirmar-pagamento">
-            Confirmar Pagamento
-          </button>
-        </div>
-      </div>
-    </div>
+          <div style="display: flex; justify-content: space-between; font-weight: 700; margin-bottom: 2px;">
+            <span>TOTAL:</span>
+            <span>{{ formatBRL(cupomEncomenda.valor_total) }}</span>
+          </div>
 
-    <!-- MODAL: IMPRESSÃO DE CUPOM TÉRMICO (Spec 8) -->
-    <div v-if="showCupomModal && selectedEncomenda" class="modal-backdrop">
-      <div class="modal-content" style="max-width: 440px;">
-        <div class="modal-header">
-          <h3 style="font-size: 1.15rem;">Comprovante de Encomenda</h3>
-          <button @click="showCupomModal = false" style="background: none; border: none; cursor: pointer;">
-            <X :size="20" />
-          </button>
-        </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.76rem; color: #334155;">
+            <span>STATUS PAGTO:</span>
+            <span>{{ cupomEncomenda.situacao_pagamento }}</span>
+          </div>
 
-        <div class="modal-body">
-          <!-- Thermal Paper Layout Preview -->
-          <div style="background: #ffffff; color: #000000; padding: 1.5rem 1rem; font-family: monospace; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem; line-height: 1.4;">
-            <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 0.5rem; margin-bottom: 0.75rem;">
-              <div style="font-weight: bold; font-size: 1rem;">{{ authStore.currentConfig.nome_sistema }}</div>
-              <div>{{ authStore.currentTenant.nome_empresa }}</div>
-              <div>COMPROVANTE DE ENCOMENDA</div>
-            </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.76rem; color: #334155;">
+            <span>VALOR JÁ PAGO:</span>
+            <span>{{ formatBRL(cupomEncomenda.valor_pago) }}</span>
+          </div>
 
-            <div style="margin-bottom: 0.75rem;">
-              <div>Código: {{ selectedEncomenda.codigo_rastreio }}</div>
-              <div>Data: {{ new Date(selectedEncomenda.criado_em).toLocaleDateString('pt-BR') }}</div>
-              <div>Cliente: {{ selectedEncomenda.cliente?.nome }}</div>
-              <div>Telefone: {{ selectedEncomenda.cliente?.telefone }}</div>
-            </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.76rem; font-weight: 700;">
+            <span>A COBRAR:</span>
+            <span>{{ formatBRL(Math.max(0, cupomEncomenda.valor_total - cupomEncomenda.valor_pago)) }}</span>
+          </div>
 
-            <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 0.5rem 0; margin-bottom: 0.75rem;">
-              <div v-for="it in selectedEncomenda.itens" :key="it.id" style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <span>{{ it.quantidade }}x {{ it.descricao }}</span>
-                <span>{{ formatarMoeda(it.subtotal) }}</span>
-              </div>
-            </div>
-
-            <div style="text-align: right; font-weight: bold; margin-bottom: 0.5rem;">
-              TOTAL: {{ formatarMoeda(selectedEncomenda.valor_total) }}
-            </div>
-            <div style="text-align: right; color: #475569;">
-              PAGO: {{ formatarMoeda(selectedEncomenda.valor_pago) }}
-            </div>
-            <div style="text-align: right; font-weight: bold; margin-bottom: 0.75rem;">
-              SITUAÇÃO: {{ selectedEncomenda.situacao_pagamento.toUpperCase() }}
-            </div>
-
-            <div style="text-align: center; font-size: 0.72rem; border-top: 1px dashed #000; padding-top: 0.5rem;">
-              Avisaremos pelo WhatsApp assim que o pedido estiver pronto para retirada. Obrigado pela preferência!
-            </div>
+          <div style="text-align: center; margin-top: 1rem; font-size: 0.72rem; color: #64748b;">
+            Obrigado pela preferência!
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button @click="showCupomModal = false" class="btn btn-secondary">
+        <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
+          <button @click="showCupomModal = false" class="modal-btn-cancelar" style="flex: 1;">
             Fechar
           </button>
-          <button @click="imprimirCupom" class="btn btn-primary" id="btn-imprimir-cupom">
+          <button
+            @click="printCupom"
+            style="
+              flex: 1;
+              height: 40px;
+              border-radius: 10px;
+              border: none;
+              background: #2563eb;
+              color: #ffffff;
+              font-weight: 600;
+              font-size: 0.88rem;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 0.45rem;
+              cursor: pointer;
+            "
+          >
             <Printer :size="16" />
-            <span>Imprimir Cupom</span>
+            <span>Imprimir</span>
           </button>
         </div>
       </div>
     </div>
 
-    <!-- MODAL CONFIRMAÇÃO: ARQUIVAR ENTREGUES (Spec 5.6) -->
-    <div v-if="showArquivarConfirmModal" class="modal-backdrop">
-      <div class="modal-content" style="max-width: 480px;">
-        <div class="modal-header">
-          <h3 style="font-size: 1.15rem;">Arquivar Encomendas Entregues</h3>
-          <button @click="showArquivarConfirmModal = false" style="background: none; border: none; cursor: pointer;">
-            <X :size="20" />
-          </button>
-        </div>
-        <div class="modal-body">
-          <p style="font-size: 0.92rem; color: var(--text-main); margin-bottom: 0.75rem;">
-            As encomendas com status <strong>Entregue</strong> serão removidas da visualização operacional do painel para manter o sistema ágil e limpo.
-          </p>
-          <p style="font-size: 0.85rem; color: var(--text-muted);">
-            Elas continuarão preservadas permanentemente no histórico, auditoria e relatórios fiscais/gerenciais. Deseja prosseguir?
-          </p>
-        </div>
-        <div class="modal-footer">
-          <button @click="showArquivarConfirmModal = false" class="btn btn-secondary">
-            Cancelar
-          </button>
-          <button @click="executarArquivarEntregues" class="btn btn-primary" id="btn-confirmar-arquivamento">
-            Confirmar Arquivamento
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- MODAL: HISTÓRICO DE MEDICAMENTOS DO CLIENTE -->
+    <HistoricoClienteModal
+      v-model="showHistoricoModal"
+      :cliente="clienteHistorico"
+      @novo-pedido="(clienteId) => router.push({ path: '/nova-encomenda', query: { clienteId } })"
+    />
   </div>
 </template>
+
+<style scoped>
+/* BLOCO DE CADA ENCOMENDA (GRADE DE ENCOMENDAS) */
+.encomenda-card-block {
+  background: #ffffff;
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.05);
+  border: 1.5px solid #e2e8f0;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  position: relative;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+/* ANIMAÇÃO AO PASSAR O MOUSE: FICA MARCADO EM VOLTA DO BLOQUINHO COM BRILHO COBALTO */
+.encomenda-card-block:hover {
+  border-color: #2563eb;
+  box-shadow: 0 12px 28px -4px rgba(37, 99, 235, 0.16), 0 0 0 3px rgba(37, 99, 235, 0.22);
+  transform: translateY(-3px);
+}
+
+/* BLOCO DE ENCOMENDA NA ABA DE PESQUISA */
+.encomenda-search-card-block {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 0.9rem 1.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+.encomenda-search-card-block:hover {
+  border-color: #2563eb;
+  box-shadow: 0 8px 22px -3px rgba(37, 99, 235, 0.14), 0 0 0 2.5px rgba(37, 99, 235, 0.2);
+  transform: translateY(-2px);
+}
+</style>

@@ -110,7 +110,7 @@ function confirmarBreakGlass() {
 
       <button
         @click="showNovoTenantModal = true"
-        class="btn btn-primary"
+        class="btn-primary-pill"
         id="btn-novo-tenant"
       >
         <Plus :size="18" />
@@ -188,7 +188,8 @@ function confirmarBreakGlass() {
                 <!-- Suporte Break-Glass (Spec 6.7) -->
                 <button
                   @click="abrirBreakGlass(t)"
-                  class="btn btn-sm btn-secondary"
+                  class="btn-outline-neutral"
+                  style="padding: 4px 12px; font-size: 0.8rem;"
                   title="Acesso emergencial de suporte com justificativa auditada"
                 >
                   <KeyRound :size="14" />
@@ -198,8 +199,9 @@ function confirmarBreakGlass() {
                 <!-- Suspender / Reativar Tenant (Spec 8) -->
                 <button
                   @click="alternarStatusTenant(t)"
-                  class="btn btn-sm btn-secondary"
-                  :style="{ color: t.status === 'ativo' ? '#dc2626' : '#16a34a' }"
+                  class="btn-outline-neutral"
+                  style="padding: 4px 12px; font-size: 0.8rem;"
+                  :style="{ color: t.status === 'ativo' ? '#dc2626 !important' : '#16a34a !important' }"
                 >
                   <PauseCircle v-if="t.status === 'ativo'" :size="14" />
                   <PlayCircle v-else :size="14" />
@@ -254,10 +256,10 @@ function confirmarBreakGlass() {
         </div>
 
         <div class="modal-footer">
-          <button @click="showNovoTenantModal = false" class="btn btn-secondary">
+          <button @click="showNovoTenantModal = false" class="btn-outline-neutral">
             Cancelar
           </button>
-          <button @click="salvarNovoTenant" class="btn btn-primary" id="btn-salvar-tenant">
+          <button @click="salvarNovoTenant" class="btn-primary-pill" id="btn-salvar-tenant">
             Provisionar Empresa
           </button>
         </div>
@@ -295,10 +297,10 @@ function confirmarBreakGlass() {
         </div>
 
         <div class="modal-footer">
-          <button @click="showBreakGlassModal = false" class="btn btn-secondary">
+          <button @click="showBreakGlassModal = false" class="btn-outline-neutral">
             Cancelar
           </button>
-          <button @click="confirmarBreakGlass" class="btn btn-danger" id="btn-confirmar-break-glass">
+          <button @click="confirmarBreakGlass" class="btn-primary-pill" style="background-color: #dc2626 !important;" id="btn-confirmar-break-glass">
             Confirmar Acesso Auditado
           </button>
         </div>

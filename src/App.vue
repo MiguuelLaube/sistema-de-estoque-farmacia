@@ -1,21 +1,26 @@
 <script setup lang="ts">
 import { onMounted, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from './stores/auth';
 import { useEncomendasStore } from './stores/encomendas';
 import {
   LayoutDashboard,
   PackageOpen,
-  ShoppingCart,
+  ClipboardList,
   Users,
   BarChart3,
   Settings,
   ShieldCheck,
   Building2,
   UserCheck,
+  LogOut,
+  Pill,
+  PlusCircle,
+  ExternalLink,
 } from 'lucide-vue-next';
 
 const route = useRoute();
+const router = useRouter();
 const authStore = useAuthStore();
 const encomendasStore = useEncomendasStore();
 
@@ -29,34 +34,58 @@ watch(
     authStore.applyTheme();
   }
 );
+
+async function handleLogout() {
+  await authStore.logout();
+  router.push('/login');
+}
 </script>
 
 <template>
-  <div class="app-container">
+  <!-- Fullscreen Layout for Public Pages (Login & Landing) -->
+  <div v-if="route.name === 'login' || route.name === 'landing'" class="landing-or-login-wrapper">
+    <router-view />
+  </div>
+
+  <!-- Standard App Layout with Sidebar and Topbar -->
+  <div v-else class="app-container">
     <!-- Sidebar Navigation -->
     <aside class="app-sidebar">
       <div class="sidebar-header">
-        <div class="tenant-logo-badge">
-          {{ authStore.currentConfig.nome_sistema.charAt(0) }}
+        <div class="tenant-logo-badge" style="background: #2563eb; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+          <Pill :size="20" />
         </div>
         <div class="tenant-meta">
           <span class="brand-title" :title="authStore.currentConfig.nome_sistema">
             {{ authStore.currentConfig.nome_sistema }}
           </span>
-          <span class="brand-plan">
-            Plano {{ authStore.currentTenant.plano }}
+          <span class="brand-plan" style="color: #64748b; font-size: 0.76rem; font-weight: 500;">
+            Sistema de Encomendas
           </span>
         </div>
       </div>
 
       <nav class="sidebar-nav">
+        <div class="sidebar-section-title">Menu</div>
+
         <router-link to="/" class="nav-link" id="nav-dashboard">
-          <LayoutDashboard :size="18" />
+          <span class="nav-icon-box">
+            <LayoutDashboard :size="18" />
+          </span>
           <span>Início</span>
         </router-link>
 
+        <router-link to="/clientes" class="nav-link" id="nav-clientes">
+          <span class="nav-icon-box">
+            <Users :size="18" />
+          </span>
+          <span>Clientes</span>
+        </router-link>
+
         <router-link to="/encomendas" class="nav-link" id="nav-encomendas">
-          <PackageOpen :size="18" />
+          <span class="nav-icon-box">
+            <PackageOpen :size="18" />
+          </span>
           <span>Encomendas</span>
           <span
             v-if="encomendasStore.metricas.pendentes > 0"
@@ -67,14 +96,12 @@ watch(
           </span>
         </router-link>
 
-        <router-link to="/compras" class="nav-link" id="nav-compras">
-          <ShoppingCart :size="18" />
-          <span>Lista de Compras</span>
-        </router-link>
 
-        <router-link to="/clientes" class="nav-link" id="nav-clientes">
-          <Users :size="18" />
-          <span>Clientes</span>
+        <router-link to="/compras" class="nav-link" id="nav-compras">
+          <span class="nav-icon-box">
+            <ClipboardList :size="18" />
+          </span>
+          <span>Pedidos</span>
         </router-link>
 
         <router-link
@@ -83,7 +110,9 @@ watch(
           class="nav-link"
           id="nav-relatorios"
         >
-          <BarChart3 :size="18" />
+          <span class="nav-icon-box">
+            <BarChart3 :size="18" />
+          </span>
           <span>Relatórios</span>
         </router-link>
 
@@ -93,7 +122,9 @@ watch(
           class="nav-link"
           id="nav-configuracoes"
         >
-          <Settings :size="18" />
+          <span class="nav-icon-box">
+            <Settings :size="18" />
+          </span>
           <span>Configurações</span>
         </router-link>
 
@@ -103,10 +134,36 @@ watch(
           class="nav-link"
           id="nav-plataforma"
         >
-          <ShieldCheck :size="18" />
+          <span class="nav-icon-box">
+            <ShieldCheck :size="18" />
+          </span>
           <span>Portal da Plataforma</span>
         </router-link>
+
+        <router-link
+          to="/apresentacao"
+          class="nav-link"
+          id="nav-apresentacao"
+          title="Ver página de apresentação do sistema"
+        >
+          <span class="nav-icon-box">
+            <ExternalLink :size="18" />
+          </span>
+          <span>Apresentação SaaS</span>
+        </router-link>
       </nav>
+
+      <!-- Quick Action: Nova Encomenda button pinned in sidebar (exactly as Base44) -->
+      <div class="sidebar-quick-action">
+        <router-link
+          to="/nova-encomenda"
+          class="btn-nova-encomenda-sidebar"
+          id="btn-sidebar-nova-encomenda"
+        >
+          <PlusCircle :size="16" />
+          <span>Nova Encomenda</span>
+        </router-link>
+      </div>
 
       <!-- Active User Profile & Role Indicator -->
       <div class="sidebar-footer">
@@ -119,6 +176,15 @@ watch(
             <span class="user-role">{{ authStore.currentUser.perfil.replace('_', ' ') }}</span>
           </div>
         </div>
+
+        <button
+          @click="handleLogout"
+          class="btn-logout"
+          title="Sair do sistema (Logout)"
+          id="btn-sidebar-logout"
+        >
+          <LogOut :size="16" />
+        </button>
       </div>
     </aside>
 

@@ -116,37 +116,51 @@ export const useComprasStore = defineStore('compras', () => {
   function arquivarChegou(): number {
     const tenantId = authStore.activeTenantId;
     let arquivados = 0;
+    const nomesParaMemoria: string[] = [];
+
     for (const item of allCompras.value) {
       if (item.tenant_id === tenantId && item.status === 'Chegou' && !item.arquivado_em) {
         item.arquivado_em = new Date().toISOString();
+        nomesParaMemoria.push(item.descricao);
         arquivados++;
       }
     }
+
+    // Salva os nomes na memória local (Documento Seção 3 / Pág. 8)
+    if (nomesParaMemoria.length > 0 && typeof localStorage !== 'undefined') {
+      try {
+        const salvo = JSON.parse(localStorage.getItem('pharma_med_history') || '[]');
+        const combinado = Array.from(new Set([...salvo, ...nomesParaMemoria]));
+        localStorage.setItem('pharma_med_history', JSON.stringify(combinado));
+      } catch (e) {
+        console.error('Erro ao salvar pharma_med_history', e);
+      }
+    }
+
     return arquivados;
   }
 
-  function exportarParaCSV(): string {
-    const itens = currentCompras.value;
+  function exportarParaCSV(listaCustomizada?: CompraItem[]): string {
+    const itens = listaCustomizada || currentCompras.value;
     const tenant = authStore.currentTenant;
-    const header = ['ID', 'Descrição', 'Classificação', 'Quantidade', 'Custo Unitário', 'Status', 'Urgente', 'Controlado', 'Fornecedor'];
+
+    // Colunas especificadas no Documento (Pág. 8): Nome, Classificação, Quantidade, Status e Urgente
+    const header = ['Nome', 'Classificação', 'Quantidade', 'Status', 'Urgente'];
     const rows = itens.map((i) => [
-      i.id,
-      `"${i.descricao}"`,
-      `"${i.classificacao?.nome || 'Geral'}"`,
+      `"${i.descricao.replace(/"/g, '""')}"`,
+      `"${(i.classificacao?.nome || 'Geral').replace(/"/g, '""')}"`,
       i.quantidade,
-      i.preco_custo.toFixed(2),
       i.status,
       i.urgente ? 'SIM' : 'NÃO',
-      i.controlado ? 'SIM' : 'NÃO',
-      `"${i.fornecedor?.nome || 'Não definido'}"`,
     ]);
 
-    const csvContent = [header.join(';'), ...rows.map((r) => r.join(';'))].join('\n');
+    // Delimitado por ponto e vírgula com BOM UTF-8 (\uFEFF)
+    const csvContent = '\uFEFF' + [header.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `compras_${tenant.slug}_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `pedidos_compra_${tenant.slug}_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
