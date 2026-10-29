@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { useEncomendasStore } from '../stores/encomendas';
 import { useClientesStore } from '../stores/clientes';
 import {
   DollarSign,
   FileSpreadsheet,
+  RefreshCw,
 } from 'lucide-vue-next';
 
 const authStore = useAuthStore();
@@ -14,7 +15,19 @@ const clientesStore = useClientesStore();
 
 const activeRelatorioTab = ref<'financeiro' | 'produtos' | 'auditoria'>('financeiro');
 
-// Valores a receber por cliente (Spec 8)
+onMounted(() => {
+  if (authStore.isAdmin) {
+    authStore.carregarLogsAuditoriaTenant();
+  }
+});
+
+watch(activeRelatorioTab, (tab) => {
+  if (tab === 'auditoria' && authStore.isAdmin) {
+    authStore.carregarLogsAuditoriaTenant();
+  }
+});
+
+// Valores a receber por cliente
 const clientesComSaldoDevedor = computed(() => {
   return clientesStore.currentTenantClientes
     .map((c) => {
@@ -60,77 +73,40 @@ const rankingProdutos = computed(() => {
     .sort((a, b) => b.quantidade - a.quantidade);
 });
 
-// Log de Auditoria Simulado (Spec 3.1 & 8)
-const mockLogsAuditoria = ref([
-  {
-    id: 'log-1',
-    acao: 'CONSULTA_FICHA_CLIENTE',
-    recurso: 'Maria Oliveira Santos (CPF: 123.456.789-00)',
-    usuario: 'Ana Balcão (operador)',
-    ip: '192.168.1.45',
-    data: '2026-03-02 14:15:20',
-  },
-  {
-    id: 'log-2',
-    acao: 'EXPORTACAO_RELATORIO_FINANCEIRO',
-    recurso: 'Relatorio_Valores_Receber_Marco2026.csv',
-    usuario: 'Carlos Gerente (admin)',
-    ip: '192.168.1.10',
-    data: '2026-03-02 11:30:10',
-  },
-  {
-    id: 'log-3',
-    acao: 'LIBERACAO_ENTREGA_COM_SALDO',
-    recurso: 'Encomenda ENC-2026-001 (Saldo pendente R$ 645,00)',
-    usuario: 'Carlos Gerente (admin)',
-    ip: '192.168.1.10',
-    data: '2026-03-01 16:40:00',
-  },
-  {
-    id: 'log-4',
-    acao: 'IMPORTACAO_XML_NFE',
-    recurso: 'NF-e_PANPHARMA_004921.xml (3 itens)',
-    usuario: 'Roberto Compras (comprador)',
-    ip: '192.168.1.22',
-    data: '2026-02-28 09:12:44',
-  },
-]);
-
 function formatarMoeda(val: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 }
 
-function exportarRelatorioFinanceiro() {
+async function exportarRelatorioFinanceiro() {
   const tenant = authStore.currentTenant;
   const header = ['Cliente', 'Telefone', 'Total Pedidos', 'Valor Total', 'Valor Pago', 'Saldo Devedor'];
   const rows = clientesComSaldoDevedor.value.map((c) => [
-    `"${c.cliente.nome}"`,
-    `"${c.cliente.telefone}"`,
+    `"${c.cliente.nome.replace(/"/g, '""')}"`,
+    `"${(c.cliente.telefone || '').replace(/"/g, '""')}"`,
     c.pedidosCount,
     c.valorTotal.toFixed(2),
     c.valorPago.toFixed(2),
     c.saldoDevedor.toFixed(2),
   ]);
 
-  const csv = [header.join(';'), ...rows.map((r) => r.join(';'))].join('\n');
+  const nomeArquivo = `relatorio_receber_${tenant.slug}_${new Date().toISOString().slice(0, 10)}.csv`;
+  const csv = '\uFEFF' + [header.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `relatorio_receber_${tenant.slug}_${new Date().toISOString().slice(0, 10)}.csv`;
+  link.download = nomeArquivo;
   link.click();
+  URL.revokeObjectURL(url);
 
-  // Registra no log de auditoria (Spec 5.8)
-  mockLogsAuditoria.value.unshift({
-    id: 'log-' + Date.now(),
-    acao: 'EXPORTACAO_RELATORIO_FINANCEIRO',
-    recurso: `relatorio_receber_${tenant.slug}.csv`,
-    usuario: `${authStore.currentUser.nome} (${authStore.currentUser.perfil})`,
-    ip: '127.0.0.1',
-    data: new Date().toLocaleString('pt-BR'),
-  });
+  await authStore.registrarAuditoria(
+    'EXPORTACAO_RELATORIO_FINANCEIRO',
+    nomeArquivo,
+    `${clientesComSaldoDevedor.value.length} clientes com saldo em aberto`
+  );
+  await authStore.carregarLogsAuditoriaTenant();
 
-  alert('Relatório financeiro exportado com sucesso e registrado na auditoria.');
+  alert('Relatório financeiro exportado com sucesso e registrado na trilha imutável de auditoria.');
 }
 </script>
 
@@ -183,7 +159,7 @@ function exportarRelatorioFinanceiro() {
       </button>
     </div>
 
-    <!-- TAB 1: VALORES A RECEBER (Spec 8) -->
+    <!-- TAB 1: VALORES A RECEBER -->
     <div v-if="activeRelatorioTab === 'financeiro'">
       <div class="stat-card" style="margin-bottom: 1.5rem; max-width: 320px;">
         <div class="stat-info">
@@ -228,7 +204,7 @@ function exportarRelatorioFinanceiro() {
       </div>
     </div>
 
-    <!-- TAB 2: RANKING DE MEDICAMENTOS (Spec 5.5 & 8) -->
+    <!-- TAB 2: RANKING DE MEDICAMENTOS -->
     <div v-if="activeRelatorioTab === 'produtos'">
       <div class="table-container">
         <table class="data-table">
@@ -242,6 +218,11 @@ function exportarRelatorioFinanceiro() {
             </tr>
           </thead>
           <tbody>
+            <tr v-if="rankingProdutos.length === 0">
+              <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                Nenhum medicamento registrado no período.
+              </td>
+            </tr>
             <tr v-for="(prod, idx) in rankingProdutos" :key="prod.nome">
               <td style="font-weight: 700; color: var(--text-muted);">{{ idx + 1 }}</td>
               <td style="font-weight: 600;">{{ prod.nome }}</td>
@@ -254,12 +235,16 @@ function exportarRelatorioFinanceiro() {
       </div>
     </div>
 
-    <!-- TAB 3: TRILHA DE AUDITORIA & LGPD (Spec 8, 3.1 & 7.2) -->
+    <!-- TAB 3: TRILHA DE AUDITORIA IMUTÁVEL & LGPD -->
     <div v-if="activeRelatorioTab === 'auditoria'">
-      <div class="card" style="margin-bottom: 1rem; background: var(--bg-surface);">
-        <p style="font-size: 0.85rem; color: var(--text-muted);">
-          Registro imutável de acessos a dados sensíveis, exportações de dados e operações administrativas com retenção mínima de 6 meses (Marco Civil e LGPD).
+      <div class="card" style="margin-bottom: 1rem; background: var(--bg-surface); display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">
+          Registro imutável em banco de dados (<code>log_auditoria</code>) de acessos a dados sensíveis, exportações e ações administrativas (Marco Civil da Internet e LGPD).
         </p>
+        <button @click="authStore.carregarLogsAuditoriaTenant()" class="btn-secondary-pill" style="padding: 6px 14px; font-size: 0.8rem;">
+          <RefreshCw :size="14" />
+          <span>Atualizar</span>
+        </button>
       </div>
 
       <div class="table-container">
@@ -274,16 +259,23 @@ function exportarRelatorioFinanceiro() {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="log in mockLogsAuditoria" :key="log.id">
+            <tr v-if="authStore.logsAuditoria.length === 0">
+              <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                Nenhum evento de auditoria registrado nesta unidade até o momento.
+              </td>
+            </tr>
+            <tr v-for="log in authStore.logsAuditoria" :key="log.id">
               <td>
                 <span class="badge" style="background: var(--bg-body); font-family: monospace; font-size: 0.75rem;">
                   {{ log.acao }}
                 </span>
               </td>
               <td style="font-weight: 500;">{{ log.recurso }}</td>
-              <td>{{ log.usuario }}</td>
-              <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-muted);">{{ log.ip }}</td>
-              <td style="text-align: right; font-size: 0.82rem; color: var(--text-muted);">{{ log.data }}</td>
+              <td>{{ log.usuario_id ? (authStore.tenantUsers.find((u) => u.id === log.usuario_id)?.nome || 'Usuário Autenticado') : 'Sistema' }}</td>
+              <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-muted);">{{ log.ip || '-' }}</td>
+              <td style="text-align: right; font-size: 0.82rem; color: var(--text-muted);">
+                {{ new Date(log.criado_em).toLocaleString('pt-BR') }}
+              </td>
             </tr>
           </tbody>
         </table>

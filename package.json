@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test:isolation": "tsx scripts/run-isolation-tests.ts",
     "migrate:base44": "tsx scripts/migrate-base44.ts",
+    "backup:db": "node scripts/backup-database.mjs",
     "deploy": "npm run build && wrangler pages deploy dist"
   },
   "dependencies": {

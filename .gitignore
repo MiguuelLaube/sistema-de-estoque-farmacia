@@ -27,7 +27,10 @@ dist-ssr
 .env
 .env.*
 !.env.example
+!.env.development.example
+!.env.production.example
 scratch/
+backups/
 evolution-api/
 cloudflared.exe
 *.log

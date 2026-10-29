@@ -32,11 +32,8 @@ export interface ConfigTenant {
   bloquear_entrega_com_saldo: boolean;
   dias_retencao_arquivamento: number;
   ocultar_medicamentos_notificacao?: boolean;
-  // Integração Evolution API (Disparo Automático de WhatsApp)
+  // Integração WhatsApp via Proxy Server-Side (Segredos isolados em variáveis de ambiente do servidor)
   evolution_api_ativo?: boolean;
-  evolution_api_url?: string;
-  evolution_api_key?: string;
-  evolution_api_instance?: string;
   // Campos de PrintTemplate (Documento Seção 2)
   header_title?: string;
   header_subtitle?: string;
@@ -45,6 +42,26 @@ export interface ConfigTenant {
   show_payment?: boolean;
   show_status?: boolean;
   font_size?: number;
+}
+
+export interface SuperAdminPolitica {
+  usuario_id: string;
+  mfa_obrigatorio: boolean;
+  restringir_ip: boolean;
+  ips_permitidos: string[];
+  exigir_dispositivo_confiavel: boolean;
+  atualizado_em: string;
+}
+
+export interface SuperAdminDispositivo {
+  id: string;
+  usuario_id: string;
+  nome_dispositivo: string;
+  ip_registro?: string;
+  user_agent?: string;
+  ultimo_acesso_em: string;
+  revogado_em?: string | null;
+  criado_em: string;
 }
 
 export interface Funcionario {
@@ -225,11 +242,13 @@ export interface EventoHistorico {
 
 export interface LogAuditoria {
   id: string;
-  tenant_id: string;
-  usuario_id?: string;
+  tenant_id: string | null;
+  usuario_id?: string | null;
   acao: string;
   recurso: string;
   justificativa?: string;
   ip?: string;
+  nivel?: string;
+  visivel_tenant?: boolean;
   criado_em: string;
 }

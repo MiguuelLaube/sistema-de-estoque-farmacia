@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useAuthStore } from '../stores/auth';
 import { useClientesStore } from '../stores/clientes';
 import { useEncomendasStore } from '../stores/encomendas';
 import HistoricoClienteModal from '../components/HistoricoClienteModal.vue';
@@ -25,6 +26,7 @@ import {
 
 const route = useRoute();
 const router = useRouter();
+const authStore = useAuthStore();
 const clientesStore = useClientesStore();
 const encomendasStore = useEncomendasStore();
 
@@ -122,6 +124,17 @@ function salvarCliente() {
   formNome.value = formNome.value.trim().toUpperCase();
 
   const cleanTel = formTelefone.value.replace(/\D/g, '');
+  if (cleanTel.length < 10 || cleanTel.length > 11) {
+    alert('Informe um número de telefone/WhatsApp válido com DDD (10 ou 11 dígitos).');
+    return;
+  }
+
+  // BUG-10 FIX: Validação algorítmica dos dígitos verificadores do CPF quando preenchido
+  if (formCpf.value.trim() && !clientesStore.validarCPF(formCpf.value)) {
+    alert('O CPF informado é inválido. Verifique os 11 dígitos ou deixe o campo em branco.');
+    return;
+  }
+
   const duplicado = clientesStore.currentTenantClientes.find(
     (c) => c.id !== clienteEmEdicao.value?.id && c.telefone.replace(/\D/g, '') === cleanTel
   );
@@ -134,15 +147,15 @@ function salvarCliente() {
     clientesStore.atualizarCliente(clienteEmEdicao.value.id, {
       nome: formNome.value,
       telefone: formTelefone.value,
-      cpf: formCpf.value || undefined,
-      endereco: formEndereco.value || undefined,
+      cpf: formCpf.value.trim() || undefined,
+      endereco: formEndereco.value.trim() || undefined,
     });
   } else {
     clientesStore.adicionarCliente({
       nome: formNome.value,
       telefone: formTelefone.value,
-      cpf: formCpf.value || undefined,
-      endereco: formEndereco.value || undefined,
+      cpf: formCpf.value.trim() || undefined,
+      endereco: formEndereco.value.trim() || undefined,
       base_legal: 'execucao_contrato',
     });
   }
@@ -156,10 +169,14 @@ function removerCliente(c: Cliente) {
   }
 }
 
-// LGPD Art. 18: Revelação auditada de CPF em tela
+// LGPD Art. 18 & BUG-10 FIX: Revelação auditada de CPF em tela
 const revealedCpfs = ref<Record<string, boolean>>({});
-function toggleRevealCpf(id: string) {
-  revealedCpfs.value[id] = !revealedCpfs.value[id];
+function toggleRevealCpf(c: Cliente) {
+  const proximoEstado = !revealedCpfs.value[c.id];
+  revealedCpfs.value[c.id] = proximoEstado;
+  if (proximoEstado) {
+    authStore.registrarAuditoria('VISUALIZACAO_CPF_TITULAR', `Cliente ${c.id}`, 'Desmascaramento pontual em tela');
+  }
 }
 
 // LGPD Art. 18, II e V: Exportação de dados do titular (DSAR / Portabilidade)
@@ -258,7 +275,7 @@ function anonimizarTitular(c: Cliente) {
                 <span style="font-family: monospace;">{{ revealedCpfs[c.id] ? c.cpf : clientesStore.mascararCPF(c.cpf) }}</span>
                 <button
                   type="button"
-                  @click.stop="toggleRevealCpf(c.id)"
+                  @click.stop="toggleRevealCpf(c)"
                   style="background: none; border: none; padding: 0 2px; cursor: pointer; color: #64748b; display: inline-flex; align-items: center;"
                   :title="revealedCpfs[c.id] ? 'Ocultar CPF' : 'Revelar CPF'"
                 >

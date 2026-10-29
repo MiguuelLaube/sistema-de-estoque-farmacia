@@ -1,19 +1,63 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { Cliente } from '../types';
 import { initialClientes } from '../data/mockData';
 import { useAuthStore } from './auth';
+import { supabase, isLiveSupabaseConfigured } from '../services/supabase';
+
+function gerarUuidSeguro(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0').slice(-12);
+}
+
+async function calcularSha256Hex(texto: string): Promise<string> {
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    const data = new TextEncoder().encode(texto);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+  return '';
+}
 
 export const useClientesStore = defineStore('clientes', () => {
   const authStore = useAuthStore();
-  const allClientes = ref<Cliente[]>(initialClientes);
+  const isLive = isLiveSupabaseConfigured();
+  const allClientes = ref<Cliente[]>(isLive ? [] : initialClientes);
 
-  // Filtered by current tenant and not deleted
   const currentTenantClientes = computed(() => {
     return allClientes.value.filter(
       (c) => c.tenant_id === authStore.activeTenantId && !c.excluido_em
     );
   });
+
+  async function carregarClientes() {
+    if (!isLive || !authStore.isAuthenticated) {
+      if (!isLive) allClientes.value = initialClientes;
+      else allClientes.value = [];
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('cliente')
+      .select('*')
+      .order('criado_em', { ascending: false });
+
+    if (!error && data) {
+      allClientes.value = data as Cliente[];
+    }
+  }
+
+  watch(
+    () => [authStore.isAuthenticated, authStore.activeTenantId, authStore.breakGlassTenantId],
+    () => {
+      carregarClientes();
+    },
+    { immediate: true }
+  );
 
   function normalizarTelefone(tel: string): string {
     const digits = tel.replace(/\D/g, '');
@@ -23,7 +67,7 @@ export const useClientesStore = defineStore('clientes', () => {
     if (digits.length === 10) {
       return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
     }
-    return tel;
+    return tel.trim();
   }
 
   function validarCPF(cpf: string): boolean {
@@ -33,14 +77,20 @@ export const useClientesStore = defineStore('clientes', () => {
     let soma = 0;
     for (let i = 0; i < 9; i++) soma += parseInt(clean.charAt(i)) * (10 - i);
     let resto = 11 - (soma % 11);
-    let dig1 = resto === 10 || resto === 11 ? 0 : resto;
+    const dig1 = resto === 10 || resto === 11 ? 0 : resto;
     if (dig1 !== parseInt(clean.charAt(9))) return false;
 
     soma = 0;
     for (let i = 0; i < 10; i++) soma += parseInt(clean.charAt(i)) * (11 - i);
     resto = 11 - (soma % 11);
-    let dig2 = resto === 10 || resto === 11 ? 0 : resto;
+    const dig2 = resto === 10 || resto === 11 ? 0 : resto;
     return dig2 === parseInt(clean.charAt(10));
+  }
+
+  function formatarCPF(cpf: string): string {
+    const clean = cpf.replace(/\D/g, '');
+    if (clean.length !== 11) return cpf.trim();
+    return `${clean.slice(0, 3)}.${clean.slice(3, 6)}.${clean.slice(6, 9)}-${clean.slice(9)}`;
   }
 
   function verificarDuplicidade(nome: string, telefone: string, cpf?: string, ignoreId?: string) {
@@ -74,40 +124,93 @@ export const useClientesStore = defineStore('clientes', () => {
     endereco?: string;
     base_legal?: string;
   }): Cliente {
+    const cpfLimpo = dados.cpf ? dados.cpf.replace(/\D/g, '') : '';
+    const cpfFormatado = cpfLimpo.length === 11 ? formatarCPF(cpfLimpo) : undefined;
+    const agora = new Date().toISOString();
+
     const novoCliente: Cliente = {
-      id: 'd' + Math.random().toString(36).substr(2, 9),
+      id: gerarUuidSeguro(),
       tenant_id: authStore.activeTenantId,
       nome: dados.nome.trim().toUpperCase(),
-      telefone: normalizarTelefone(dados.telefone),
-      cpf: dados.cpf ? dados.cpf.trim() : undefined,
-      cpf_hash: dados.cpf ? 'hash_' + dados.cpf.replace(/\D/g, '') : undefined,
+      telefone: normalizarTelefone(dados.telefone || '(00) 00000-0000'),
+      cpf: cpfFormatado,
+      cpf_hash: undefined,
       endereco: dados.endereco ? dados.endereco.trim() : undefined,
-      consentimento_em: new Date().toISOString(),
+      consentimento_em: agora,
       base_legal: dados.base_legal || 'execucao_contrato',
-      criado_em: new Date().toISOString(),
+      criado_em: agora,
     };
 
     allClientes.value.unshift(novoCliente);
+
+    (async () => {
+      const hash = cpfLimpo.length === 11 ? await calcularSha256Hex(cpfLimpo) : undefined;
+      if (hash) novoCliente.cpf_hash = hash;
+
+      if (isLive && authStore.isAuthenticated) {
+        await supabase.from('cliente').insert({
+          id: novoCliente.id,
+          tenant_id: novoCliente.tenant_id,
+          nome: novoCliente.nome,
+          telefone: novoCliente.telefone,
+          cpf: novoCliente.cpf || null,
+          cpf_hash: hash || null,
+          endereco: novoCliente.endereco || null,
+          consentimento_em: novoCliente.consentimento_em,
+          base_legal: novoCliente.base_legal,
+        });
+      }
+    })();
+
     return novoCliente;
   }
 
   function atualizarCliente(id: string, dados: Partial<Cliente>) {
     const index = allClientes.value.findIndex((c) => c.id === id);
     if (index !== -1) {
+      const cpfLimpo = dados.cpf !== undefined ? (dados.cpf ? dados.cpf.replace(/\D/g, '') : '') : undefined;
+      const cpfFinal =
+        cpfLimpo !== undefined ? (cpfLimpo.length === 11 ? formatarCPF(cpfLimpo) : undefined) : allClientes.value[index].cpf;
+
       allClientes.value[index] = {
         ...allClientes.value[index],
         ...dados,
         nome: dados.nome ? dados.nome.trim().toUpperCase() : allClientes.value[index].nome,
         telefone: dados.telefone ? normalizarTelefone(dados.telefone) : allClientes.value[index].telefone,
-        cpf: dados.cpf !== undefined ? (dados.cpf ? dados.cpf.trim() : undefined) : allClientes.value[index].cpf,
+        cpf: cpfFinal,
       };
+
+      const atualizado = allClientes.value[index];
+      (async () => {
+        const hash = cpfLimpo !== undefined ? (cpfLimpo.length === 11 ? await calcularSha256Hex(cpfLimpo) : null) : atualizado.cpf_hash || null;
+        if (hash) atualizado.cpf_hash = hash;
+        else atualizado.cpf_hash = undefined;
+
+        if (isLive && authStore.isAuthenticated) {
+          await supabase
+            .from('cliente')
+            .update({
+              nome: atualizado.nome,
+              telefone: atualizado.telefone,
+              cpf: atualizado.cpf || null,
+              cpf_hash: hash,
+              endereco: atualizado.endereco || null,
+              atualizado_em: new Date().toISOString(),
+            })
+            .eq('id', id);
+        }
+      })();
     }
   }
 
   function arquivarCliente(id: string) {
     const cliente = allClientes.value.find((c) => c.id === id);
     if (cliente) {
-      cliente.arquivado_em = new Date().toISOString();
+      const agora = new Date().toISOString();
+      cliente.arquivado_em = agora;
+      if (isLive && authStore.isAuthenticated) {
+        supabase.from('cliente').update({ arquivado_em: agora }).eq('id', id).then(() => {});
+      }
     }
   }
 
@@ -117,16 +220,41 @@ export const useClientesStore = defineStore('clientes', () => {
     if (index === -1) return false;
 
     const original = allClientes.value[index];
+    const agora = new Date().toISOString();
+    const nomeAnonimo = `TITULAR ANONIMIZADO #${original.id.slice(-4)}`;
+
     allClientes.value[index] = {
       ...original,
-      nome: `TITULAR ANONIMIZADO #${original.id.slice(-4)}`,
+      nome: nomeAnonimo,
       cpf: undefined,
       cpf_hash: undefined,
       telefone: '(00) 00000-0000',
       endereco: undefined,
-      excluido_em: new Date().toISOString(),
-      arquivado_em: new Date().toISOString(),
+      excluido_em: agora,
+      arquivado_em: agora,
     };
+
+    if (isLive && authStore.isAuthenticated) {
+      supabase
+        .from('cliente')
+        .update({
+          nome: nomeAnonimo,
+          cpf: null,
+          cpf_hash: null,
+          telefone: '(00) 00000-0000',
+          endereco: null,
+          excluido_em: agora,
+          arquivado_em: agora,
+        })
+        .eq('id', id)
+        .then(() => {
+          authStore.registrarAuditoria(
+            'ANONIMIZACAO_TITULAR_LGPD',
+            `Titular #${original.id.slice(-8)}`,
+            'Exercício do Direito de Eliminação/Anonimização (Art. 18, IV e VI LGPD)'
+          );
+        });
+    }
     return true;
   }
 
@@ -167,10 +295,15 @@ export const useClientesStore = defineStore('clientes', () => {
       URL.revokeObjectURL(url);
     }
 
+    authStore.registrarAuditoria(
+      'EXPORTACAO_PORTABILIDADE_LGPD',
+      `Titular #${cliente.id.slice(-8)}`,
+      'Atendimento ao Direito de Acesso e Portabilidade (Art. 18, II e V LGPD)'
+    );
+
     return dadosExportacao;
   }
 
-  // Função utilitária de mascaramento de CPF em tela (Art. 6º, IV da LGPD)
   function mascararCPF(cpf?: string): string {
     if (!cpf) return '';
     const clean = cpf.replace(/\D/g, '');
@@ -181,6 +314,7 @@ export const useClientesStore = defineStore('clientes', () => {
   return {
     allClientes,
     currentTenantClientes,
+    carregarClientes,
     normalizarTelefone,
     validarCPF,
     verificarDuplicidade,

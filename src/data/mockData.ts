@@ -40,9 +40,6 @@ export const initialConfigs: Record<string, ConfigTenant> = {
     bloquear_entrega_com_saldo: false,
     dias_retencao_arquivamento: 90,
     evolution_api_ativo: true,
-    evolution_api_url: 'http://localhost:8080',
-    evolution_api_key: 'farmacia_secret_api_key_2026',
-    evolution_api_instance: 'drogaria',
     header_title: 'DROGARIA AEROPORTO',
     header_subtitle: 'Sistema de Encomendas',
     footer_text: 'Obrigado pela preferencia!',
@@ -63,9 +60,6 @@ export const initialConfigs: Record<string, ConfigTenant> = {
     bloquear_entrega_com_saldo: true,
     dias_retencao_arquivamento: 90,
     evolution_api_ativo: false,
-    evolution_api_url: 'http://localhost:8080',
-    evolution_api_key: '',
-    evolution_api_instance: 'farmacia_boa_esperanca',
     header_title: 'FARMÁCIA BOA ESPERANÇA',
     header_subtitle: 'Comprovante de Encomenda',
     footer_text: 'Obrigado pela preferência! Volte sempre.',
@@ -78,7 +72,7 @@ export const initialConfigs: Record<string, ConfigTenant> = {
 
 export const initialUsuarios: Usuario[] = [
   {
-    id: 'u0000000-0000-0000-0000-000000000001',
+    id: '01000000-0000-0000-0000-000000000001',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
     nome: 'Carlos Gerente',
     email: 'carlos@aeroporto.com.br',
@@ -87,7 +81,7 @@ export const initialUsuarios: Usuario[] = [
     criado_em: '2026-01-10T10:00:00Z',
   },
   {
-    id: 'u0000000-0000-0000-0000-000000000002',
+    id: '01000000-0000-0000-0000-000000000002',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
     nome: 'Ana Balcão',
     email: 'ana@aeroporto.com.br',
@@ -96,7 +90,7 @@ export const initialUsuarios: Usuario[] = [
     criado_em: '2026-01-11T09:00:00Z',
   },
   {
-    id: 'u0000000-0000-0000-0000-000000000003',
+    id: '01000000-0000-0000-0000-000000000003',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
     nome: 'Roberto Compras',
     email: 'roberto@aeroporto.com.br',
@@ -104,25 +98,14 @@ export const initialUsuarios: Usuario[] = [
     ativo: true,
     criado_em: '2026-01-11T09:00:00Z',
   },
-  // Tenant B
   {
-    id: 'u0000000-0000-0000-0000-000000000004',
+    id: '01000000-0000-0000-0000-000000000004',
     tenant_id: 'b0000000-0000-0000-0000-000000000002',
     nome: 'Mariana Admin',
     email: 'mariana@boaesperanca.com.br',
     perfil: 'admin',
     ativo: true,
     criado_em: '2026-02-15T15:00:00Z',
-  },
-  // Super admin da plataforma
-  {
-    id: 'u0000000-0000-0000-0000-000000000099',
-    tenant_id: null,
-    nome: 'Super Administrador',
-    email: 'superadmin@plataforma.com.br',
-    perfil: 'super_admin',
-    ativo: true,
-    criado_em: '2026-01-01T00:00:00Z',
   },
 ];
 
@@ -131,7 +114,6 @@ export const initialClassificacoes: Classificacao[] = [
   { id: 'c0000000-0000-0000-0000-000000000002', tenant_id: 'a0000000-0000-0000-0000-000000000001', nome: 'GENÉRICO / SIMILAR', ordem: 2, criado_em: '2026-01-10T10:00:00Z' },
   { id: 'c0000000-0000-0000-0000-000000000003', tenant_id: 'a0000000-0000-0000-0000-000000000001', nome: 'REFERÊNCIA', ordem: 3, criado_em: '2026-01-10T10:00:00Z' },
   { id: 'c0000000-0000-0000-0000-000000000004', tenant_id: 'a0000000-0000-0000-0000-000000000001', nome: 'PERFUMARIA / HIGIENE', ordem: 4, criado_em: '2026-01-10T10:00:00Z' },
-  // Tenant B
   { id: 'c0000000-0000-0000-0000-000000000005', tenant_id: 'b0000000-0000-0000-0000-000000000002', nome: 'MEDICAMENTOS', ordem: 1, criado_em: '2026-02-15T15:00:00Z' },
   { id: 'c0000000-0000-0000-0000-000000000006', tenant_id: 'b0000000-0000-0000-0000-000000000002', nome: 'COSMÉTICOS', ordem: 2, criado_em: '2026-02-15T15:00:00Z' },
 ];
@@ -231,13 +213,12 @@ export const initialClientes: Cliente[] = [
     base_legal: 'execucao_contrato',
     criado_em: '2026-02-01T11:00:00Z',
   },
-  // Tenant B
   {
     id: 'd0000000-0000-0000-0000-000000000004',
     tenant_id: 'b0000000-0000-0000-0000-000000000002',
     nome: 'Fernanda Souza',
     cpf: '222.333.444-55',
-    cpf_hash: '22233344455hash',
+    cpf_hash: '64d94cf3e0449312232c191a2d4c25be1bc71284a40548619184770918432391',
     telefone: '(21) 98888-7777',
     endereco: '',
     consentimento_em: '2026-02-16T10:00:00Z',
@@ -248,7 +229,7 @@ export const initialClientes: Cliente[] = [
 
 export const initialCompras: CompraItem[] = [
   {
-    id: 'cp000000-0000-0000-0000-000000000091',
+    id: '02000000-0000-0000-0000-000000000091',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
     descricao: 'NESTOGENO 2',
     descricao_normalizada: 'NESTOGENO 2',
@@ -265,7 +246,7 @@ export const initialCompras: CompraItem[] = [
     atualizado_em: '2026-03-01T10:00:00Z',
   },
   {
-    id: 'cp000000-0000-0000-0000-000000000092',
+    id: '02000000-0000-0000-0000-000000000092',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
     descricao: 'NESTOGENO 1',
     descricao_normalizada: 'NESTOGENO 1',
@@ -282,7 +263,7 @@ export const initialCompras: CompraItem[] = [
     atualizado_em: '2026-03-01T10:00:00Z',
   },
   {
-    id: 'cp000000-0000-0000-0000-000000000093',
+    id: '02000000-0000-0000-0000-000000000093',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
     descricao: 'NAN SUPREME 6-12 MESES',
     descricao_normalizada: 'NAN SUPREME 6-12 MESES',
@@ -299,7 +280,7 @@ export const initialCompras: CompraItem[] = [
     atualizado_em: '2026-03-01T10:00:00Z',
   },
   {
-    id: 'cp000000-0000-0000-0000-000000000001',
+    id: '02000000-0000-0000-0000-000000000001',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
     descricao: 'Ozempic 1mg Solução Injetável',
     descricao_normalizada: 'OZEMPIC 1MG SOLUCAO INJETAVEL',
@@ -316,7 +297,7 @@ export const initialCompras: CompraItem[] = [
     atualizado_em: '2026-03-01T11:00:00Z',
   },
   {
-    id: 'cp000000-0000-0000-0000-000000000002',
+    id: '02000000-0000-0000-0000-000000000002',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
     descricao: 'Agulhas para Caneta Novofine 32G cx 100',
     descricao_normalizada: 'AGULHAS PARA CANETA NOVOFINE 32G CX 100',
@@ -333,7 +314,7 @@ export const initialCompras: CompraItem[] = [
     atualizado_em: '2026-03-01T10:00:00Z',
   },
   {
-    id: 'cp000000-0000-0000-0000-000000000003',
+    id: '02000000-0000-0000-0000-000000000003',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
     descricao: 'Rivotril 2mg c/ 30 Comprimidos',
     descricao_normalizada: 'RIVOTRIL 2MG C/ 30 COMPRIMIDOS',
@@ -350,7 +331,7 @@ export const initialCompras: CompraItem[] = [
     atualizado_em: '2026-03-02T14:00:00Z',
   },
   {
-    id: 'cp000000-0000-0000-0000-000000000004',
+    id: '02000000-0000-0000-0000-000000000004',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
     descricao: 'Venvanse 50mg c/ 28 Cápsulas',
     descricao_normalizada: 'VENVANSE 50MG C/ 28 CAPSULAS',
@@ -372,20 +353,20 @@ export const initialEncomendas: Encomenda[] = [
   {
     id: 'e0000000-0000-0000-0000-000000000081',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
-    cliente_id: 'd0000000-0000-0000-0000-000000000016', // RUBICHELE JANAINA
+    cliente_id: 'd0000000-0000-0000-0000-000000000016',
     codigo_rastreio: 'ENC-2026-081',
     status: 'Pedido Feito',
     valor_total: 77.00,
     valor_pago: 30.00,
     situacao_pagamento: 'Parcial',
     observacao: '',
-    criado_por: 'u0000000-0000-0000-0000-000000000001',
+    criado_por: '01000000-0000-0000-0000-000000000001',
     entregue_com_saldo_devedor: false,
     criado_em: '2026-10-26T13:14:00Z',
     atualizado_em: '2026-10-26T13:14:00Z',
     itens: [
       {
-        id: 'i0000000-0000-0000-0000-000000000081',
+        id: '03000000-0000-0000-0000-000000000081',
         tenant_id: 'a0000000-0000-0000-0000-000000000001',
         encomenda_id: 'e0000000-0000-0000-0000-000000000081',
         descricao: 'MONURIL',
@@ -407,7 +388,7 @@ export const initialEncomendas: Encomenda[] = [
     ],
     pagamentos: [
       {
-        id: 'p0000000-0000-0000-0000-000000000081',
+        id: '04000000-0000-0000-0000-000000000081',
         tenant_id: 'a0000000-0000-0000-0000-000000000001',
         encomenda_id: 'e0000000-0000-0000-0000-000000000081',
         valor: 30.00,
@@ -421,20 +402,20 @@ export const initialEncomendas: Encomenda[] = [
   {
     id: 'e0000000-0000-0000-0000-000000000082',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
-    cliente_id: 'd0000000-0000-0000-0000-000000000017', // Julio Godoi
+    cliente_id: 'd0000000-0000-0000-0000-000000000017',
     codigo_rastreio: 'ENC-2026-082',
     status: 'Pedido Feito',
     valor_total: 0.00,
     valor_pago: 0.00,
     situacao_pagamento: 'Não pago',
     observacao: '',
-    criado_por: 'u0000000-0000-0000-0000-000000000002',
+    criado_por: '01000000-0000-0000-0000-000000000002',
     entregue_com_saldo_devedor: false,
     criado_em: '2026-10-25T11:06:00Z',
     atualizado_em: '2026-10-25T11:06:00Z',
     itens: [
       {
-        id: 'i0000000-0000-0000-0000-000000000082',
+        id: '03000000-0000-0000-0000-000000000082',
         tenant_id: 'a0000000-0000-0000-0000-000000000001',
         encomenda_id: 'e0000000-0000-0000-0000-000000000082',
         descricao: 'LAMITOR 100 C/60CP',
@@ -449,7 +430,7 @@ export const initialEncomendas: Encomenda[] = [
         criado_em: '2026-10-25T11:06:00Z',
       },
       {
-        id: 'i0000000-0000-0000-0000-000000000083',
+        id: '03000000-0000-0000-0000-000000000083',
         tenant_id: 'a0000000-0000-0000-0000-000000000001',
         encomenda_id: 'e0000000-0000-0000-0000-000000000082',
         descricao: 'AZITROMICINA 500 C/5CP',
@@ -470,7 +451,6 @@ export const initialEncomendas: Encomenda[] = [
     ],
     pagamentos: [],
   },
-  // 18 Encomendas Entregues (matching Screenshot 1: Entregue (18), Total = 20)
   ...Array.from({ length: 18 }).map((_, index) => {
     const clients = [
       { id: 'd0000000-0000-0000-0000-000000000010', name: 'EDEN LIGIERI' },
@@ -497,14 +477,14 @@ export const initialEncomendas: Encomenda[] = [
       valor_pago: price,
       situacao_pagamento: 'Pago' as const,
       observacao: '',
-      criado_por: 'u0000000-0000-0000-0000-000000000001',
+      criado_por: '01000000-0000-0000-0000-000000000001',
       entregue_com_saldo_devedor: false,
       criado_em: `2026-10-${dayStr}T10:00:00Z`,
       atualizado_em: `2026-10-${dayStr}T16:00:00Z`,
       entregue_em: `2026-10-${dayStr}T16:00:00Z`,
       itens: [
         {
-          id: `i0000000-0000-0000-0000-0000000000${(index + 10).toString().padStart(2, '0')}`,
+          id: `03000000-0000-0000-0000-0000000000${(index + 10).toString().padStart(2, '0')}`,
           tenant_id: 'a0000000-0000-0000-0000-000000000001',
           encomenda_id: `e0000000-0000-0000-0000-0000000000${(index + 3).toString().padStart(2, '0')}`,
           descricao: medName,
@@ -525,7 +505,7 @@ export const initialEncomendas: Encomenda[] = [
       ],
       pagamentos: [
         {
-          id: `p0000000-0000-0000-0000-0000000000${(index + 10).toString().padStart(2, '0')}`,
+          id: `04000000-0000-0000-0000-0000000000${(index + 10).toString().padStart(2, '0')}`,
           tenant_id: 'a0000000-0000-0000-0000-000000000001',
           encomenda_id: `e0000000-0000-0000-0000-0000000000${(index + 3).toString().padStart(2, '0')}`,
           valor: price,
@@ -541,28 +521,28 @@ export const initialEncomendas: Encomenda[] = [
 
 export const initialFuncionarios: Funcionario[] = [
   {
-    id: 'f0000000-0000-0000-0000-000000000001',
+    id: '0f000000-0000-0000-0000-000000000001',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
     nome: 'MIGUEL',
     cargo: 'Farmacêutico / Atendente',
     criado_em: '2026-01-10T10:00:00Z',
   },
   {
-    id: 'f0000000-0000-0000-0000-000000000002',
+    id: '0f000000-0000-0000-0000-000000000002',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
     nome: 'THAIS',
     cargo: 'Balconista',
     criado_em: '2026-01-10T10:00:00Z',
   },
   {
-    id: 'f0000000-0000-0000-0000-000000000003',
+    id: '0f000000-0000-0000-0000-000000000003',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
     nome: 'CARLOS',
     cargo: 'Gerente',
     criado_em: '2026-01-10T10:00:00Z',
   },
   {
-    id: 'f0000000-0000-0000-0000-000000000004',
+    id: '0f000000-0000-0000-0000-000000000004',
     tenant_id: 'b0000000-0000-0000-0000-000000000002',
     nome: 'João Santos',
     cargo: 'Operador de Caixa',
@@ -572,7 +552,7 @@ export const initialFuncionarios: Funcionario[] = [
 
 export const initialReservas: Reserva[] = [
   {
-    id: 'res-000001',
+    id: '05000000-0000-0000-0000-000000000001',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
     customer_name: 'MARIA APARECIDA LIMA',
     phone: '(11) 98765-4321',

@@ -61,8 +61,18 @@ export function calcularSimilaridadeTokens(strA: string, strB: string): number {
   return Math.min(1, pontos / pesoTotal);
 }
 
-// Leitor no navegador via DOMParser (Documento Seção 3 / Pág. 9)
+// Leitor no navegador via DOMParser com proteção contra XML malformado, tamanho excessivo e XXE
 export function parsearXmlNfe(xmlConteudo: string): Array<{ nome: string; quantidade?: number }> {
+  if (!xmlConteudo || typeof xmlConteudo !== 'string') {
+    throw new Error('Conteúdo XML vazio ou inválido.');
+  }
+  if (xmlConteudo.length > 5 * 1024 * 1024) {
+    throw new Error('O arquivo XML excede o tamanho máximo permitido (5 MB).');
+  }
+  if (/<!ENTITY/i.test(xmlConteudo) || /<!DOCTYPE/i.test(xmlConteudo)) {
+    throw new Error('Declarações externas (DOCTYPE/ENTITY) não são permitidas por segurança.');
+  }
+
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(xmlConteudo, 'text/xml');
 

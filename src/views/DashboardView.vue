@@ -16,7 +16,7 @@ import {
   Loader2,
   Check,
 } from 'lucide-vue-next';
-import { enviarMensagemEvolutionApi, formatarMensagemNotificacao } from '../services/evolutionApi';
+import { enviarMensagemWhatsAppProxy, formatarMensagemNotificacao } from '../services/evolutionApi';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -62,10 +62,10 @@ async function dispararAvisoBot(enc: any) {
   }
 
   // Se robô não estiver ativo, usa rota manual WhatsApp Web
-  if (!cfg.evolution_api_ativo || !cfg.evolution_api_url) {
+  if (!cfg.evolution_api_ativo) {
     const url = encomendasStore.gerarLinkWhatsApp(enc);
     if (url) {
-      window.open(url, '_blank');
+      window.open(url, '_blank', 'noopener,noreferrer');
       encomendasStore.alternarClienteAvisado(enc.id, true, authStore.currentUser.nome);
     }
     return;
@@ -83,27 +83,18 @@ async function dispararAvisoBot(enc: any) {
       cfg.ocultar_medicamentos_notificacao
     );
 
-    const res = await enviarMensagemEvolutionApi(
-      {
-        ativo: true,
-        apiUrl: cfg.evolution_api_url,
-        apiKey: cfg.evolution_api_key || '',
-        instanceName: cfg.evolution_api_instance || '',
-      },
-      cliente.telefone,
-      msg
-    );
+    const res = await enviarMensagemWhatsAppProxy(true, cliente.telefone, msg);
 
     if (res.sucesso) {
-      encomendasStore.alternarClienteAvisado(enc.id, true, 'Robô Evolution API');
+      encomendasStore.alternarClienteAvisado(enc.id, true, 'Robô WhatsApp');
       alert(`✅ Mensagem de chegada enviada com sucesso para ${cliente.nome}!`);
     } else {
-      alert(`❌ Falha no robô: ${res.mensagem}\nVocê pode abrir pelo WhatsApp Web.`);
+      alert(`❌ Falha no disparo automático: ${res.mensagem}\nVocê pode abrir pelo WhatsApp Web.`);
       const url = encomendasStore.gerarLinkWhatsApp(enc);
-      if (url) window.open(url, '_blank');
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
     }
-  } catch (err: any) {
-    alert(`Erro ao comunicar com Evolution API: ${err?.message || err}`);
+  } catch {
+    alert('Não foi possível conectar ao serviço de mensageria no momento.');
   } finally {
     enviandoAvisoId.value = null;
   }

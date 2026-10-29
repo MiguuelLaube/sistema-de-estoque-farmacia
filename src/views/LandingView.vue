@@ -27,7 +27,7 @@ const estaLogado = computed(() => authStore.isAuthenticated);
 
 function acessarPlataforma() {
   if (estaLogado.value) {
-    router.push('/dashboard');
+    router.push(authStore.isSuperAdmin ? { name: 'plataforma' } : { name: 'dashboard' });
   } else {
     router.push('/login');
   }

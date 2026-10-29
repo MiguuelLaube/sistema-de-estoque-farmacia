@@ -29,7 +29,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-vue-next';
-import { enviarMensagemEvolutionApi, formatarMensagemNotificacao } from '../services/evolutionApi';
+import { enviarMensagemWhatsAppProxy, formatarMensagemNotificacao } from '../services/evolutionApi';
 import HistoricoClienteModal from '../components/HistoricoClienteModal.vue';
 import type { Cliente } from '../types';
 
@@ -206,17 +206,35 @@ function requestDeleteOrder(orderId: string) {
   }
 }
 
-// Confirm action with employee
+const listaAtendentesModal = computed<Funcionario[]>(() => {
+  if (authStore.tenantFuncionarios.length > 0) {
+    return authStore.tenantFuncionarios;
+  }
+  return [
+    {
+      id: authStore.currentUser.id || 'usuario-atual',
+      tenant_id: authStore.activeTenantId,
+      nome: (authStore.currentUser.nome || 'ATENDIMENTO').toUpperCase(),
+      cargo: 'Usuário Autenticado',
+      criado_em: new Date().toISOString(),
+    },
+  ];
+});
+
+// Confirm action with employee (BUG-09 FIX: respeita alçada real do usuário logado e exibe erro de governança)
 function confirmEmployeeAction(employee: Funcionario) {
   if (!pendingAction.value) return;
 
   const { type, orderId, statusTarget, paidTarget } = pendingAction.value;
 
   if (type === 'status' && statusTarget) {
-    encomendasStore.alterarStatus(orderId, statusTarget, {
-      autorizacaoAdmin: true,
+    const res = encomendasStore.alterarStatus(orderId, statusTarget, {
+      autorizacaoAdmin: authStore.isAdmin,
       funcionarioNome: employee.nome,
     });
+    if (!res.sucesso) {
+      alert(res.mensagem || 'Operação bloqueada pelas políticas de alçada da loja.');
+    }
   } else if (type === 'togglePaid' && paidTarget !== undefined) {
     encomendasStore.alternarPago(orderId, paidTarget, employee.nome);
   }
@@ -294,11 +312,11 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
     return;
   }
 
-  if (!cfg.evolution_api_ativo || !cfg.evolution_api_url) {
+  if (!cfg.evolution_api_ativo) {
     // Se o robô não estiver ativo, abre o link tradicional do WhatsApp Web
     const link = encomendasStore.gerarLinkWhatsApp(order);
     if (link) {
-      window.open(link, '_blank');
+      window.open(link, '_blank', 'noopener,noreferrer');
       encomendasStore.alternarClienteAvisado(order.id, true, authStore.currentUser.nome);
     }
     return;
@@ -316,25 +334,16 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
       cfg.ocultar_medicamentos_notificacao
     );
 
-    const res = await enviarMensagemEvolutionApi(
-      {
-        ativo: true,
-        apiUrl: cfg.evolution_api_url,
-        apiKey: cfg.evolution_api_key || '',
-        instanceName: cfg.evolution_api_instance || '',
-      },
-      cliente.telefone,
-      mensagem
-    );
+    const res = await enviarMensagemWhatsAppProxy(true, cliente.telefone, mensagem);
 
     if (res.sucesso) {
-      encomendasStore.alternarClienteAvisado(order.id, true, 'Robô Evolution API');
+      encomendasStore.alternarClienteAvisado(order.id, true, 'Robô WhatsApp');
       alert(`✅ Mensagem de chegada enviada com sucesso para ${cliente.nome}!`);
     } else {
       alert(`❌ Falha no disparo automático: ${res.mensagem}\nVocê pode copiar a mensagem ou abrir o WhatsApp manualmente.`);
     }
-  } catch (err: any) {
-    alert(`Erro ao conectar com robô de WhatsApp: ${err?.message || err}`);
+  } catch {
+    alert('Não foi possível conectar ao serviço de mensageria no momento.');
   } finally {
     enviandoAvisoId.value = null;
   }
@@ -1099,7 +1108,7 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
 
         <div style="display: flex; flex-direction: column; gap: 0.5rem;">
           <button
-            v-for="emp in authStore.tenantFuncionarios"
+            v-for="emp in listaAtendentesModal"
             :key="emp.id"
             @click="confirmEmployeeAction(emp)"
             style="
@@ -1267,7 +1276,7 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
           </button>
         </div>
 
-        <!-- Thermal Receipt Container -->
+        <!-- Thermal Receipt Container (BUG-11 FIX: usa modelo dinâmico do tenant) -->
         <div
           id="cupom-termico-print"
           style="
@@ -1276,14 +1285,18 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
             border-radius: 8px;
             padding: 1.25rem 1rem;
             font-family: 'Courier New', Courier, monospace;
-            font-size: 0.82rem;
             color: #000000;
             line-height: 1.4;
           "
+          :style="{ fontSize: `${authStore.currentConfig.font_size || 13}px` }"
         >
           <div style="text-align: center; margin-bottom: 0.75rem;">
-            <div style="font-weight: 700; font-size: 0.95rem;">DROGARIA AEROPORTO</div>
-            <div style="font-size: 0.75rem; color: #475569;">Sistema de Encomendas</div>
+            <div style="font-weight: 700; font-size: 1.05em;">
+              {{ authStore.currentConfig.header_title || 'DROGARIA AEROPORTO' }}
+            </div>
+            <div style="font-size: 0.88em; color: #475569;">
+              {{ authStore.currentConfig.header_subtitle || 'Sistema de Encomendas' }}
+            </div>
             <div style="margin-top: 4px; border-bottom: 1px dashed #000; padding-bottom: 4px;">
               {{ formatDate(cupomEncomenda.criado_em) }}
             </div>
@@ -1291,7 +1304,7 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
 
           <div style="margin-bottom: 0.5rem;">
             <div><strong>CLIENTE:</strong> {{ cupomEncomenda.cliente?.nome || 'NÃO INFORMADO' }}</div>
-            <div v-if="cupomEncomenda.cliente?.telefone">
+            <div v-if="authStore.currentConfig.show_phone !== false && cupomEncomenda.cliente?.telefone">
               <strong>TEL:</strong> {{ cupomEncomenda.cliente?.telefone }}
             </div>
           </div>
@@ -1313,23 +1326,32 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
             <span>{{ formatBRL(cupomEncomenda.valor_total) }}</span>
           </div>
 
-          <div style="display: flex; justify-content: space-between; font-size: 0.76rem; color: #334155;">
+          <div
+            v-if="authStore.currentConfig.show_status !== false"
+            style="display: flex; justify-content: space-between; font-size: 0.9em; color: #334155;"
+          >
             <span>STATUS PAGTO:</span>
             <span>{{ cupomEncomenda.situacao_pagamento }}</span>
           </div>
 
-          <div style="display: flex; justify-content: space-between; font-size: 0.76rem; color: #334155;">
+          <div
+            v-if="authStore.currentConfig.show_payment !== false"
+            style="display: flex; justify-content: space-between; font-size: 0.9em; color: #334155;"
+          >
             <span>VALOR JÁ PAGO:</span>
             <span>{{ formatBRL(cupomEncomenda.valor_pago) }}</span>
           </div>
 
-          <div style="display: flex; justify-content: space-between; font-size: 0.76rem; font-weight: 700;">
+          <div
+            v-if="authStore.currentConfig.show_payment !== false"
+            style="display: flex; justify-content: space-between; font-size: 0.9em; font-weight: 700;"
+          >
             <span>A COBRAR:</span>
             <span>{{ formatBRL(Math.max(0, cupomEncomenda.valor_total - cupomEncomenda.valor_pago)) }}</span>
           </div>
 
-          <div style="text-align: center; margin-top: 1rem; font-size: 0.72rem; color: #64748b;">
-            Obrigado pela preferência!
+          <div style="text-align: center; margin-top: 1rem; font-size: 0.85em; color: #64748b;">
+            {{ authStore.currentConfig.footer_text || 'Obrigado pela preferência!' }}
           </div>
         </div>
 
@@ -1342,7 +1364,7 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
             style="
               flex: 1;
               height: 40px;
-              border-radius: 10px;
+              border-radius: 9999px;
               border: none;
               background: #2563eb;
               color: #ffffff;

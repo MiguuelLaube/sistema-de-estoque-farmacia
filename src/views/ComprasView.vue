@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { useAuthStore } from '../stores/auth';
 import { useComprasStore } from '../stores/compras';
 import { useEncomendasStore } from '../stores/encomendas';
 import type { StatusCompra, CompraItem } from '../types';
@@ -22,7 +21,6 @@ import {
   Tag,
 } from 'lucide-vue-next';
 
-const authStore = useAuthStore();
 const comprasStore = useComprasStore();
 const encomendasStore = useEncomendasStore();
 
@@ -154,20 +152,18 @@ function abrirEditarItem(item: CompraItem) {
 }
 
 function salvarEdicaoItem() {
-  if (!itemEmEdicao.value) return;
-  const original = comprasStore.allCompras.find((c) => c.id === itemEmEdicao.value!.id);
-  if (original) {
-    original.descricao = itemEmEdicao.value.descricao.trim().toUpperCase();
-    original.descricao_normalizada = comprasStore.normalizarDescricao(original.descricao);
-    original.classificacao_id = itemEmEdicao.value.classificacao_id;
-    original.quantidade = itemEmEdicao.value.quantidade;
-  }
+  if (!itemEmEdicao.value || !itemEmEdicao.value.descricao.trim()) return;
+  comprasStore.atualizarItemCompra(itemEmEdicao.value.id, {
+    descricao: itemEmEdicao.value.descricao,
+    classificacao_id: itemEmEdicao.value.classificacao_id,
+    quantidade: itemEmEdicao.value.quantidade,
+  });
   showEditarItemModal.value = false;
 }
 
 function excluirItem(id: string) {
   if (confirm('Deseja realmente remover este item da lista de compras?')) {
-    comprasStore.allCompras = comprasStore.allCompras.filter((c) => c.id !== id);
+    comprasStore.removerItemCompra(id);
     showEditarItemModal.value = false;
   }
 }
@@ -211,18 +207,12 @@ function criarNovaClassificacao() {
     alert('Classificação já cadastrada!');
     return;
   }
-  comprasStore.allClassificacoes.push({
-    id: 'c' + Math.random().toString(36).substr(2, 9),
-    tenant_id: authStore.activeTenantId,
-    nome: nomeUpper,
-    ordem: comprasStore.currentClassificacoes.length + 1,
-    criado_em: new Date().toISOString(),
-  });
+  comprasStore.adicionarClassificacao(nomeUpper);
   novaClassificacaoNome.value = '';
 }
 
 function removerClassificacao(id: string) {
-  comprasStore.allClassificacoes = comprasStore.allClassificacoes.filter((c) => c.id !== id);
+  comprasStore.removerClassificacao(id);
 }
 
 function abrirImportacaoXML() {
@@ -237,6 +227,12 @@ function processarArquivoXml(event: Event) {
   const file = input.files[0];
   if (!file.name.toLowerCase().endsWith('.xml')) {
     alert('Por favor, selecione um arquivo válido com extensão .xml');
+    input.value = '';
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    alert('O arquivo XML excede o tamanho máximo permitido (5 MB).');
+    input.value = '';
     return;
   }
 

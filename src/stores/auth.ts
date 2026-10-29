@@ -1,73 +1,120 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import type { Tenant, ConfigTenant, Usuario, Funcionario } from '../types';
+import type {
+  Tenant,
+  ConfigTenant,
+  Usuario,
+  Funcionario,
+  SuperAdminDispositivo,
+  LogAuditoria,
+} from '../types';
 import { initialTenants, initialConfigs, initialUsuarios, initialFuncionarios } from '../data/mockData';
 import { supabase, isLiveSupabaseConfigured } from '../services/supabase';
 
+const DEVICE_TOKEN_STORAGE_KEY = 'pharma_sa_device_token_v1';
+
+function gerarUuidSeguro(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0').slice(-12);
+}
+
+function sanitizarMensagemErroAuth(rawMsg?: string): string {
+  const lower = (rawMsg || '').toLowerCase();
+  if (lower.includes('invalid login credentials') || lower.includes('invalid_credentials')) {
+    return 'Credenciais inválidas. Verifique o identificador e a senha informados.';
+  }
+  if (lower.includes('too many requests') || lower.includes('rate limit')) {
+    return 'Muitas tentativas em curto intervalo. Aguarde alguns minutos antes de tentar novamente.';
+  }
+  if (lower.includes('email not confirmed')) {
+    return 'Conta aguardando confirmação cadastral.';
+  }
+  return 'Não foi possível concluir a autenticação no momento.';
+}
+
 export const useAuthStore = defineStore('auth', () => {
-  const tenants = ref<Tenant[]>(initialTenants);
-  const configs = ref<Record<string, ConfigTenant>>(initialConfigs);
-  const usuarios = ref<Usuario[]>(initialUsuarios);
-  const funcionarios = ref<Funcionario[]>(initialFuncionarios);
+  const isLive = isLiveSupabaseConfigured();
+
+  const tenants = ref<Tenant[]>(isLive ? [] : initialTenants);
+  const configs = ref<Record<string, ConfigTenant>>(isLive ? {} : initialConfigs);
+  const usuarios = ref<Usuario[]>(isLive ? [] : initialUsuarios);
+  const funcionarios = ref<Funcionario[]>(isLive ? [] : initialFuncionarios);
 
   const activeTenantId = ref<string>('a0000000-0000-0000-0000-000000000001');
-  const activeUserId = ref<string>('u0000000-0000-0000-0000-000000000001'); // Admin
-  const isAuthenticated = ref<boolean>(localStorage.getItem('pharma_auth_logged') !== 'false');
+  const activeUserId = ref<string>('');
+  const currentUserProfile = ref<Usuario | null>(null);
 
-  const currentTenant = computed(() => {
-    return tenants.value.find((t) => t.id === activeTenantId.value) || tenants.value[0];
+  // BUG-01 FIX: Nunca iniciar autenticado por padrão nem confiar em localStorage
+  const isAuthenticated = ref<boolean>(false);
+  const isAuthInitialized = ref<boolean>(false);
+
+  // Estados de MFA Obrigatório (2FA TOTP) e Recuperação de Senha
+  const mfaStage = ref<'none' | 'enroll' | 'verify'>('none');
+  const mfaFactorId = ref<string>('');
+  const mfaQrCode = ref<string>('');
+  const mfaSecret = ref<string>('');
+  const passwordRecoveryMode = ref<boolean>(false);
+
+  // Estado Break-Glass e Segurança Zero-Trust do Super Admin
+  const breakGlassTenantId = ref<string | null>(null);
+  const superAdminContext = ref<{
+    ip_atual: string;
+    dispositivo_reconhecido: boolean;
+    restringir_ip: boolean;
+    ips_permitidos: string[];
+    exigir_dispositivo_confiavel: boolean;
+  }>({
+    ip_atual: '127.0.0.1',
+    dispositivo_reconhecido: false,
+    restringir_ip: false,
+    ips_permitidos: [],
+    exigir_dispositivo_confiavel: false,
+  });
+  const superAdminDispositivos = ref<SuperAdminDispositivo[]>([]);
+  const logsAuditoria = ref<LogAuditoria[]>([]);
+
+  const fallbackConfig: ConfigTenant = initialConfigs['a0000000-0000-0000-0000-000000000001'];
+  const fallbackTenant: Tenant = initialTenants[0];
+  const fallbackUser: Usuario = {
+    id: '',
+    tenant_id: null,
+    nome: 'Usuário',
+    email: '',
+    perfil: 'operador',
+    ativo: false,
+    criado_em: new Date().toISOString(),
+  };
+
+  const currentTenant = computed<Tenant>(() => {
+    return tenants.value.find((t) => t.id === activeTenantId.value) || tenants.value[0] || fallbackTenant;
   });
 
-  const currentConfig = computed(() => {
-    return configs.value[activeTenantId.value] || initialConfigs['a0000000-0000-0000-0000-000000000001'];
+  const currentConfig = computed<ConfigTenant>(() => {
+    return configs.value[activeTenantId.value] || fallbackConfig;
   });
 
-  const currentUser = computed(() => {
-    return usuarios.value.find((u) => u.id === activeUserId.value) || usuarios.value[0];
+  const currentUser = computed<Usuario>(() => {
+    if (currentUserProfile.value) return currentUserProfile.value;
+    return usuarios.value.find((u) => u.id === activeUserId.value) || fallbackUser;
   });
 
-  const isSuperAdmin = computed(() => currentUser.value.perfil === 'super_admin');
-  const isAdmin = computed(() => currentUser.value.perfil === 'admin' || isSuperAdmin.value);
-  const isComprador = computed(() => currentUser.value.perfil === 'comprador' || isAdmin.value);
-  const isOperador = computed(() => currentUser.value.perfil === 'operador' || isAdmin.value);
+  const isSuperAdmin = computed(() => isAuthenticated.value && currentUser.value.perfil === 'super_admin');
+  const isAdmin = computed(() => isAuthenticated.value && (currentUser.value.perfil === 'admin' || isSuperAdmin.value));
+  const isComprador = computed(() => isAuthenticated.value && (currentUser.value.perfil === 'comprador' || isAdmin.value));
+  const isOperador = computed(() => isAuthenticated.value && (currentUser.value.perfil === 'operador' || isAdmin.value));
 
-  // Users belonging to the current tenant
+  // BUG-06 FIX: Super Admin é estritamente invisível na listagem de equipe de qualquer tenant
   const tenantUsers = computed(() => {
-    return usuarios.value.filter((u) => u.tenant_id === activeTenantId.value || u.perfil === 'super_admin');
+    return usuarios.value.filter(
+      (u) => u.tenant_id === activeTenantId.value && u.perfil !== 'super_admin' && !u.excluido_em
+    );
   });
 
-  // Funcionários cadastrados no tenant (Documento Seção 2 e 3)
   const tenantFuncionarios = computed(() => {
     return funcionarios.value.filter((f) => f.tenant_id === activeTenantId.value);
   });
-
-  function adicionarFuncionario(nome: string, cargo?: string) {
-    if (!nome.trim()) return null;
-    const novo: Funcionario = {
-      id: 'f' + Math.random().toString(36).substring(2, 9),
-      tenant_id: activeTenantId.value,
-      nome: nome.trim(),
-      cargo: cargo?.trim() || undefined,
-      criado_em: new Date().toISOString(),
-    };
-    funcionarios.value.push(novo);
-    return novo;
-  }
-
-  function atualizarFuncionario(id: string, dados: { nome?: string; cargo?: string }) {
-    const f = funcionarios.value.find((item) => item.id === id);
-    if (f) {
-      if (dados.nome !== undefined) f.nome = dados.nome.trim();
-      if (dados.cargo !== undefined) f.cargo = dados.cargo?.trim() || undefined;
-    }
-  }
-
-  function removerFuncionario(id: string) {
-    const idx = funcionarios.value.findIndex((item) => item.id === id);
-    if (idx !== -1) {
-      funcionarios.value.splice(idx, 1);
-    }
-  }
 
   function applyTheme() {
     if (typeof document !== 'undefined') {
@@ -81,7 +128,9 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function adjustColorBrightness(hex: string, percent: number) {
-    let num = parseInt(hex.replace('#', ''), 16);
+    const clean = hex.replace('#', '');
+    if (!/^[0-9a-fA-F]{6}$/.test(clean)) return '#2563eb';
+    const num = parseInt(clean, 16);
     let r = (num >> 16) + Math.round(255 * (percent / 100));
     let g = ((num >> 8) & 0x00ff) + Math.round(255 * (percent / 100));
     let b = (num & 0x0000ff) + Math.round(255 * (percent / 100));
@@ -91,96 +140,642 @@ export const useAuthStore = defineStore('auth', () => {
     return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
   }
 
-  function switchTenant(tenantId: string) {
-    activeTenantId.value = tenantId;
-    // Set active user to first user of this tenant
-    const userForTenant = usuarios.value.find((u) => u.tenant_id === tenantId);
-    if (userForTenant) {
-      activeUserId.value = userForTenant.id;
+  async function carregarDadosContexto() {
+    if (!isLive || !isAuthenticated.value) return;
+
+    const [tenantsRes, configsRes, usersRes, funcsRes] = await Promise.all([
+      supabase.from('tenant').select('*').order('criado_em', { ascending: true }),
+      supabase.from('config_tenant').select('*'),
+      supabase.from('usuario').select('*').neq('perfil', 'super_admin').order('nome', { ascending: true }),
+      supabase.from('funcionario').select('*').order('nome', { ascending: true }),
+    ]);
+
+    if (tenantsRes.data) {
+      tenants.value = tenantsRes.data as Tenant[];
+      if (currentUserProfile.value?.tenant_id) {
+        activeTenantId.value = currentUserProfile.value.tenant_id;
+      } else if (breakGlassTenantId.value) {
+        activeTenantId.value = breakGlassTenantId.value;
+      } else if (tenants.value.length > 0 && !tenants.value.some((t) => t.id === activeTenantId.value)) {
+        activeTenantId.value = tenants.value[0].id;
+      }
     }
+
+    if (configsRes.data) {
+      const map: Record<string, ConfigTenant> = {};
+      for (const c of configsRes.data as ConfigTenant[]) {
+        map[c.tenant_id] = c;
+      }
+      configs.value = map;
+    }
+
+    if (usersRes.data) {
+      usuarios.value = usersRes.data as Usuario[];
+    }
+
+    if (funcsRes.data) {
+      funcionarios.value = funcsRes.data as Funcionario[];
+    }
+
     applyTheme();
   }
 
-  function switchUser(userId: string) {
-    const user = usuarios.value.find((u) => u.id === userId);
-    if (user) {
-      activeUserId.value = user.id;
-      if (user.tenant_id && user.tenant_id !== activeTenantId.value) {
-        activeTenantId.value = user.tenant_id;
-        applyTheme();
-      }
+  async function prepararFluxoMfaSuperAdmin(): Promise<{
+    autorizado: boolean;
+    stage: 'none' | 'enroll' | 'verify';
+    message?: string;
+  }> {
+    const { data: aalData, error: aalErr } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aalErr) {
+      return { autorizado: false, stage: 'none', message: 'Não foi possível validar o nível de segurança 2FA.' };
     }
+
+    const { data: factorsData, error: factorsErr } = await supabase.auth.mfa.listFactors();
+    if (factorsErr) {
+      return { autorizado: false, stage: 'none', message: 'Falha ao consultar dispositivos 2FA cadastrados.' };
+    }
+
+    const verifiedTotp = factorsData.totp.find((f) => f.status === 'verified');
+
+    if (!verifiedTotp) {
+      // Remove fatores incompletos anteriores antes de gerar novo QR Code
+      for (const unverified of factorsData.all.filter((f) => f.status === 'unverified')) {
+        await supabase.auth.mfa.unenroll({ factorId: unverified.id });
+      }
+
+      const { data: enrollData, error: enrollErr } = await supabase.auth.mfa.enroll({
+        factorType: 'totp',
+        friendlyName: 'SuperAdmin TOTP Principal',
+      });
+
+      if (enrollErr || !enrollData) {
+        return {
+          autorizado: false,
+          stage: 'none',
+          message: 'Não foi possível iniciar o provisionamento obrigatório do 2FA.',
+        };
+      }
+
+      mfaFactorId.value = enrollData.id;
+      mfaQrCode.value = enrollData.totp.qr_code;
+      mfaSecret.value = enrollData.totp.secret;
+      mfaStage.value = 'enroll';
+      isAuthenticated.value = false;
+      return { autorizado: false, stage: 'enroll' };
+    }
+
+    if (aalData.currentLevel !== 'aal2') {
+      mfaFactorId.value = verifiedTotp.id;
+      mfaQrCode.value = '';
+      mfaSecret.value = '';
+      mfaStage.value = 'verify';
+      isAuthenticated.value = false;
+      return { autorizado: false, stage: 'verify' };
+    }
+
+    // Já está em AAL2: valida políticas Zero-Trust no banco (IP Allowlist + Dispositivo Confiável)
+    const deviceToken = typeof localStorage !== 'undefined' ? localStorage.getItem(DEVICE_TOKEN_STORAGE_KEY) : null;
+    const { data: ctxData, error: ctxErr } = await supabase.rpc('validar_contexto_super_admin', {
+      p_device_token: deviceToken,
+    });
+
+    if (ctxErr || !ctxData?.autorizado) {
+      const codigo = ctxData?.codigo || 'ACESSO_NEGADO';
+      await supabase.auth.signOut();
+      mfaStage.value = 'none';
+      isAuthenticated.value = false;
+      currentUserProfile.value = null;
+
+      if (codigo === 'IP_NAO_AUTORIZADO') {
+        return {
+          autorizado: false,
+          stage: 'none',
+          message: `Acesso bloqueado: seu endereço IP atual (${ctxData?.ip_atual || 'desconhecido'}) não consta na lista de IPs autorizados do Super Admin.`,
+        };
+      }
+      if (codigo === 'DISPOSITIVO_NAO_CONFIAVEL') {
+        return {
+          autorizado: false,
+          stage: 'none',
+          message: 'Acesso bloqueado: este computador/navegador não possui certificado de Dispositivo Confiável autorizado.',
+        };
+      }
+      return {
+        autorizado: false,
+        stage: 'none',
+        message: 'Acesso administrativo negado pelas políticas de segurança Zero-Trust.',
+      };
+    }
+
+    superAdminContext.value = {
+      ip_atual: ctxData.ip_atual || '127.0.0.1',
+      dispositivo_reconhecido: Boolean(ctxData.dispositivo_reconhecido),
+      restringir_ip: Boolean(ctxData.restringir_ip),
+      ips_permitidos: Array.isArray(ctxData.ips_permitidos) ? ctxData.ips_permitidos : [],
+      exigir_dispositivo_confiavel: Boolean(ctxData.exigir_dispositivo_confiavel),
+    };
+
+    mfaStage.value = 'none';
+    return { autorizado: true, stage: 'none' };
   }
 
-  async function login(email: string, password: string): Promise<{ success: boolean; message?: string }> {
-    if (!email.trim() || !password) {
-      return { success: false, message: 'Informe o e-mail e a senha.' };
+  async function sincronizarSessaoAtiva(): Promise<{
+    autenticado: boolean;
+    mfaPendente?: 'enroll' | 'verify';
+    erro?: string;
+  }> {
+    if (!isLive) {
+      return { autenticado: isAuthenticated.value };
     }
 
-    if (isLiveSupabaseConfigured()) {
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
-        if (error) {
-          return { success: false, message: error.message };
-        }
-        if (data.user) {
-          const found = usuarios.value.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
-          if (found) {
-            activeUserId.value = found.id;
-            if (found.tenant_id) activeTenantId.value = found.tenant_id;
-          }
-        }
-      } catch (err: any) {
-        return { success: false, message: err.message || 'Falha ao conectar com o Supabase.' };
+    const { data: sessionRes } = await supabase.auth.getSession();
+    const session = sessionRes?.session;
+    if (!session?.user) {
+      isAuthenticated.value = false;
+      currentUserProfile.value = null;
+      activeUserId.value = '';
+      mfaStage.value = 'none';
+      return { autenticado: false };
+    }
+
+    const { data: profile, error: profErr } = await supabase
+      .from('usuario')
+      .select('*')
+      .eq('auth_user_id', session.user.id)
+      .maybeSingle();
+
+    if (profErr || !profile || !profile.ativo || profile.excluido_em) {
+      await supabase.auth.signOut();
+      isAuthenticated.value = false;
+      currentUserProfile.value = null;
+      return { autenticado: false, erro: 'Conta inativa ou sem permissão de acesso.' };
+    }
+
+    currentUserProfile.value = profile as Usuario;
+    activeUserId.value = profile.id;
+    if (profile.tenant_id) {
+      activeTenantId.value = profile.tenant_id;
+    }
+
+    if (profile.perfil === 'super_admin') {
+      const mfaCheck = await prepararFluxoMfaSuperAdmin();
+      if (!mfaCheck.autorizado) {
+        return {
+          autenticado: false,
+          mfaPendente: mfaCheck.stage !== 'none' ? mfaCheck.stage : undefined,
+          erro: mfaCheck.message,
+        };
       }
     } else {
-      // Modo Local / Demonstração
-      const found = usuarios.value.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
-      if (found) {
-        activeUserId.value = found.id;
-        if (found.tenant_id) activeTenantId.value = found.tenant_id;
-      }
+      mfaStage.value = 'none';
     }
 
     isAuthenticated.value = true;
-    localStorage.setItem('pharma_auth_logged', 'true');
-    applyTheme();
-    return { success: true };
+    await carregarDadosContexto();
+    return { autenticado: true };
   }
 
-  function loginAsDemo(role: 'admin' | 'operador' = 'operador') {
-    const target = usuarios.value.find((u) => u.perfil === role) || usuarios.value[0];
-    if (target) {
-      activeUserId.value = target.id;
-      if (target.tenant_id) activeTenantId.value = target.tenant_id;
+  let initPromise: Promise<void> | null = null;
+  function initAuth(): Promise<void> {
+    if (initPromise) return initPromise;
+    initPromise = (async () => {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('pharma_auth_logged');
+      }
+      if (isLive) {
+        await sincronizarSessaoAtiva();
+        supabase.auth.onAuthStateChange((event) => {
+          if (event === 'PASSWORD_RECOVERY') {
+            passwordRecoveryMode.value = true;
+          } else if (event === 'SIGNED_OUT') {
+            isAuthenticated.value = false;
+            currentUserProfile.value = null;
+            activeUserId.value = '';
+            mfaStage.value = 'none';
+            breakGlassTenantId.value = null;
+          }
+        });
+      }
+      isAuthInitialized.value = true;
+    })();
+    return initPromise;
+  }
+
+  async function login(
+    email: string,
+    password: string
+  ): Promise<{ success: boolean; mfaRequired?: 'enroll' | 'verify'; isSuperAdmin?: boolean; message?: string }> {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !password) {
+      return { success: false, message: 'Informe seu identificador corporativo e senha.' };
     }
-    isAuthenticated.value = true;
-    localStorage.setItem('pharma_auth_logged', 'true');
+
+    if (!isLive) {
+      return { success: false, message: 'Modo de produção requer conexão ativa com o servidor de autenticação.' };
+    }
+
+    try {
+      // 1. Verifica Rate Limiting (5 falhas em 15 minutos bloqueiam identificador/IP)
+      const { data: lockData } = await supabase.rpc('verificar_bloqueio_login', {
+        p_identificador: cleanEmail,
+      });
+
+      if (lockData?.bloqueado) {
+        const min = Math.ceil((lockData.segundos_restantes || 900) / 60);
+        return {
+          success: false,
+          message: `Conta temporariamente protegida contra tentativas repetidas. Aguarde cerca de ${min} minuto(s) e tente novamente.`,
+        };
+      }
+
+      // 2. Autenticação Primária (Senha de alta entropia)
+      const { error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
+
+      if (error) {
+        await supabase.rpc('registrar_evento_login', {
+          p_identificador: cleanEmail,
+          p_sucesso: false,
+          p_motivo: 'Falha de credenciais',
+        });
+        return { success: false, message: sanitizarMensagemErroAuth(error.message) };
+      }
+
+      await supabase.rpc('registrar_evento_login', {
+        p_identificador: cleanEmail,
+        p_sucesso: true,
+        p_motivo: 'Credencial primária validada',
+      });
+
+      // 3. Sincroniza perfil e verifica exigência de 2FA Obrigatório (AAL2)
+      const sync = await sincronizarSessaoAtiva();
+      if (sync.mfaPendente) {
+        return {
+          success: false,
+          mfaRequired: sync.mfaPendente,
+          message:
+            sync.mfaPendente === 'enroll'
+              ? 'Primeiro acesso de segurança detectado: configure o autenticador em dois fatores (2FA) obrigatório.'
+              : 'Informe o código temporário de 6 dígitos do seu aplicativo autenticador (2FA).',
+        };
+      }
+
+      if (!sync.autenticado) {
+        return { success: false, message: sync.erro || 'Não foi possível validar o contexto de segurança.' };
+      }
+
+      return {
+        success: true,
+        isSuperAdmin: currentUserProfile.value?.perfil === 'super_admin',
+      };
+    } catch {
+      return {
+        success: false,
+        message: 'Serviço de autenticação temporariamente indisponível. Tente novamente em instantes.',
+      };
+    }
+  }
+
+  async function verificarCodigoMfa(codigoTotp: string): Promise<{ success: boolean; message?: string }> {
+    const cleanCode = codigoTotp.replace(/\D/g, '');
+    if (cleanCode.length !== 6 || !mfaFactorId.value) {
+      return { success: false, message: 'Digite os 6 dígitos numéricos gerados pelo aplicativo autenticador.' };
+    }
+
+    try {
+      const { error } = await supabase.auth.mfa.challengeAndVerify({
+        factorId: mfaFactorId.value,
+        code: cleanCode,
+      });
+
+      if (error) {
+        return { success: false, message: 'Código 2FA inválido ou expirado. Verifique o horário do seu celular e tente novamente.' };
+      }
+
+      const sync = await sincronizarSessaoAtiva();
+      if (!sync.autenticado) {
+        return { success: false, message: sync.erro || 'Acesso bloqueado pelas políticas Zero-Trust.' };
+      }
+
+      return { success: true };
+    } catch {
+      return { success: false, message: 'Falha ao validar o código de segundo fator.' };
+    }
+  }
+
+  async function solicitarRecuperacaoSenha(email: string): Promise<{ success: boolean; message: string }> {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      return { success: false, message: 'Informe seu e-mail corporativo para receber as instruções.' };
+    }
+
+    try {
+      const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined;
+      await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo });
+      // Resposta sempre genérica para impedir enumeração de contas existentes (OWASP)
+      return {
+        success: true,
+        message: 'Se o endereço informado estiver associado a uma conta ativa, um link seguro de redefinição foi enviado.',
+      };
+    } catch {
+      return {
+        success: true,
+        message: 'Se o endereço informado estiver associado a uma conta ativa, um link seguro de redefinição foi enviado.',
+      };
+    }
+  }
+
+  async function redefinirSenhaRecuperacao(novaSenha: string): Promise<{ success: boolean; message: string }> {
+    if (!novaSenha || novaSenha.length < 12) {
+      return { success: false, message: 'A nova senha deve possuir no mínimo 12 caracteres.' };
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: novaSenha });
+    if (error) {
+      return { success: false, message: 'Não foi possível atualizar a senha. Solicite um novo link de recuperação.' };
+    }
+
+    passwordRecoveryMode.value = false;
+    await registrarAuditoria('REDEFINICAO_SENHA', 'Credencial do Usuário', 'Senha redefinida via fluxo de recuperação');
+    return { success: true, message: 'Senha atualizada com sucesso!' };
+  }
+
+  async function registrarAuditoria(acao: string, recurso: string, justificativa?: string) {
+    if (!isLive || !isAuthenticated.value) return;
+    await supabase.rpc('registrar_auditoria', {
+      p_acao: acao,
+      p_recurso: recurso,
+      p_justificativa: justificativa || null,
+    });
+  }
+
+  async function salvarConfigTenant(parcial: Partial<ConfigTenant>): Promise<{ sucesso: boolean; mensagem?: string }> {
+    const tenantId = activeTenantId.value;
+    const atual = configs.value[tenantId] || { ...fallbackConfig, tenant_id: tenantId };
+    const atualizado = { ...atual, ...parcial, tenant_id: tenantId };
+    configs.value[tenantId] = atualizado;
     applyTheme();
+
+    if (isLive && isAuthenticated.value) {
+      const { error } = await supabase
+        .from('config_tenant')
+        .update({
+          ...parcial,
+          atualizado_em: new Date().toISOString(),
+        })
+        .eq('tenant_id', tenantId);
+
+      if (error) {
+        return { sucesso: false, mensagem: 'Não foi possível salvar as configurações no servidor.' };
+      }
+      await registrarAuditoria('ATUALIZACAO_CONFIG_TENANT', `Tenant ${tenantId}`, Object.keys(parcial).join(', '));
+    }
+    return { sucesso: true };
+  }
+
+  async function adicionarFuncionario(nome: string, cargo?: string) {
+    if (!nome.trim()) return null;
+    const novo: Funcionario = {
+      id: gerarUuidSeguro(),
+      tenant_id: activeTenantId.value,
+      nome: nome.trim().toUpperCase(),
+      cargo: cargo?.trim() || undefined,
+      criado_em: new Date().toISOString(),
+    };
+    funcionarios.value.push(novo);
+
+    if (isLive && isAuthenticated.value) {
+      await supabase.from('funcionario').insert({
+        id: novo.id,
+        tenant_id: novo.tenant_id,
+        nome: novo.nome,
+        cargo: novo.cargo || null,
+      });
+    }
+    return novo;
+  }
+
+  async function atualizarFuncionario(id: string, dados: { nome?: string; cargo?: string }) {
+    const f = funcionarios.value.find((item) => item.id === id);
+    if (f) {
+      if (dados.nome !== undefined) f.nome = dados.nome.trim().toUpperCase();
+      if (dados.cargo !== undefined) f.cargo = dados.cargo?.trim() || undefined;
+      if (isLive && isAuthenticated.value) {
+        await supabase.from('funcionario').update({ nome: f.nome, cargo: f.cargo || null }).eq('id', id);
+      }
+    }
+  }
+
+  async function removerFuncionario(id: string) {
+    const idx = funcionarios.value.findIndex((item) => item.id === id);
+    if (idx !== -1) {
+      funcionarios.value.splice(idx, 1);
+      if (isLive && isAuthenticated.value) {
+        await supabase.from('funcionario').delete().eq('id', id);
+      }
+    }
+  }
+
+  // Governança de Plataforma e Zero-Trust exclusivos do Super Admin
+  async function carregarSegurancaSuperAdmin() {
+    if (!isLive || !isSuperAdmin.value) return;
+    const deviceToken = typeof localStorage !== 'undefined' ? localStorage.getItem(DEVICE_TOKEN_STORAGE_KEY) : null;
+    const [ctxRes, dispRes, logsRes] = await Promise.all([
+      supabase.rpc('validar_contexto_super_admin', { p_device_token: deviceToken }),
+      supabase.from('super_admin_dispositivo').select('*').is('revogado_em', null).order('criado_em', { ascending: false }),
+      supabase.from('log_auditoria').select('*').order('criado_em', { ascending: false }).limit(80),
+    ]);
+
+    if (ctxRes.data?.autorizado) {
+      superAdminContext.value = {
+        ip_atual: ctxRes.data.ip_atual || '127.0.0.1',
+        dispositivo_reconhecido: Boolean(ctxRes.data.dispositivo_reconhecido),
+        restringir_ip: Boolean(ctxRes.data.restringir_ip),
+        ips_permitidos: Array.isArray(ctxRes.data.ips_permitidos) ? ctxRes.data.ips_permitidos : [],
+        exigir_dispositivo_confiavel: Boolean(ctxRes.data.exigir_dispositivo_confiavel),
+      };
+    }
+    if (dispRes.data) {
+      superAdminDispositivos.value = dispRes.data as SuperAdminDispositivo[];
+    }
+    if (logsRes.data) {
+      logsAuditoria.value = logsRes.data as LogAuditoria[];
+    }
+  }
+
+  async function carregarLogsAuditoriaTenant() {
+    if (!isLive || !isAdmin.value) return;
+    const { data } = await supabase
+      .from('log_auditoria')
+      .select('*')
+      .order('criado_em', { ascending: false })
+      .limit(100);
+    if (data) {
+      logsAuditoria.value = data as LogAuditoria[];
+    }
+  }
+
+  async function autorizarDispositivoAtual(nomeDispositivo: string): Promise<{ sucesso: boolean; mensagem: string }> {
+    if (!isSuperAdmin.value) return { sucesso: false, mensagem: 'Operação restrita.' };
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    const tokenPlain = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+
+    const { error } = await supabase.rpc('registrar_dispositivo_super_admin', {
+      p_nome_dispositivo: nomeDispositivo.trim() || 'Estação Principal',
+      p_token_plain: tokenPlain,
+    });
+
+    if (error) {
+      return { sucesso: false, mensagem: 'Não foi possível autorizar este dispositivo.' };
+    }
+
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(DEVICE_TOKEN_STORAGE_KEY, tokenPlain);
+    }
+    await carregarSegurancaSuperAdmin();
+    return { sucesso: true, mensagem: 'Este navegador foi certificado como Dispositivo Confiável!' };
+  }
+
+  async function revogarDispositivo(id: string) {
+    if (!isSuperAdmin.value) return;
+    await supabase
+      .from('super_admin_dispositivo')
+      .update({ revogado_em: new Date().toISOString() })
+      .eq('id', id);
+    await carregarSegurancaSuperAdmin();
+  }
+
+  async function salvarPoliticaZeroTrust(
+    restringirIp: boolean,
+    ipsPermitidos: string[],
+    exigirDispositivo: boolean
+  ): Promise<{ sucesso: boolean; mensagem: string }> {
+    const limpos = ipsPermitidos.map((ip) => ip.trim()).filter(Boolean);
+    const { error } = await supabase.rpc('atualizar_politica_super_admin', {
+      p_restringir_ip: restringirIp,
+      p_ips_permitidos: limpos,
+      p_exigir_dispositivo: exigirDispositivo,
+    });
+
+    if (error) {
+      return { sucesso: false, mensagem: error.message || 'Falha ao atualizar política Zero-Trust.' };
+    }
+    await carregarSegurancaSuperAdmin();
+    return { sucesso: true, mensagem: 'Política de restrição de IP e Dispositivos Confiáveis atualizada com sucesso!' };
+  }
+
+  async function provisionarTenant(dados: {
+    nomeEmpresa: string;
+    slug: string;
+    plano: 'basico' | 'profissional' | 'enterprise';
+    limite: number;
+  }): Promise<{ sucesso: boolean; mensagem: string }> {
+    if (!isSuperAdmin.value) return { sucesso: false, mensagem: 'Acesso negado.' };
+    const id = gerarUuidSeguro();
+    const slugLimpo = dados.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+
+    const { error: tErr } = await supabase.from('tenant').insert({
+      id,
+      nome_empresa: dados.nomeEmpresa.trim(),
+      slug: slugLimpo,
+      dominio: `${slugLimpo}.plataforma.com.br`,
+      status: 'ativo',
+      plano: dados.plano,
+      limite_encomendas_mes: dados.limite,
+    });
+
+    if (tErr) {
+      return { sucesso: false, mensagem: 'Não foi possível criar o tenant (verifique se o slug já está em uso).' };
+    }
+
+    await supabase.from('config_tenant').insert({
+      tenant_id: id,
+      nome_sistema: `${dados.nomeEmpresa.trim()} Encomendas`,
+      cor_primaria: '#2563eb',
+      cor_secundaria: '#1e293b',
+      header_title: dados.nomeEmpresa.trim().toUpperCase(),
+    });
+
+    await registrarAuditoria('PROVISIONAMENTO_TENANT', dados.nomeEmpresa.trim(), `Plano ${dados.plano}`);
+    await carregarDadosContexto();
+    return { sucesso: true, mensagem: 'Nova empresa provisionada com sucesso!' };
+  }
+
+  async function alternarStatusTenant(tenant: Tenant) {
+    if (!isSuperAdmin.value) return;
+    const novoStatus = tenant.status === 'ativo' ? 'suspenso' : 'ativo';
+    const { error } = await supabase.from('tenant').update({ status: novoStatus }).eq('id', tenant.id);
+    if (!error) {
+      tenant.status = novoStatus;
+      await registrarAuditoria('ALTERACAO_STATUS_TENANT', tenant.nome_empresa, `Novo status: ${novoStatus}`);
+    }
+  }
+
+  async function ativarBreakGlass(tenantId: string, justificativa: string): Promise<{ sucesso: boolean; mensagem: string }> {
+    if (!isSuperAdmin.value) return { sucesso: false, mensagem: 'Apenas o Super Admin com 2FA pode iniciar suporte Break-Glass.' };
+    const { error } = await supabase.rpc('ativar_break_glass_suporte', {
+      p_tenant_id: tenantId,
+      p_justificativa: justificativa,
+    });
+
+    if (error) {
+      return { sucesso: false, mensagem: error.message || 'Falha ao registrar sessão Break-Glass.' };
+    }
+
+    breakGlassTenantId.value = tenantId;
+    activeTenantId.value = tenantId;
+    await carregarDadosContexto();
+    return { sucesso: true, mensagem: 'Sessão temporária de suporte auditado ativada por 30 minutos.' };
+  }
+
+  async function encerrarBreakGlass() {
+    if (isLive && isSuperAdmin.value) {
+      await supabase.rpc('encerrar_break_glass_suporte');
+    }
+    breakGlassTenantId.value = null;
   }
 
   async function logout() {
-    if (isLiveSupabaseConfigured()) {
+    if (isLive) {
       try {
+        if (isAuthenticated.value) {
+          await registrarAuditoria('LOGOUT', 'Sessão do Usuário', 'Encerramento voluntário de sessão');
+        }
         await supabase.auth.signOut();
-      } catch (e) {
-        console.warn('Erro ao deslogar do Supabase:', e);
+      } catch {
+        // Ignora falha de rede no signOut
       }
     }
     isAuthenticated.value = false;
-    localStorage.setItem('pharma_auth_logged', 'false');
+    currentUserProfile.value = null;
+    activeUserId.value = '';
+    mfaStage.value = 'none';
+    mfaFactorId.value = '';
+    mfaQrCode.value = '';
+    mfaSecret.value = '';
+    breakGlassTenantId.value = null;
   }
 
   return {
     tenants,
     configs,
     usuarios,
+    funcionarios,
     activeTenantId,
     activeUserId,
     isAuthenticated,
+    isAuthInitialized,
+    mfaStage,
+    mfaQrCode,
+    mfaSecret,
+    passwordRecoveryMode,
+    breakGlassTenantId,
+    superAdminContext,
+    superAdminDispositivos,
+    logsAuditoria,
     currentTenant,
     currentConfig,
     currentUser,
@@ -189,16 +784,27 @@ export const useAuthStore = defineStore('auth', () => {
     isComprador,
     isOperador,
     tenantUsers,
-    funcionarios,
     tenantFuncionarios,
+    initAuth,
+    applyTheme,
+    login,
+    verificarCodigoMfa,
+    solicitarRecuperacaoSenha,
+    redefinirSenhaRecuperacao,
+    registrarAuditoria,
+    salvarConfigTenant,
     adicionarFuncionario,
     atualizarFuncionario,
     removerFuncionario,
-    switchTenant,
-    switchUser,
-    applyTheme,
-    login,
-    loginAsDemo,
+    carregarSegurancaSuperAdmin,
+    carregarLogsAuditoriaTenant,
+    autorizarDispositivoAtual,
+    revogarDispositivo,
+    salvarPoliticaZeroTrust,
+    provisionarTenant,
+    alternarStatusTenant,
+    ativarBreakGlass,
+    encerrarBreakGlass,
     logout,
   };
 });

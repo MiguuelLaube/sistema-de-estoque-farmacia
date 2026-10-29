@@ -2,13 +2,11 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
-import { isLiveSupabaseConfigured } from '../services/supabase';
 import {
   Lock,
   Mail,
   LogIn,
   ShieldCheck,
-  UserCheck,
   AlertCircle,
   Pill,
   Send,
@@ -18,17 +16,25 @@ import {
   CheckCircle2,
   ArrowRight,
   ExternalLink,
+  KeyRound,
+  ArrowLeft,
 } from 'lucide-vue-next';
 
 const router = useRouter();
 const authStore = useAuthStore();
 
-const email = ref('admin@drogariaaeroporto.com.br');
-const password = ref('********');
+// Credenciais limpas por padrão (sem pré-preenchimento ou exposição de e-mails administrativos)
+const email = ref('');
+const password = ref('');
+const totpCode = ref('');
+const recoveryEmail = ref('');
+const newPassword = ref('');
+const newPasswordConfirm = ref('');
+
+const showForgotPassword = ref(false);
 const loading = ref(false);
 const errorMessage = ref('');
-
-const isLive = isLiveSupabaseConfigured();
+const successMessage = ref('');
 
 // Modal de Contato / Compra do Sistema
 const showContatoModal = ref(false);
@@ -40,31 +46,95 @@ const contatoEnviadoSucesso = ref(false);
 
 async function handleLogin() {
   errorMessage.value = '';
+  successMessage.value = '';
   loading.value = true;
   try {
     const res = await authStore.login(email.value, password.value);
     if (res.success) {
-      router.push('/dashboard');
+      password.value = '';
+      router.push(res.isSuperAdmin ? { name: 'plataforma' } : { name: 'dashboard' });
+    } else if (res.mfaRequired) {
+      password.value = '';
+      totpCode.value = '';
+      successMessage.value = res.message || '';
     } else {
-      errorMessage.value = res.message || 'Falha na autenticação. Verifique suas credenciais.';
+      errorMessage.value = res.message || 'Credenciais inválidas.';
     }
-  } catch (err: any) {
-    errorMessage.value = err.message || 'Erro inesperado ao conectar.';
+  } catch {
+    errorMessage.value = 'Não foi possível concluir a autenticação no momento.';
   } finally {
     loading.value = false;
   }
 }
 
-function handleDemoLogin(role: 'admin' | 'operador') {
-  authStore.loginAsDemo(role);
-  router.push('/dashboard');
+async function handleMfaSubmit() {
+  errorMessage.value = '';
+  successMessage.value = '';
+  loading.value = true;
+  try {
+    const res = await authStore.verificarCodigoMfa(totpCode.value);
+    if (res.success) {
+      totpCode.value = '';
+      router.push(authStore.isSuperAdmin ? { name: 'plataforma' } : { name: 'dashboard' });
+    } else {
+      errorMessage.value = res.message || 'Código 2FA inválido.';
+    }
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function cancelarMfa() {
+  totpCode.value = '';
+  errorMessage.value = '';
+  successMessage.value = '';
+  await authStore.logout();
+}
+
+async function handleSolicitarRecuperacao() {
+  errorMessage.value = '';
+  successMessage.value = '';
+  loading.value = true;
+  try {
+    const res = await authStore.solicitarRecuperacaoSenha(recoveryEmail.value);
+    if (res.success) {
+      successMessage.value = res.message;
+    } else {
+      errorMessage.value = res.message;
+    }
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function handleRedefinirSenha() {
+  errorMessage.value = '';
+  successMessage.value = '';
+  if (newPassword.value !== newPasswordConfirm.value) {
+    errorMessage.value = 'A confirmação de senha não confere.';
+    return;
+  }
+  loading.value = true;
+  try {
+    const res = await authStore.redefinirSenhaRecuperacao(newPassword.value);
+    if (res.success) {
+      newPassword.value = '';
+      newPasswordConfirm.value = '';
+      successMessage.value = res.message;
+      router.push({ name: 'dashboard' });
+    } else {
+      errorMessage.value = res.message;
+    }
+  } finally {
+    loading.value = false;
+  }
 }
 
 function abrirWhatsAppComercial() {
   const mensagem = encodeURIComponent(
     'Olá! Tenho interesse em contratar o Sistema de Estoque e Encomendas da Drogaria Aeroporto para a minha farmácia. Poderiam me apresentar os planos e proposta comercial?'
   );
-  window.open(`https://wa.me/5511999999999?text=${mensagem}`, '_blank');
+  window.open(`https://wa.me/5511999999999?text=${mensagem}`, '_blank', 'noopener,noreferrer');
 }
 
 function enviarSolicitacaoContato() {
@@ -87,7 +157,6 @@ function fecharModalContato() {
 
 <template>
   <div class="login-wrapper-light">
-    <!-- Fundo decorativo sutil com o azul cobalto oficial -->
     <div class="login-decor-bg"></div>
 
     <div class="login-card-container">
@@ -97,25 +166,169 @@ function fecharModalContato() {
           <Pill :size="24" class="text-white" />
         </div>
         <h1 class="login-card-title">Drogaria Aeroporto</h1>
-        <p class="login-card-subtitle">Sistema de Gestão de Estoque & Encomendas</p>
+        <p class="login-card-subtitle">Sistema Seguro de Gestão de Estoque &amp; Encomendas</p>
       </div>
 
-      <!-- Badge de Conexão -->
-      <div class="env-badge-pill" :class="isLive ? 'badge-live' : 'badge-local'">
+      <!-- Badge de Segurança -->
+      <div class="env-badge-pill badge-live">
         <span class="status-indicator-dot"></span>
-        <span>{{ isLive ? 'Conectado ao Supabase Cloud' : 'Ambiente de Homologação Ativo' }}</span>
+        <span>Conexão Criptografada • Proteção Zero-Trust Ativa</span>
       </div>
 
-      <!-- Mensagem de Erro -->
+      <!-- Alerta de Erro Sanitizado -->
       <div v-if="errorMessage" class="login-error-alert" role="alert">
-        <AlertCircle :size="16" aria-hidden="true" />
+        <AlertCircle :size="16" aria-hidden="true" style="flex-shrink: 0;" />
         <span>{{ errorMessage }}</span>
       </div>
 
-      <!-- Formulário de Login -->
-      <form @submit.prevent="handleLogin" class="login-form-body">
+      <!-- Alerta Informativo / Sucesso -->
+      <div v-if="successMessage" class="login-success-alert" role="status">
+        <ShieldCheck :size="16" aria-hidden="true" style="flex-shrink: 0;" />
+        <span>{{ successMessage }}</span>
+      </div>
+
+      <!-- FLUXO 1: REDEFINIÇÃO DE SENHA VIA LINK DE RECUPERAÇÃO -->
+      <form v-if="authStore.passwordRecoveryMode" @submit.prevent="handleRedefinirSenha" class="login-form-body">
         <div class="form-field-group">
-          <label class="form-field-label" for="input-login-email">E-mail Corporativo</label>
+          <label class="form-field-label" for="input-new-password">Nova Senha Forte (mín. 12 caracteres)</label>
+          <div class="input-wrapper">
+            <Lock :size="17" class="field-icon" aria-hidden="true" />
+            <input
+              id="input-new-password"
+              v-model="newPassword"
+              type="password"
+              minlength="12"
+              required
+              autocomplete="new-password"
+              class="form-field-input"
+              placeholder="Digite sua nova senha"
+            />
+          </div>
+        </div>
+
+        <div class="form-field-group">
+          <label class="form-field-label" for="input-confirm-password">Confirmar Nova Senha</label>
+          <div class="input-wrapper">
+            <Lock :size="17" class="field-icon" aria-hidden="true" />
+            <input
+              id="input-confirm-password"
+              v-model="newPasswordConfirm"
+              type="password"
+              minlength="12"
+              required
+              autocomplete="new-password"
+              class="form-field-input"
+              placeholder="Repita a nova senha"
+            />
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary-pill btn-submit-full" :disabled="loading">
+          <CheckCircle2 :size="17" />
+          <span>{{ loading ? 'Salvando...' : 'Atualizar Senha de Acesso' }}</span>
+        </button>
+      </form>
+
+      <!-- FLUXO 2: AUTENTICAÇÃO EM DOIS FATORES OBRIGATÓRIA (2FA TOTP - ENROLL OU VERIFY) -->
+      <form v-else-if="authStore.mfaStage !== 'none'" @submit.prevent="handleMfaSubmit" class="login-form-body">
+        <div
+          v-if="authStore.mfaStage === 'enroll'"
+          style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 14px; padding: 1rem; text-align: center;"
+        >
+          <div style="font-size: 0.85rem; font-weight: 700; color: #0f172a; margin-bottom: 0.4rem;">
+            Configuração Obrigatória de 2FA (TOTP)
+          </div>
+          <p style="font-size: 0.78rem; color: #475569; margin: 0 0 0.75rem; line-height: 1.4;">
+            Escaneie o QR Code abaixo no Google Authenticator, Authy ou Microsoft Authenticator e digite o código de 6 dígitos gerado.
+          </p>
+          <div
+            v-if="authStore.mfaQrCode"
+            style="background: #ffffff; padding: 10px; border-radius: 12px; display: inline-block; border: 1px solid #e2e8f0;"
+          >
+            <img :src="authStore.mfaQrCode" alt="QR Code 2FA TOTP" style="width: 190px; height: 190px; display: block;" />
+          </div>
+          <div v-if="authStore.mfaSecret" style="margin-top: 0.65rem; font-size: 0.74rem; color: #64748b;">
+            Chave manual:
+            <code style="display: block; margin-top: 3px; font-weight: 700; color: #0f172a; background: #e2e8f0; padding: 4px 8px; border-radius: 6px; user-select: all;">
+              {{ authStore.mfaSecret }}
+            </code>
+          </div>
+        </div>
+
+        <div class="form-field-group">
+          <label class="form-field-label" for="input-totp-code">Código de 6 Dígitos do Autenticador (2FA)</label>
+          <div class="input-wrapper">
+            <KeyRound :size="17" class="field-icon" aria-hidden="true" />
+            <input
+              id="input-totp-code"
+              v-model="totpCode"
+              type="text"
+              inputmode="numeric"
+              maxlength="6"
+              pattern="[0-9]{6}"
+              required
+              autocomplete="one-time-code"
+              class="form-field-input"
+              style="letter-spacing: 0.25em; font-weight: 700; font-size: 1.05rem;"
+              placeholder="000000"
+            />
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary-pill btn-submit-full" :disabled="loading" id="btn-mfa-verify">
+          <ShieldCheck :size="17" />
+          <span>{{ loading ? 'Verificando 2FA...' : 'Confirmar Segundo Fator (AAL2)' }}</span>
+        </button>
+
+        <button
+          type="button"
+          @click="cancelarMfa"
+          class="btn-outline-neutral btn-submit-full"
+          style="margin-top: 0;"
+        >
+          <ArrowLeft :size="15" />
+          <span>Cancelar e voltar ao login</span>
+        </button>
+      </form>
+
+      <!-- FLUXO 3: SOLICITAÇÃO DE RECUPERAÇÃO DE SENHA -->
+      <form v-else-if="showForgotPassword" @submit.prevent="handleSolicitarRecuperacao" class="login-form-body">
+        <div class="form-field-group">
+          <label class="form-field-label" for="input-recovery-email">E-mail Cadastrado</label>
+          <div class="input-wrapper">
+            <Mail :size="17" class="field-icon" aria-hidden="true" />
+            <input
+              id="input-recovery-email"
+              v-model="recoveryEmail"
+              type="email"
+              required
+              autocomplete="email"
+              class="form-field-input"
+              placeholder="seu.email@drogaria.com.br"
+            />
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary-pill btn-submit-full" :disabled="loading" id="btn-send-recovery">
+          <Send :size="16" />
+          <span>{{ loading ? 'Enviando...' : 'Enviar Link de Recuperação' }}</span>
+        </button>
+
+        <button
+          type="button"
+          @click="showForgotPassword = false; errorMessage = ''; successMessage = '';"
+          class="btn-outline-neutral btn-submit-full"
+          style="margin-top: 0;"
+        >
+          <ArrowLeft :size="15" />
+          <span>Voltar para o Login</span>
+        </button>
+      </form>
+
+      <!-- FLUXO 4: LOGIN CORPORATIVO PADRÃO -->
+      <form v-else @submit.prevent="handleLogin" class="login-form-body">
+        <div class="form-field-group">
+          <label class="form-field-label" for="input-login-email">Identificador Corporativo</label>
           <div class="input-wrapper">
             <Mail :size="17" class="field-icon" aria-hidden="true" />
             <input
@@ -123,14 +336,25 @@ function fecharModalContato() {
               v-model="email"
               type="email"
               required
+              autocomplete="username"
               class="form-field-input"
-              placeholder="farmaceutico@drogaria.com.br"
+              placeholder="colaborador@drogaria.com.br"
             />
           </div>
         </div>
 
         <div class="form-field-group">
-          <label class="form-field-label" for="input-login-password">Senha de Acesso</label>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label class="form-field-label" for="input-login-password">Senha de Acesso</label>
+            <button
+              type="button"
+              @click="showForgotPassword = true; errorMessage = ''; successMessage = '';"
+              style="background: none; border: none; color: #2563eb; font-size: 0.76rem; font-weight: 600; cursor: pointer; padding: 0;"
+              id="btn-esqueci-senha"
+            >
+              Esqueci minha senha
+            </button>
+          </div>
           <div class="input-wrapper">
             <Lock :size="17" class="field-icon" aria-hidden="true" />
             <input
@@ -138,8 +362,9 @@ function fecharModalContato() {
               v-model="password"
               type="password"
               required
+              autocomplete="current-password"
               class="form-field-input"
-              placeholder="••••••••"
+              placeholder="••••••••••••"
             />
           </div>
         </div>
@@ -155,37 +380,8 @@ function fecharModalContato() {
         </button>
       </form>
 
-      <!-- Acesso Rápido de Demonstração -->
-      <div class="quick-demo-section">
-        <div class="divider-line">
-          <span>Acesso Rápido de Teste</span>
-        </div>
-
-        <div class="demo-buttons-row">
-          <button
-            type="button"
-            @click="handleDemoLogin('operador')"
-            class="btn-outline-neutral btn-demo-pill"
-            title="Acessar com perfil de balconista/operador"
-          >
-            <UserCheck :size="15" aria-hidden="true" />
-            <span>Atendente de Balcão</span>
-          </button>
-
-          <button
-            type="button"
-            @click="handleDemoLogin('admin')"
-            class="btn-outline-neutral btn-demo-pill"
-            title="Acessar com perfil de administrador"
-          >
-            <ShieldCheck :size="15" aria-hidden="true" />
-            <span>Administrador / RT</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- DESTAQUE COMERCIAL: OPÇÃO PARA COMPRAR O SISTEMA -->
-      <div class="sales-contact-box">
+      <!-- DESTAQUE COMERCIAL: OPÇÃO PARA CONTRATAR O SISTEMA -->
+      <div v-if="authStore.mfaStage === 'none' && !authStore.passwordRecoveryMode" class="sales-contact-box">
         <div class="sales-header">
           <Building2 :size="16" class="sales-icon" aria-hidden="true" />
           <span class="sales-title">Deseja implantar este sistema na sua farmácia?</span>
@@ -194,25 +390,21 @@ function fecharModalContato() {
           Licenciamento B2B especializado para drogarias independentes e redes. Automatize encomendas de balcão e conferência de NF-e.
         </p>
         <div class="sales-actions-grid">
-          <!-- Botão WhatsApp Comercial -->
           <button
             type="button"
             @click="abrirWhatsAppComercial"
             class="btn-outline-emerald btn-sales-pill"
             id="btn-comprar-whatsapp"
-            title="Falar diretamente com nosso consultor comercial via WhatsApp"
           >
             <Send :size="14" aria-hidden="true" />
             <span>Falar com Consultor (WhatsApp)</span>
           </button>
 
-          <!-- Botão Abrir Formulário de Contato -->
           <button
             type="button"
             @click="showContatoModal = true"
             class="btn-outline-neutral btn-sales-pill"
             id="btn-solicitar-proposta"
-            title="Solicitar proposta comercial por e-mail"
           >
             <Phone :size="14" aria-hidden="true" />
             <span>Solicitar Contato Comercial</span>
@@ -224,7 +416,7 @@ function fecharModalContato() {
       <div class="login-card-footer">
         <span class="footer-security-text">
           <Lock :size="12" aria-hidden="true" />
-          <span>Acesso criptografado e auditado por IP (LGPD)</span>
+          <span>Acesso monitorado, protegido contra força bruta e auditado (LGPD)</span>
         </span>
 
         <button
@@ -238,7 +430,7 @@ function fecharModalContato() {
       </div>
     </div>
 
-    <!-- MODAL DE CONTATO / COMPRA DO SISTEMA (Padrão Farmácia Base44) -->
+    <!-- MODAL DE CONTATO COMERCIAL -->
     <div
       v-if="showContatoModal"
       class="modal-backdrop-blur"
@@ -247,7 +439,6 @@ function fecharModalContato() {
       aria-modal="true"
     >
       <div class="modal-card-center">
-        <!-- Header do Modal -->
         <div class="modal-header-row">
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             <div class="modal-icon-badge">
@@ -268,7 +459,6 @@ function fecharModalContato() {
           </button>
         </div>
 
-        <!-- Conteúdo se já enviado -->
         <div v-if="contatoEnviadoSucesso" class="contato-sucesso-box">
           <div class="sucesso-icon-circle">
             <CheckCircle2 :size="36" />
@@ -289,7 +479,6 @@ function fecharModalContato() {
           </button>
         </div>
 
-        <!-- Formulário de Contato -->
         <form v-else @submit.prevent="enviarSolicitacaoContato" class="modal-form-grid">
           <div class="form-field-group">
             <label class="form-field-label" for="contato-farmacia">Nome da Farmácia / Drogaria *</label>
@@ -299,6 +488,7 @@ function fecharModalContato() {
               type="text"
               required
               class="form-field-input"
+              style="padding-left: 1rem;"
               placeholder="Ex: Farmácia Central de Manipulação"
             />
           </div>
@@ -310,6 +500,7 @@ function fecharModalContato() {
               v-model="contatoResponsavel"
               type="text"
               class="form-field-input"
+              style="padding-left: 1rem;"
               placeholder="Seu nome completo"
             />
           </div>
@@ -322,6 +513,7 @@ function fecharModalContato() {
               type="tel"
               required
               class="form-field-input"
+              style="padding-left: 1rem;"
               placeholder="(11) 99999-9999"
             />
           </div>
@@ -333,6 +525,7 @@ function fecharModalContato() {
               v-model="contatoCidade"
               type="text"
               class="form-field-input"
+              style="padding-left: 1rem;"
               placeholder="São Paulo - SP"
             />
           </div>
@@ -362,12 +555,6 @@ function fecharModalContato() {
 </template>
 
 <style scoped>
-/* ====================================================================
-   LOGIN VIEW - DESIGN PADRÃO DA DROGARIA AEROPORTO
-   Minimalista, Claro, Paleta Azul Cobalto (#2563eb)
-   WCAG 2.2 Touch Targets (min 44px) e Estilo do Sistema
-   ==================================================================== */
-
 .login-wrapper-light {
   position: relative;
   min-height: 100vh;
@@ -383,10 +570,7 @@ function fecharModalContato() {
 
 .login-decor-bg {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: radial-gradient(circle at 50% 15%, rgba(37, 99, 235, 0.07) 0%, transparent 60%),
               radial-gradient(circle at 85% 85%, rgba(5, 150, 105, 0.05) 0%, transparent 50%);
   pointer-events: none;
@@ -411,7 +595,6 @@ function fecharModalContato() {
   }
 }
 
-/* HEADER DO LOGIN */
 .login-card-header {
   text-align: center;
   margin-bottom: 1.25rem;
@@ -444,9 +627,8 @@ function fecharModalContato() {
   margin: 0;
 }
 
-/* BADGE DE CONEXÃO */
 .env-badge-pill {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.45rem;
   font-size: 0.74rem;
@@ -455,19 +637,12 @@ function fecharModalContato() {
   border-radius: 9999px;
   margin: 0 auto 1.5rem;
   width: fit-content;
-  display: flex;
 }
 
 .badge-live {
   background-color: #ecfdf5;
   color: #047857;
   border: 1px solid #a7f3d0;
-}
-
-.badge-local {
-  background-color: #eff6ff;
-  color: #2563eb;
-  border: 1px solid #bfdbfe;
 }
 
 .status-indicator-dot {
@@ -477,7 +652,6 @@ function fecharModalContato() {
   background-color: currentColor;
 }
 
-/* ALERTA DE ERRO */
 .login-error-alert {
   display: flex;
   align-items: center;
@@ -491,7 +665,19 @@ function fecharModalContato() {
   margin-bottom: 1.25rem;
 }
 
-/* FORMULÁRIO */
+.login-success-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  padding: 0.65rem 0.85rem;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  margin-bottom: 1.25rem;
+}
+
 .login-form-body {
   display: flex;
   flex-direction: column;
@@ -547,55 +733,9 @@ function fecharModalContato() {
   height: 44px;
   justify-content: center;
   margin-top: 0.35rem;
-  font-size: 0.92rem;
+  font-size: 0.9rem;
 }
 
-/* ACESSO RÁPIDO */
-.quick-demo-section {
-  margin-top: 1.5rem;
-}
-
-.divider-line {
-  position: relative;
-  text-align: center;
-  margin-bottom: 0.85rem;
-}
-
-.divider-line::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background-color: var(--border-color, #e2e8f0);
-}
-
-.divider-line span {
-  position: relative;
-  background-color: #ffffff;
-  padding: 0 0.75rem;
-  font-size: 0.74rem;
-  color: #94a3b8;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.demo-buttons-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
-}
-
-.btn-demo-pill {
-  width: 100%;
-  justify-content: center;
-  font-size: 0.8rem;
-  padding: 0.5rem 0.75rem;
-}
-
-/* BOX COMERCIAL PARA COMPRA DO SISTEMA */
 .sales-contact-box {
   margin-top: 1.5rem;
   background-color: #f8fafc;
@@ -643,7 +783,6 @@ function fecharModalContato() {
   padding: 0.45rem 0.85rem;
 }
 
-/* FOOTER */
 .login-card-footer {
   margin-top: 1.5rem;
   padding-top: 1rem;
@@ -681,7 +820,6 @@ function fecharModalContato() {
   color: #1d4ed8;
 }
 
-/* MODAL DE CONTATO / PROPOSTA COMERCIAL */
 .modal-backdrop-blur {
   position: fixed;
   inset: 0;
@@ -748,11 +886,6 @@ function fecharModalContato() {
   cursor: pointer;
   padding: 0.25rem;
   border-radius: 6px;
-  transition: color 0.15s ease;
-}
-
-.btn-close-modal:hover {
-  color: #0f172a;
 }
 
 .modal-form-grid {

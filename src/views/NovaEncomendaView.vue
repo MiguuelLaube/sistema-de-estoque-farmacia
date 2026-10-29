@@ -27,7 +27,9 @@ const memoriaStore = useMedicamentosMemoriaStore();
 // Form State
 const selectedClientId = ref<string>('');
 const clientSearchText = ref<string>('');
+const clientQuickPhone = ref<string>('');
 const showClientDropdown = ref(false);
+const formErrorMsg = ref<string>('');
 
 const itens = ref<Array<{ quantity: number; name: string; price: string }>>([
   { quantity: 1, name: '', price: '0,00' },
@@ -61,7 +63,19 @@ const filteredClients = computed(() => {
 function selectClient(client: Cliente) {
   selectedClientId.value = client.id;
   clientSearchText.value = client.nome;
+  clientQuickPhone.value = client.telefone || '';
+  formErrorMsg.value = '';
   showClientDropdown.value = false;
+}
+
+function handleClientInput() {
+  showClientDropdown.value = true;
+  if (selectedClientId.value) {
+    const sel = clientesStore.currentTenantClientes.find((c) => c.id === selectedClientId.value);
+    if (!sel || sel.nome.toLowerCase() !== clientSearchText.value.trim().toLowerCase()) {
+      selectedClientId.value = '';
+    }
+  }
 }
 
 function handleClientBlur() {
@@ -135,15 +149,57 @@ watch(medicamentoPago, (pago) => {
   }
 });
 
+const listaAtendentesModal = computed<Funcionario[]>(() => {
+  if (authStore.tenantFuncionarios.length > 0) {
+    return authStore.tenantFuncionarios;
+  }
+  return [
+    {
+      id: authStore.currentUser.id || 'usuario-atual',
+      tenant_id: authStore.activeTenantId,
+      nome: (authStore.currentUser.nome || 'ATENDIMENTO').toUpperCase(),
+      cargo: 'Usuário Autenticado',
+      criado_em: new Date().toISOString(),
+    },
+  ];
+});
+
 // Validation
 const isFormValid = computed(() => {
   if (!selectedClientId.value && !clientSearchText.value.trim()) return false;
-  return itens.value.every((it) => it.name.trim().length > 0);
+  return itens.value.every((it) => it.name.trim().length > 0 && (Number(it.quantity) || 0) >= 1);
 });
 
 function handleSubmit() {
+  formErrorMsg.value = '';
   if (!isFormValid.value) return;
-  // Open employee selection modal exactly as in Base44
+
+  // Se digitou um nome novo sem selecionar na lista, verifica se já existe exato ou exige telefone válido
+  if (!selectedClientId.value) {
+    const existente = clientesStore.currentTenantClientes.find(
+      (c) => c.nome.trim().toUpperCase() === clientSearchText.value.trim().toUpperCase()
+    );
+    if (existente) {
+      selectedClientId.value = existente.id;
+    } else {
+      const telDigitos = clientQuickPhone.value.replace(/\D/g, '');
+      if (telDigitos.length < 10 || telDigitos.length > 11) {
+        formErrorMsg.value = 'Para cadastrar um novo cliente rapidamente, informe um telefone/WhatsApp válido com DDD (10 ou 11 dígitos).';
+        return;
+      }
+    }
+  }
+
+  // BUG-09 FIX: Impedir adiantamento negativo ou maior que o total do pedido
+  if (valorJaPago.value < 0) {
+    formErrorMsg.value = 'O valor adiantado não pode ser negativo.';
+    return;
+  }
+  if (!medicamentoPago.value && valorJaPago.value > totalCalculado.value + 0.001) {
+    formErrorMsg.value = 'O valor já pago não pode ultrapassar o valor total calculado da encomenda.';
+    return;
+  }
+
   showEmployeeModal.value = true;
 }
 
@@ -152,10 +208,9 @@ function confirmCreateOrder(employee: Funcionario) {
 
   let clientId = selectedClientId.value;
   if (!clientId && clientSearchText.value.trim()) {
-    // If typed client name not selected from dropdown, create/find them
     const newClient = clientesStore.adicionarCliente({
       nome: clientSearchText.value.trim().toUpperCase(),
-      telefone: '',
+      telefone: clientQuickPhone.value.trim(),
       base_legal: 'execucao_contrato',
     });
     clientId = newClient.id;
@@ -248,6 +303,13 @@ onBeforeUnmount(() => {
       </div>
 
       <form @submit.prevent="handleSubmit" style="display: flex; flex-direction: column; gap: 1.25rem;">
+        <div
+          v-if="formErrorMsg"
+          style="padding: 0.75rem 1rem; border-radius: 12px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: 0.84rem; font-weight: 600;"
+        >
+          ⚠️ {{ formErrorMsg }}
+        </div>
+
         <!-- FIELD: Cliente -->
         <div style="display: flex; flex-direction: column; gap: 0.4rem;">
           <label style="display: flex; align-items: center; gap: 0.45rem; font-size: 0.88rem; font-weight: 600; color: #1e293b;">
@@ -258,6 +320,7 @@ onBeforeUnmount(() => {
           <div style="position: relative; width: 100%;">
             <input
               v-model="clientSearchText"
+              @input="handleClientInput"
               @focus="showClientDropdown = true"
               @blur="handleClientBlur"
               type="text"
@@ -329,6 +392,32 @@ onBeforeUnmount(() => {
                 </span>
               </button>
             </div>
+          </div>
+
+          <div
+            v-if="!selectedClientId && clientSearchText.trim().length > 1"
+            style="margin-top: 0.35rem; display: flex; flex-direction: column; gap: 0.25rem;"
+          >
+            <label style="font-size: 0.78rem; font-weight: 600; color: #475569;">
+              WhatsApp do novo cliente (obrigatório para cadastro rápido)
+            </label>
+            <input
+              v-model="clientQuickPhone"
+              type="text"
+              placeholder="(12) 99999-9999"
+              style="
+                width: 100%;
+                height: 38px;
+                border-radius: 10px;
+                border: 1px solid #cbd5e1;
+                background: #f8fafc;
+                padding: 0 0.85rem;
+                font-size: 0.86rem;
+                color: #0f172a;
+                outline: none;
+              "
+              id="input-nova-encomenda-cliente-telefone"
+            />
           </div>
         </div>
 
@@ -710,7 +799,7 @@ onBeforeUnmount(() => {
 
         <div style="display: flex; flex-direction: column; gap: 0.5rem;">
           <button
-            v-for="emp in authStore.tenantFuncionarios"
+            v-for="emp in listaAtendentesModal"
             :key="emp.id"
             @click="confirmCreateOrder(emp)"
             style="

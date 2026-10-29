@@ -1,26 +1,88 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { Encomenda, EncomendaItem, Pagamento, StatusEncomenda, StatusCompra, FormaPagamento } from '../types';
 import { initialEncomendas } from '../data/mockData';
 import { useAuthStore } from './auth';
 import { useComprasStore } from './compras';
 import { useClientesStore } from './clientes';
 import { useMedicamentosMemoriaStore } from './medicamentosMemoria';
-import { enviarMensagemEvolutionApi, formatarMensagemNotificacao } from '../services/evolutionApi';
+import { enviarMensagemWhatsAppProxy, formatarMensagemNotificacao } from '../services/evolutionApi';
+import { supabase, isLiveSupabaseConfigured } from '../services/supabase';
+
+function gerarUuidSeguro(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0').slice(-12);
+}
 
 export const useEncomendasStore = defineStore('encomendas', () => {
   const authStore = useAuthStore();
   const comprasStore = useComprasStore();
   const clientesStore = useClientesStore();
   const memoriaStore = useMedicamentosMemoriaStore();
+  const isLive = isLiveSupabaseConfigured();
 
-  const allEncomendas = ref<Encomenda[]>(initialEncomendas);
+  const allEncomendas = ref<Encomenda[]>(isLive ? [] : initialEncomendas);
   const showArchived = ref<boolean>(false);
   const activeTab = ref<StatusEncomenda | 'Todas'>('Todas');
   const searchQuery = ref<string>('');
   const paymentFilter = ref<string>('todos');
 
-  // Tenant-scoped orders with enriched client and purchase references
+  async function carregarEncomendas() {
+    if (!isLive || !authStore.isAuthenticated) {
+      if (!isLive) allEncomendas.value = initialEncomendas;
+      else allEncomendas.value = [];
+      return;
+    }
+
+    const [encRes, itemRes, pagRes] = await Promise.all([
+      supabase.from('encomenda').select('*').order('criado_em', { ascending: false }),
+      supabase.from('encomenda_item').select('*').order('criado_em', { ascending: true }),
+      supabase.from('pagamento').select('*').order('data', { ascending: true }),
+    ]);
+
+    if (encRes.data) {
+      const itensPorEnc = new Map<string, EncomendaItem[]>();
+      for (const it of (itemRes.data || []) as EncomendaItem[]) {
+        const arr = itensPorEnc.get(it.encomenda_id) || [];
+        arr.push({
+          ...it,
+          preco_unitario: Number(it.preco_unitario) || 0,
+          subtotal: Number(it.subtotal) || 0,
+        });
+        itensPorEnc.set(it.encomenda_id, arr);
+      }
+
+      const pagsPorEnc = new Map<string, Pagamento[]>();
+      for (const p of (pagRes.data || []) as Pagamento[]) {
+        const arr = pagsPorEnc.get(p.encomenda_id) || [];
+        arr.push({
+          ...p,
+          valor: Number(p.valor) || 0,
+        });
+        pagsPorEnc.set(p.encomenda_id, arr);
+      }
+
+      allEncomendas.value = (encRes.data as any[]).map((e) => ({
+        ...e,
+        valor_total: Number(e.valor_total) || 0,
+        valor_pago: Number(e.valor_pago) || 0,
+        historico: Array.isArray(e.historico) ? e.historico : [],
+        itens: itensPorEnc.get(e.id) || [],
+        pagamentos: pagsPorEnc.get(e.id) || [],
+      })) as Encomenda[];
+    }
+  }
+
+  watch(
+    () => [authStore.isAuthenticated, authStore.activeTenantId, authStore.breakGlassTenantId],
+    () => {
+      carregarEncomendas();
+    },
+    { immediate: true }
+  );
+
   const currentTenantEncomendas = computed(() => {
     return allEncomendas.value
       .filter((e) => {
@@ -34,7 +96,6 @@ export const useEncomendasStore = defineStore('encomendas', () => {
       }));
   });
 
-  // Filtered orders according to current tab and search query
   const filteredEncomendas = computed(() => {
     let list = currentTenantEncomendas.value;
 
@@ -60,7 +121,6 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     return list;
   });
 
-  // Metrics from the single consolidated view (Spec 5.5)
   const metricas = computed(() => {
     const list = currentTenantEncomendas.value.filter((e) => !e.arquivada_em);
     const total = list.length;
@@ -90,7 +150,6 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     };
   });
 
-  // Recalculates order status based on minimum status of its items (Spec 5.2)
   function recalcularStatus(encomenda: Encomenda) {
     if (encomenda.status === 'Cancelada') return;
 
@@ -109,7 +168,6 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     } else if (hasPedidoFeito) {
       encomenda.status = 'Pedido Feito';
     } else if (allChegou) {
-      // Se todos chegaram e já estava marcada como Entregue, mantém
       if (encomenda.status !== 'Entregue') {
         const eraOutroStatus = encomenda.status !== 'Chegou';
         encomenda.status = 'Chegou';
@@ -120,7 +178,7 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     }
   }
 
-  // Disparo automático via Evolution API quando o status passa para Chegou
+  // Disparo automático via Proxy Backend (/api/whatsapp) sem credenciais no cliente
   async function dispararNotificacaoChegadaEvolution(encomenda: Encomenda) {
     const cfg = authStore.currentConfig;
     if (!cfg || !cfg.evolution_api_ativo) return;
@@ -138,34 +196,36 @@ export const useEncomendasStore = defineStore('encomendas', () => {
       cfg.ocultar_medicamentos_notificacao
     );
 
-    const resultado = await enviarMensagemEvolutionApi(
-      {
-        ativo: true,
-        apiUrl: cfg.evolution_api_url || '',
-        apiKey: cfg.evolution_api_key || '',
-        instanceName: cfg.evolution_api_instance || '',
-      },
-      cliente.telefone,
-      mensagem
-    );
+    const resultado = await enviarMensagemWhatsAppProxy(true, cliente.telefone, mensagem);
 
     if (resultado.sucesso) {
       encomenda.cliente_avisado = true;
       encomenda.cliente_avisado_em = new Date().toISOString();
-      encomenda.cliente_avisado_por = 'Robô Evolution API';
+      encomenda.cliente_avisado_por = 'Robô WhatsApp';
     }
 
     if (!encomenda.historico) encomenda.historico = [];
     encomenda.historico.push({
-      employee_name: 'Robô Evolution API',
+      employee_name: 'Robô WhatsApp',
       action: resultado.sucesso
         ? `disparou WhatsApp automático de chegada para ${cliente.nome}`
         : `falha no envio automático do WhatsApp: ${resultado.mensagem}`,
       timestamp: new Date().toISOString(),
     });
+
+    if (isLive && authStore.isAuthenticated) {
+      await supabase
+        .from('encomenda')
+        .update({
+          cliente_avisado: encomenda.cliente_avisado || false,
+          cliente_avisado_em: encomenda.cliente_avisado_em || null,
+          cliente_avisado_por: encomenda.cliente_avisado_por || null,
+          historico: encomenda.historico,
+        })
+        .eq('id', encomenda.id);
+    }
   }
 
-  // Hook called when a purchase item changes status
   function sincronizarStatusPorCompra(compraId: string, novoStatus: StatusCompra) {
     for (const enc of allEncomendas.value) {
       if (enc.tenant_id !== authStore.activeTenantId) continue;
@@ -186,7 +246,6 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     }
   }
 
-  // Create new order with multiple items and automatic purchase item links
   function criarEncomenda(dados: {
     clienteId: string;
     observacao?: string;
@@ -201,14 +260,13 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     }>;
   }): Encomenda {
     const tenantId = authStore.activeTenantId;
-    const orderId = 'e' + Math.random().toString(36).substr(2, 9);
+    const orderId = gerarUuidSeguro();
     const trackingCode = `ENC-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
+    const agora = new Date().toISOString();
 
     const itensCriados: EncomendaItem[] = dados.itens.map((it) => {
-      // Registra na memória de medicamentos mais pedidos (Documento Pág. 10)
       memoriaStore.registrarMedicamento(it.descricao, it.precoUnitario);
 
-      // Procura ou cria o item na lista de compras da farmácia
       const compraItem = comprasStore.encontrarOuCriarCompraItem(
         it.descricao,
         it.classificacaoId,
@@ -218,7 +276,7 @@ export const useEncomendasStore = defineStore('encomendas', () => {
       );
 
       return {
-        id: 'i' + Math.random().toString(36).substr(2, 9),
+        id: gerarUuidSeguro(),
         tenant_id: tenantId,
         encomenda_id: orderId,
         descricao: it.descricao.trim(),
@@ -231,11 +289,12 @@ export const useEncomendasStore = defineStore('encomendas', () => {
         compra_item_id: compraItem.id,
         status_item: compraItem.status,
         atributos: {},
-        criado_em: new Date().toISOString(),
+        criado_em: agora,
       };
     });
 
     const valorTotal = itensCriados.reduce((acc, curr) => acc + curr.subtotal, 0);
+    const criadoPorId = authStore.currentUser.tenant_id ? authStore.activeUserId : undefined;
 
     const novaEncomenda: Encomenda = {
       id: orderId,
@@ -247,27 +306,62 @@ export const useEncomendasStore = defineStore('encomendas', () => {
       valor_pago: 0,
       situacao_pagamento: 'Não pago',
       observacao: dados.observacao,
-      criado_por: authStore.activeUserId,
+      criado_por: criadoPorId,
       entregue_com_saldo_devedor: false,
-      criado_em: new Date().toISOString(),
-      atualizado_em: new Date().toISOString(),
+      criado_em: agora,
+      atualizado_em: agora,
       itens: itensCriados,
       pagamentos: [],
       historico: [
         {
           employee_name: dados.funcionarioNome || authStore.currentUser.nome,
           action: 'Criou a encomenda (status: Aguardando)',
-          timestamp: new Date().toISOString(),
+          timestamp: agora,
         },
       ],
     };
 
     recalcularStatus(novaEncomenda);
     allEncomendas.value.unshift(novaEncomenda);
+
+    if (isLive && authStore.isAuthenticated) {
+      (async () => {
+        const { error: encErr } = await supabase.from('encomenda').insert({
+          id: novaEncomenda.id,
+          tenant_id: novaEncomenda.tenant_id,
+          cliente_id: novaEncomenda.cliente_id,
+          codigo_rastreio: novaEncomenda.codigo_rastreio,
+          status: novaEncomenda.status,
+          valor_total: novaEncomenda.valor_total,
+          valor_pago: 0,
+          observacao: novaEncomenda.observacao || null,
+          criado_por: criadoPorId || null,
+          historico: novaEncomenda.historico,
+        });
+
+        if (!encErr && itensCriados.length > 0) {
+          await supabase.from('encomenda_item').insert(
+            itensCriados.map((it) => ({
+              id: it.id,
+              tenant_id: it.tenant_id,
+              encomenda_id: it.encomenda_id,
+              descricao: it.descricao,
+              quantidade: it.quantidade,
+              preco_unitario: it.preco_unitario,
+              classificacao_id: it.classificacao_id || null,
+              controlado: it.controlado,
+              urgente: it.urgente,
+              compra_item_id: it.compra_item_id || null,
+              status_item: it.status_item,
+            }))
+          );
+        }
+      })();
+    }
+
     return novaEncomenda;
   }
 
-  // Update order status with business rules
   function alterarStatus(
     encomendaId: string,
     novoStatus: StatusEncomenda,
@@ -276,33 +370,36 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     const enc = allEncomendas.value.find((e) => e.id === encomendaId);
     if (!enc) return { sucesso: false, mensagem: 'Encomenda não encontrada.' };
 
-    // Regra 5.2: "Entregue só é marcado manualmente, e apenas se todos os itens estiverem em Chegou."
+    // Regra 5.2: Entregue só se todos os itens estiverem em Chegou (salvo alçada Admin real)
     if (novoStatus === 'Entregue') {
       const allChegou = enc.itens?.every((i) => i.status_item === 'Chegou');
       if (!allChegou && !options?.autorizacaoAdmin) {
         return {
           sucesso: false,
-          mensagem: 'Não é possível marcar como Entregue: existem itens que ainda não chegaram!',
+          mensagem: 'Não é possível marcar como Entregue: existem itens que ainda não chegaram! Apenas um Administrador pode autorizar exceção.',
         };
       }
 
-      // Regra 5.2: "Entregue com saldo devedor é permitida mediante confirmação e registro em auditoria"
       const saldoDevedor = enc.valor_total > enc.valor_pago;
       if (saldoDevedor) {
         if (authStore.currentConfig.bloquear_entrega_com_saldo && !authStore.isAdmin) {
           return {
             sucesso: false,
-            mensagem: 'Este tenant não permite entrega com saldo devedor sem autorização do Administrador.',
+            mensagem: 'Política da farmácia: entrega com saldo devedor exige autorização de Administrador.',
           };
         }
         enc.entregue_com_saldo_devedor = true;
+        authStore.registrarAuditoria(
+          'LIBERACAO_ENTREGA_COM_SALDO',
+          `Encomenda ${enc.codigo_rastreio || enc.id}`,
+          `Saldo pendente: R$ ${(enc.valor_total - enc.valor_pago).toFixed(2)}`
+        );
       }
 
       enc.entregue_em = new Date().toISOString();
-      enc.entregue_por = authStore.activeUserId;
+      enc.entregue_por = authStore.currentUser.tenant_id ? authStore.activeUserId : undefined;
     }
 
-    // Regra 3.3.4: "Se a encomenda for cancelada, o vínculo é desfeito"
     if (novoStatus === 'Cancelada') {
       if (enc.itens) {
         for (const it of enc.itens) {
@@ -311,26 +408,55 @@ export const useEncomendasStore = defineStore('encomendas', () => {
       }
     }
 
+    // Se o atendente avançou manualmente o card para Pedido Feito ou Chegou, alinha os itens da encomenda
+    if (novoStatus === 'Pedido Feito' || novoStatus === 'Chegou') {
+      if (enc.itens) {
+        for (const it of enc.itens) {
+          it.status_item = novoStatus;
+        }
+      }
+    }
+
     const eraOutroStatus = enc.status !== novoStatus;
     enc.status = novoStatus;
     enc.atualizado_em = new Date().toISOString();
+
+    if (!enc.historico) enc.historico = [];
+    enc.historico.push({
+      employee_name: options?.funcionarioNome || authStore.currentUser.nome,
+      action: `alterou status para: ${novoStatus}`,
+      timestamp: enc.atualizado_em,
+    });
+
+    if (isLive && authStore.isAuthenticated) {
+      (async () => {
+        if (novoStatus === 'Pedido Feito' || novoStatus === 'Chegou') {
+          await supabase
+            .from('encomenda_item')
+            .update({ status_item: novoStatus })
+            .eq('encomenda_id', enc.id);
+        }
+        await supabase
+          .from('encomenda')
+          .update({
+            status: enc.status,
+            entregue_em: enc.entregue_em || null,
+            entregue_por: enc.entregue_por || null,
+            entregue_com_saldo_devedor: enc.entregue_com_saldo_devedor,
+            historico: enc.historico,
+            atualizado_em: enc.atualizado_em,
+          })
+          .eq('id', enc.id);
+      })();
+    }
 
     if (novoStatus === 'Chegou' && eraOutroStatus) {
       dispararNotificacaoChegadaEvolution(enc);
     }
 
-    // Registra no histórico (Documento Seção 3 / Pág. 7)
-    if (!enc.historico) enc.historico = [];
-    enc.historico.push({
-      employee_name: options?.funcionarioNome || authStore.currentUser.nome,
-      action: `alterou status para: ${novoStatus}`,
-      timestamp: new Date().toISOString(),
-    });
-
     return { sucesso: true };
   }
 
-  // Register payment (supports positive payment and negative estorno)
   function registrarPagamento(dados: {
     encomendaId: string;
     valor: number;
@@ -343,25 +469,28 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     if (!enc) return;
 
     const valorFinal = dados.tipo === 'estorno' ? -Math.abs(dados.valor) : Math.abs(dados.valor);
+    if (valorFinal === 0) return;
+
+    const agora = new Date().toISOString();
+    const registradoPor = authStore.currentUser.tenant_id ? authStore.activeUserId : undefined;
 
     const novoPag: Pagamento = {
-      id: 'p' + Math.random().toString(36).substr(2, 9),
+      id: gerarUuidSeguro(),
       tenant_id: authStore.activeTenantId,
       encomenda_id: enc.id,
       valor: valorFinal,
       forma: dados.forma,
       tipo: dados.tipo || 'pagamento',
       motivo_estorno: dados.motivoEstorno,
-      registrado_por: authStore.activeUserId,
-      data: new Date().toISOString(),
-      criado_em: new Date().toISOString(),
+      registrado_por: registradoPor,
+      data: agora,
+      criado_em: agora,
     };
 
     if (!enc.pagamentos) enc.pagamentos = [];
     enc.pagamentos.push(novoPag);
 
-    // Atualiza valor_pago e situacao_pagamento
-    enc.valor_pago = enc.pagamentos.reduce((acc, curr) => acc + curr.valor, 0);
+    enc.valor_pago = Math.max(0, enc.pagamentos.reduce((acc, curr) => acc + curr.valor, 0));
     if (enc.valor_pago >= enc.valor_total && enc.valor_total > 0) {
       enc.situacao_pagamento = 'Pago';
     } else if (enc.valor_pago > 0) {
@@ -370,29 +499,52 @@ export const useEncomendasStore = defineStore('encomendas', () => {
       enc.situacao_pagamento = 'Não pago';
     }
 
-    // Registra no histórico (Documento Seção 3 / Pág. 7)
     if (!enc.historico) enc.historico = [];
     enc.historico.push({
       employee_name: dados.funcionarioNome || authStore.currentUser.nome,
       action: `registrou ${dados.tipo || 'pagamento'} de R$ ${Math.abs(dados.valor).toFixed(2)} (${dados.forma})`,
-      timestamp: new Date().toISOString(),
+      timestamp: agora,
     });
+
+    if (isLive && authStore.isAuthenticated) {
+      (async () => {
+        await supabase.from('pagamento').insert({
+          id: novoPag.id,
+          tenant_id: novoPag.tenant_id,
+          encomenda_id: novoPag.encomenda_id,
+          valor: novoPag.valor,
+          forma: novoPag.forma,
+          tipo: novoPag.tipo,
+          motivo_estorno: novoPag.motivo_estorno || null,
+          registrado_por: registradoPor || null,
+          data: novoPag.data,
+        });
+        await supabase
+          .from('encomenda')
+          .update({ historico: enc.historico, atualizado_em: agora })
+          .eq('id', enc.id);
+      })();
+    }
   }
 
-  // Archive delivered orders in batch (Spec 5.6: "Arquivar Entregues")
   function arquivarEntregues(): number {
     const tenantId = authStore.activeTenantId;
     let count = 0;
+    const ids: string[] = [];
+    const agora = new Date().toISOString();
     for (const enc of allEncomendas.value) {
       if (enc.tenant_id === tenantId && enc.status === 'Entregue' && !enc.arquivada_em) {
-        enc.arquivada_em = new Date().toISOString();
+        enc.arquivada_em = agora;
+        ids.push(enc.id);
         count++;
       }
+    }
+    if (ids.length > 0 && isLive && authStore.isAuthenticated) {
+      supabase.from('encomenda').update({ arquivada_em: agora }).in('id', ids).then(() => {});
     }
     return count;
   }
 
-  // Gera texto de aviso de chegada para a área de transferência (Documento Seção 3 / Pág. 8 & LGPD Art. 11)
   function obterTextoAvisoChegada(encomenda: Encomenda): string {
     const cliente = clientesStore.allClientes.find((c) => c.id === encomenda.cliente_id);
     const primeiroNome = cliente ? cliente.nome.split(' ')[0] : 'Cliente';
@@ -405,7 +557,6 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     return `Olá, ${primeiroNome}! Seu pedido de ${medicamentos} já chegou na drogaria e está pronto para retirada.${textoSaldo} Obrigado pela preferência!`;
   }
 
-  // Gera resumo da encomenda para a área de transferência (Documento Seção 3 / Pág. 8)
   function obterResumoEncomenda(encomenda: Encomenda): string {
     const cliente = clientesStore.allClientes.find((c) => c.id === encomenda.cliente_id);
     const itensStr = encomenda.itens?.map((i) => `• ${i.quantidade}x ${i.descricao} - R$ ${i.subtotal.toFixed(2)}`).join('\n') || '';
@@ -413,7 +564,6 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     return `📋 RESUMO DA ENCOMENDA [${encomenda.codigo_rastreio}]\nCliente: ${cliente?.nome || 'N/A'}\nTelefone: ${cliente?.telefone || 'N/A'}\n\nItens:\n${itensStr}\n\nTotal: R$ ${encomenda.valor_total.toFixed(2)}\nValor Pago: R$ ${encomenda.valor_pago.toFixed(2)}\nSaldo a Cobrar: R$ ${saldo.toFixed(2)}\nStatus: ${encomenda.status}`;
   }
 
-  // Generate WhatsApp wa.me link with template interpolation (Spec 2.4, 5.1 & 8)
   function gerarLinkWhatsApp(encomenda: Encomenda): string {
     const cliente = clientesStore.allClientes.find((c) => c.id === encomenda.cliente_id);
     if (!cliente || !cliente.telefone) return '';
@@ -433,15 +583,19 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     return `https://wa.me/${numComDdd}?text=${encodeURIComponent(mensagem)}`;
   }
 
-  // Delete single order
   function removerEncomenda(encomendaId: string) {
     const idx = allEncomendas.value.findIndex((e) => e.id === encomendaId);
     if (idx !== -1) {
+      const removida = allEncomendas.value[idx];
       allEncomendas.value.splice(idx, 1);
+      if (isLive && authStore.isAuthenticated) {
+        supabase.from('encomenda').delete().eq('id', encomendaId).then(() => {
+          authStore.registrarAuditoria('EXCLUSAO_ENCOMENDA', `Encomenda ${removida.codigo_rastreio || encomendaId}`);
+        });
+      }
     }
   }
 
-  // Update order details (medications, notes, etc.)
   function atualizarEncomenda(
     encomendaId: string,
     dados: Partial<Encomenda> & {
@@ -456,92 +610,152 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     if (dados.observacao !== undefined) enc.observacao = dados.observacao;
     if (dados.status) enc.status = dados.status;
 
+    const agora = new Date().toISOString();
+
     if (dados.itensNovos) {
       enc.itens = dados.itensNovos.map((it) => {
         memoriaStore.registrarMedicamento(it.descricao, it.precoUnitario);
         return {
-          id: 'i' + Math.random().toString(36).substr(2, 9),
+          id: gerarUuidSeguro(),
           tenant_id: enc.tenant_id,
           encomenda_id: enc.id,
           descricao: it.descricao.trim(),
-          quantidade: it.quantidade,
-          preco_unitario: it.precoUnitario,
-          subtotal: it.quantidade * it.precoUnitario,
+          quantidade: Math.max(1, it.quantidade),
+          preco_unitario: Math.max(0, it.precoUnitario),
+          subtotal: Math.max(1, it.quantidade) * Math.max(0, it.precoUnitario),
           controlado: false,
           urgente: false,
           status_item: enc.status === 'Entregue' ? 'Chegou' : (enc.status === 'Chegou' ? 'Chegou' : 'Pedido Feito'),
           atributos: {},
-          criado_em: new Date().toISOString(),
+          criado_em: agora,
         };
       });
       enc.valor_total = enc.itens.reduce((acc, curr) => acc + curr.subtotal, 0);
+      enc.situacao_pagamento =
+        enc.valor_pago >= enc.valor_total && enc.valor_total > 0 ? 'Pago' : enc.valor_pago > 0 ? 'Parcial' : 'Não pago';
     }
 
-    if (dados.valor_pago !== undefined) {
-      enc.valor_pago = dados.valor_pago;
-      enc.situacao_pagamento = enc.valor_pago >= enc.valor_total && enc.valor_total > 0 ? 'Pago' : (enc.valor_pago > 0 ? 'Parcial' : 'Não pago');
-    }
-
-    enc.atualizado_em = new Date().toISOString();
+    enc.atualizado_em = agora;
 
     if (dados.funcionarioNome) {
       if (!enc.historico) enc.historico = [];
       enc.historico.push({
         employee_name: dados.funcionarioNome,
         action: 'editou a encomenda',
-        timestamp: new Date().toISOString(),
+        timestamp: agora,
       });
+    }
+
+    if (isLive && authStore.isAuthenticated) {
+      (async () => {
+        await supabase
+          .from('encomenda')
+          .update({
+            cliente_id: enc.cliente_id,
+            observacao: enc.observacao || null,
+            valor_total: enc.valor_total,
+            historico: enc.historico || [],
+            atualizado_em: agora,
+          })
+          .eq('id', enc.id);
+
+        if (dados.itensNovos && enc.itens) {
+          await supabase.from('encomenda_item').delete().eq('encomenda_id', enc.id);
+          await supabase.from('encomenda_item').insert(
+            enc.itens.map((it) => ({
+              id: it.id,
+              tenant_id: it.tenant_id,
+              encomenda_id: it.encomenda_id,
+              descricao: it.descricao,
+              quantidade: it.quantidade,
+              preco_unitario: it.preco_unitario,
+              status_item: it.status_item,
+            }))
+          );
+        }
+      })();
     }
   }
 
-  // Toggle paid status directly
+  // BUG-09 FIX: alternarPago reconcilia a tabela pagamento para manter integridade financeira no banco
   function alternarPago(encomendaId: string, pago: boolean, funcionarioNome?: string) {
     const enc = allEncomendas.value.find((e) => e.id === encomendaId);
     if (!enc) return;
 
     if (pago) {
-      enc.valor_pago = enc.valor_total;
-      enc.situacao_pagamento = 'Pago';
-    } else {
-      enc.valor_pago = 0;
-      enc.situacao_pagamento = 'Não pago';
+      const faltaPagar = Math.max(0, enc.valor_total - enc.valor_pago);
+      if (faltaPagar > 0) {
+        registrarPagamento({
+          encomendaId,
+          valor: faltaPagar,
+          forma: 'dinheiro',
+          tipo: 'pagamento',
+          funcionarioNome,
+        });
+      }
+    } else if (enc.valor_pago > 0) {
+      registrarPagamento({
+        encomendaId,
+        valor: enc.valor_pago,
+        forma: 'outros',
+        tipo: 'estorno',
+        motivoEstorno: 'Reversão manual de status de pagamento no card',
+        funcionarioNome,
+      });
     }
-
-    if (!enc.historico) enc.historico = [];
-    enc.historico.push({
-      employee_name: funcionarioNome || authStore.currentUser.nome,
-      action: pago ? 'marcou como pago' : 'marcou como não pago',
-      timestamp: new Date().toISOString(),
-    });
-
-    enc.atualizado_em = new Date().toISOString();
   }
 
-  // Toggle whether client was notified manually
   function alternarClienteAvisado(encomendaId: string, avisado: boolean, funcionarioNome?: string) {
     const enc = allEncomendas.value.find((e) => e.id === encomendaId);
     if (!enc) return;
 
+    const agora = new Date().toISOString();
     enc.cliente_avisado = avisado;
-    enc.cliente_avisado_em = avisado ? new Date().toISOString() : undefined;
+    enc.cliente_avisado_em = avisado ? agora : undefined;
     enc.cliente_avisado_por = avisado ? (funcionarioNome || authStore.currentUser.nome) : undefined;
 
     if (!enc.historico) enc.historico = [];
     enc.historico.push({
       employee_name: funcionarioNome || authStore.currentUser.nome,
       action: avisado ? 'marcou que o cliente já foi avisado da chegada' : 'marcou que o cliente ainda NÃO foi avisado',
-      timestamp: new Date().toISOString(),
+      timestamp: agora,
     });
 
-    enc.atualizado_em = new Date().toISOString();
+    enc.atualizado_em = agora;
+
+    if (isLive && authStore.isAuthenticated) {
+      supabase
+        .from('encomenda')
+        .update({
+          cliente_avisado: enc.cliente_avisado,
+          cliente_avisado_em: enc.cliente_avisado_em || null,
+          cliente_avisado_por: enc.cliente_avisado_por || null,
+          historico: enc.historico,
+          atualizado_em: agora,
+        })
+        .eq('id', enc.id)
+        .then(() => {});
+    }
   }
 
-  // Definitively delete delivered orders (matching "Apagar Entregues" button in Base44)
   function apagarEntreguesDefinitivo(): number {
     const tenantId = authStore.activeTenantId;
-    const initialLen = allEncomendas.value.length;
+    const idsRemover = allEncomendas.value
+      .filter((e) => e.tenant_id === tenantId && e.status === 'Entregue')
+      .map((e) => e.id);
+
     allEncomendas.value = allEncomendas.value.filter((e) => !(e.tenant_id === tenantId && e.status === 'Entregue'));
-    return initialLen - allEncomendas.value.length;
+
+    if (idsRemover.length > 0 && isLive && authStore.isAuthenticated) {
+      supabase
+        .from('encomenda')
+        .delete()
+        .in('id', idsRemover)
+        .then(() => {
+          authStore.registrarAuditoria('EXCLUSAO_LOTE_ENTREGUES', `${idsRemover.length} encomendas entregues`);
+        });
+    }
+    return idsRemover.length;
   }
 
   return {
@@ -553,6 +767,7 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     currentTenantEncomendas,
     filteredEncomendas,
     metricas,
+    carregarEncomendas,
     recalcularStatus,
     sincronizarStatusPorCompra,
     criarEncomenda,

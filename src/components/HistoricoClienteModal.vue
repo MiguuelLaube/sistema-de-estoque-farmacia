@@ -329,13 +329,25 @@ function irParaNovaEncomenda() {
   }
 }
 
+function alternarRevelacaoCpf() {
+  revelouCpf.value = !revelouCpf.value;
+  if (revelouCpf.value && props.cliente) {
+    authStore.registrarAuditoria(
+      'VISUALIZACAO_CPF_TITULAR',
+      `Cliente ${props.cliente.id}`,
+      'Desmascaramento de CPF no modal de histórico'
+    );
+  }
+}
+
 // Copiar Histórico Estruturado para WhatsApp ou Clipboard
 async function copiarHistorico() {
   if (!props.cliente) return;
   const cliente = props.cliente;
   const meds = todosMedicamentosPlanificados.value;
+  const nomeLoja = authStore.currentConfig.header_title || 'DROGARIA AEROPORTO';
 
-  let texto = `📋 *HISTÓRICO DE MEDICAMENTOS - DROGARIA AEROPORTO*\n`;
+  let texto = `📋 *HISTÓRICO DE MEDICAMENTOS - ${nomeLoja}*\n`;
   texto += `👤 *Cliente:* ${cliente.nome}\n`;
   texto += `📱 *Telefone:* ${cliente.telefone}\n`;
   texto += `📦 *Total de Encomendas:* ${estatisticas.value.totalPedidos}\n`;
@@ -357,7 +369,7 @@ async function copiarHistorico() {
     });
   }
 
-  texto += `Drogaria Aeroporto • Gestão & Atendimento Especializado`;
+  texto += `${nomeLoja} • Gestão & Atendimento Especializado`;
 
   try {
     await navigator.clipboard.writeText(texto);
@@ -365,8 +377,8 @@ async function copiarHistorico() {
     setTimeout(() => {
       copiadoFeedback.value = false;
     }, 2500);
-  } catch (err) {
-    console.error('Erro ao copiar', err);
+  } catch {
+    // Ignora falha de área de transferência sem expor detalhes internos no console
   }
 }
 
@@ -381,7 +393,8 @@ const linkWhatsAppCliente = computed(() => {
   if (!props.cliente?.telefone) return '#';
   const telLimpo = props.cliente.telefone.replace(/\D/g, '');
   const ddd = telLimpo.startsWith('55') ? telLimpo : `55${telLimpo}`;
-  const msg = `Olá ${props.cliente.nome.split(' ')[0]}! Entramos em contato da Drogaria Aeroporto referente ao seu histórico de encomendas.`;
+  const nomeLoja = authStore.currentConfig.header_title || 'Drogaria';
+  const msg = `Olá ${props.cliente.nome.split(' ')[0]}! Entramos em contato da ${nomeLoja} referente ao seu histórico de encomendas.`;
   return `https://wa.me/${ddd}?text=${encodeURIComponent(msg)}`;
 });
 </script>
@@ -521,7 +534,7 @@ const linkWhatsAppCliente = computed(() => {
                 <span>{{ revelouCpf ? cliente.cpf : clientesStore.mascararCPF(cliente.cpf) }}</span>
                 <button
                   type="button"
-                  @click="revelouCpf = !revelouCpf"
+                  @click="alternarRevelacaoCpf"
                   style="background: none; border: none; padding: 0 2px; cursor: pointer; color: #64748b; display: inline-flex; align-items: center;"
                   :title="revelouCpf ? 'Ocultar CPF' : 'Revelar CPF'"
                 >

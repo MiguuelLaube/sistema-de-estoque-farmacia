@@ -1,16 +1,11 @@
-export interface EvolutionApiConfig {
-  ativo: boolean;
-  apiUrl: string;        // Ex: https://api.seudominio.com ou http://localhost:8080
-  apiKey: string;        // Global API Key ou Instance Token da Evolution API v1/v2
-  instanceName: string;  // Nome da instância criada na Evolution API
-  mensagemTemplate?: string;
-  ocultarMedicamentos?: boolean;
-}
+import { supabase } from './supabase';
 
 export interface DisparoWhatsAppResultado {
   sucesso: boolean;
   mensagem: string;
-  detalhes?: any;
+  conectado?: boolean;
+  estado?: string;
+  base64?: string;
 }
 
 /**
@@ -19,7 +14,6 @@ export interface DisparoWhatsAppResultado {
 export function normalizarNumeroWhatsApp(telefone: string): string {
   const limpo = (telefone || '').replace(/\D/g, '');
   if (!limpo) return '';
-  // Se não começa com 55 e tem 10 ou 11 dígitos, adiciona 55
   if (!limpo.startsWith('55') && (limpo.length === 10 || limpo.length === 11)) {
     return `55${limpo}`;
   }
@@ -27,7 +21,7 @@ export function normalizarNumeroWhatsApp(telefone: string): string {
 }
 
 /**
- * Monta o texto de notificação de chegada de encomenda
+ * Monta o texto de notificação de chegada de encomenda respeitando minimização LGPD (Art. 11)
  */
 export function formatarMensagemNotificacao(
   template: string,
@@ -50,78 +44,127 @@ export function formatarMensagemNotificacao(
   return msg;
 }
 
+async function obterHeadersAutenticados(): Promise<Record<string, string> | null> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return null;
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
+}
+
 /**
- * Envia mensagem de texto via Evolution API (compatível com v1.x e v2.x)
+ * Consulta o status da instância WhatsApp via Proxy Backend (sem expor URL/API Key no navegador)
  */
-export async function enviarMensagemEvolutionApi(
-  config: EvolutionApiConfig,
+export async function consultarStatusWhatsAppProxy(): Promise<DisparoWhatsAppResultado> {
+  const headers = await obterHeadersAutenticados();
+  if (!headers) {
+    return { sucesso: false, conectado: false, mensagem: 'Sessão não autenticada.' };
+  }
+
+  try {
+    const response = await fetch('/api/whatsapp', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ action: 'status' }),
+    });
+    const data = await response.json().catch(() => null);
+    return {
+      sucesso: Boolean(data?.sucesso),
+      conectado: Boolean(data?.conectado),
+      estado: data?.estado || 'desconhecido',
+      mensagem: data?.mensagem || (data?.conectado ? 'Conectado' : 'Desconectado'),
+    };
+  } catch {
+    return {
+      sucesso: false,
+      conectado: false,
+      mensagem: 'Não foi possível verificar o status do serviço de WhatsApp.',
+    };
+  }
+}
+
+/**
+ * Solicita QR Code de pareamento via Proxy Backend (restrito a Administradores)
+ */
+export async function obterQrCodeWhatsAppProxy(): Promise<DisparoWhatsAppResultado> {
+  const headers = await obterHeadersAutenticados();
+  if (!headers) {
+    return { sucesso: false, mensagem: 'Sessão não autenticada.' };
+  }
+
+  try {
+    const response = await fetch('/api/whatsapp', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ action: 'qrcode' }),
+    });
+    const data = await response.json().catch(() => null);
+    return {
+      sucesso: Boolean(data?.sucesso),
+      conectado: Boolean(data?.conectado),
+      base64: data?.base64 || undefined,
+      mensagem: data?.mensagem || 'Solicitação processada.',
+    };
+  } catch {
+    return {
+      sucesso: false,
+      mensagem: 'Não foi possível obter o QR Code no momento.',
+    };
+  }
+}
+
+/**
+ * Envia mensagem de texto via Proxy Backend (/api/whatsapp).
+ * Credenciais externas ficam exclusivamente em variáveis de ambiente do servidor.
+ */
+export async function enviarMensagemWhatsAppProxy(
+  ativo: boolean,
   numeroDestino: string,
   texto: string
 ): Promise<DisparoWhatsAppResultado> {
-  if (!config.ativo) {
-    return { sucesso: false, mensagem: 'Disparo automático de WhatsApp está desativado.' };
-  }
-
-  if (!config.apiUrl || !config.apiKey || !config.instanceName) {
-    return {
-      sucesso: false,
-      mensagem: 'Evolution API não configurada. Preencha URL, Instância e API Key em Configurações > WhatsApp.',
-    };
+  if (!ativo) {
+    return { sucesso: false, mensagem: 'Disparo automático de WhatsApp está desativado nas configurações.' };
   }
 
   const numeroNormalizado = normalizarNumeroWhatsApp(numeroDestino);
-  if (!numeroNormalizado || numeroNormalizado.length < 10) {
-    return { sucesso: false, mensagem: `Número de telefone inválido para envio: "${numeroDestino}".` };
+  if (!numeroNormalizado || numeroNormalizado.length < 12) {
+    return { sucesso: false, mensagem: 'Número de telefone inválido para envio.' };
   }
 
-  // Tratamento da URL base sem barra final
-  const baseUrl = config.apiUrl.trim().replace(/\/+$/, '');
-  const url = `${baseUrl}/message/sendText/${encodeURIComponent(config.instanceName.trim())}`;
-
-  const payload = {
-    number: numeroNormalizado,
-    options: {
-      delay: 1200,
-      presence: 'composing',
-      linkPreview: false,
-    },
-    textMessage: {
-      text: texto,
-    },
-    // Suporte a diferentes versões do body da Evolution (v1 / v2)
-    text: texto,
-  };
+  const headers = await obterHeadersAutenticados();
+  if (!headers) {
+    return { sucesso: false, mensagem: 'Sessão expirada. Faça login novamente para enviar mensagens.' };
+  }
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch('/api/whatsapp', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: config.apiKey.trim(),
-      },
-      body: JSON.stringify(payload),
+      headers,
+      body: JSON.stringify({
+        action: 'send',
+        numeroDestino: numeroNormalizado,
+        texto,
+      }),
     });
 
     const data = await response.json().catch(() => null);
-
-    if (response.ok && (data?.status === 'PENDING' || data?.key || data?.message || data?.status === 200)) {
+    if (response.ok && data?.sucesso) {
       return {
         sucesso: true,
-        mensagem: 'Mensagem enviada com sucesso ao WhatsApp do cliente!',
-        detalhes: data,
-      };
-    } else {
-      const erroMsg = data?.response?.message || data?.message || response.statusText || 'Erro ao conectar à Evolution API';
-      return {
-        sucesso: false,
-        mensagem: `Falha na Evolution API (${response.status}): ${JSON.stringify(erroMsg)}`,
-        detalhes: data,
+        mensagem: data.mensagem || 'Mensagem enviada com sucesso!',
       };
     }
-  } catch (error: any) {
+
     return {
       sucesso: false,
-      mensagem: `Erro de conexão com o servidor da Evolution API: ${error?.message || error}`,
+      mensagem: data?.mensagem || 'Não foi possível enviar a mensagem automática.',
+    };
+  } catch {
+    return {
+      sucesso: false,
+      mensagem: 'Serviço de mensageria indisponível no momento.',
     };
   }
 }
