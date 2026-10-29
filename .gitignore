@@ -29,3 +29,5 @@ dist-ssr
 !.env.example
 scratch/
 evolution-api/
+cloudflared.exe
+*.log
