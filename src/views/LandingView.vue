@@ -50,15 +50,18 @@ function rolarParaSecao(id: string) {
         <a
           href="#topo"
           class="brand-link"
-          aria-label="Drogaria Aeroporto - Início"
+          aria-label="EncoMed - Início"
           @click.prevent="rolarParaSecao('topo')"
+          style="display: flex; align-items: center; gap: 0.75rem;"
         >
-          <div class="brand-badge-pill" aria-hidden="true">
-            <Pill :size="20" class="text-white" />
-          </div>
+          <img
+            src="/encomed-logo.png"
+            alt="EncoMed"
+            style="height: 42px; width: auto; object-fit: contain; border-radius: 8px; flex-shrink: 0;"
+          />
           <div class="brand-text-col">
-            <span class="brand-title-main">Drogaria Aeroporto</span>
-            <span class="brand-subtitle-meta">SaaS de Encomendas & Estoque</span>
+            <span class="brand-title-main">EncoMed</span>
+            <span class="brand-subtitle-meta">SaaS de Encomendas &amp; Estoque</span>
           </div>
         </a>
 

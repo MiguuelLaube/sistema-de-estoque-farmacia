@@ -14,7 +14,6 @@ import {
   Building2,
   UserCheck,
   LogOut,
-  Pill,
   PlusCircle,
   ExternalLink,
   AlertOctagon,
@@ -57,16 +56,18 @@ async function encerrarSuporteBreakGlass() {
   <div v-else class="app-container">
     <!-- Sidebar Navigation -->
     <aside class="app-sidebar">
-      <div class="sidebar-header">
-        <div class="tenant-logo-badge" style="background: #2563eb; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-          <Pill :size="20" />
-        </div>
-        <div class="tenant-meta">
+      <div class="sidebar-header" style="align-items: center; gap: 0.75rem;">
+        <img
+          src="/encomed-logo.png"
+          alt="EncoMed Logo"
+          style="height: 38px; width: auto; object-fit: contain; border-radius: 8px; flex-shrink: 0; background: #ffffff; padding: 2px;"
+        />
+        <div class="tenant-meta" style="min-width: 0;">
           <span class="brand-title" :title="authStore.isSuperAdmin && !authStore.breakGlassTenantId ? 'Governança SaaS' : authStore.currentConfig.nome_sistema">
-            {{ authStore.isSuperAdmin && !authStore.breakGlassTenantId ? 'Governança SaaS' : authStore.currentConfig.nome_sistema }}
+            {{ authStore.isSuperAdmin && !authStore.breakGlassTenantId ? 'EncoMed SaaS' : authStore.currentConfig.nome_sistema }}
           </span>
           <span class="brand-plan" style="color: #64748b; font-size: 0.76rem; font-weight: 500;">
-            {{ authStore.isSuperAdmin ? 'Controle Zero-Trust 2FA' : 'Sistema de Encomendas' }}
+            {{ authStore.isSuperAdmin ? 'Painel de Governança' : 'Gestão de Encomendas' }}
           </span>
         </div>
       </div>

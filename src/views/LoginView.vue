@@ -8,7 +8,6 @@ import {
   LogIn,
   ShieldCheck,
   AlertCircle,
-  Pill,
   Send,
   Phone,
   Building2,
@@ -161,12 +160,14 @@ function fecharModalContato() {
 
     <div class="login-card-container">
       <!-- Topo: Logo Oficial e Marca -->
-      <div class="login-card-header">
-        <div class="brand-logo-pill" aria-hidden="true">
-          <Pill :size="24" class="text-white" />
-        </div>
-        <h1 class="login-card-title">Drogaria Aeroporto</h1>
-        <p class="login-card-subtitle">Sistema Seguro de Gestão de Estoque &amp; Encomendas</p>
+      <div class="login-card-header" style="text-align: center;">
+        <img
+          src="/encomed-logo.png"
+          alt="EncoMed - Sistema de Encomendas e Gestão de Medicamentos"
+          style="max-height: 58px; max-width: 220px; object-fit: contain; margin: 0 auto 0.75rem auto; display: block;"
+        />
+        <h1 class="login-card-title">Acesso Seguro</h1>
+        <p class="login-card-subtitle">Sistema de Encomendas e Gestão de Medicamentos</p>
       </div>
 
       <!-- Badge de Segurança -->
