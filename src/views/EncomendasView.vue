@@ -23,7 +23,13 @@ import {
   AlertTriangle,
   Plus,
   History,
+  Check,
+  Send,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-vue-next';
+import { enviarMensagemEvolutionApi, formatarMensagemNotificacao } from '../services/evolutionApi';
 import HistoricoClienteModal from '../components/HistoricoClienteModal.vue';
 import type { Cliente } from '../types';
 
@@ -68,6 +74,20 @@ interface PendingAction {
   paidTarget?: boolean;
 }
 const pendingAction = ref<PendingAction | null>(null);
+
+// Controle de visibilidade de histórico por encomenda (minimalista)
+const historicoAbertoIds = ref<Record<string, boolean>>({});
+
+function toggleHistorico(orderId: string) {
+  historicoAbertoIds.value[orderId] = !historicoAbertoIds.value[orderId];
+}
+
+function filtrarHistoricoHumano(historico?: Array<{ employee_name: string; action: string; timestamp: string }>) {
+  if (!historico) return [];
+  return historico.filter(
+    (h) => !h.employee_name?.toLowerCase().includes('robô') && !h.employee_name?.toLowerCase().includes('evolution')
+  );
+}
 
 // Edit Order Form State
 const editClienteId = ref<string>('');
@@ -257,6 +277,67 @@ function copyOrderSummary(order: Encomenda) {
   const text = encomendasStore.obterResumoEncomenda(order);
   navigator.clipboard.writeText(text);
   alert('Resumo copiado para a área de transferência!');
+}
+// Disparo e marcação de aviso de chegada
+const enviandoAvisoId = ref<string | null>(null);
+
+function alternarAvisado(order: Encomenda) {
+  const novoEstado = !order.cliente_avisado;
+  encomendasStore.alternarClienteAvisado(order.id, novoEstado, authStore.currentUser.nome);
+}
+
+async function enviarAvisoWhatsappRobo(order: Encomenda) {
+  const cfg = authStore.currentConfig;
+  const cliente = clientesStore.allClientes.find((c) => c.id === order.cliente_id);
+  if (!cliente || !cliente.telefone) {
+    alert('Cliente não possui telefone cadastrado para disparo.');
+    return;
+  }
+
+  if (!cfg.evolution_api_ativo || !cfg.evolution_api_url) {
+    // Se o robô não estiver ativo, abre o link tradicional do WhatsApp Web
+    const link = encomendasStore.gerarLinkWhatsApp(order);
+    if (link) {
+      window.open(link, '_blank');
+      encomendasStore.alternarClienteAvisado(order.id, true, authStore.currentUser.nome);
+    }
+    return;
+  }
+
+  enviandoAvisoId.value = order.id;
+  try {
+    const itensDesc = order.itens?.map((i) => i.descricao).join(', ') || '';
+    const saldo = Math.max(0, order.valor_total - order.valor_pago);
+    const mensagem = formatarMensagemNotificacao(
+      cfg.mensagem_whatsapp,
+      cliente.nome,
+      itensDesc,
+      saldo,
+      cfg.ocultar_medicamentos_notificacao
+    );
+
+    const res = await enviarMensagemEvolutionApi(
+      {
+        ativo: true,
+        apiUrl: cfg.evolution_api_url,
+        apiKey: cfg.evolution_api_key || '',
+        instanceName: cfg.evolution_api_instance || '',
+      },
+      cliente.telefone,
+      mensagem
+    );
+
+    if (res.sucesso) {
+      encomendasStore.alternarClienteAvisado(order.id, true, 'Robô Evolution API');
+      alert(`✅ Mensagem de chegada enviada com sucesso para ${cliente.nome}!`);
+    } else {
+      alert(`❌ Falha no disparo automático: ${res.mensagem}\nVocê pode copiar a mensagem ou abrir o WhatsApp manualmente.`);
+    }
+  } catch (err: any) {
+    alert(`Erro ao conectar com robô de WhatsApp: ${err?.message || err}`);
+  } finally {
+    enviandoAvisoId.value = null;
+  }
 }
 </script>
 
@@ -516,6 +597,7 @@ function copyOrderSummary(order: Encomenda) {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
           gap: 1rem;
+          align-items: start;
         "
       >
         <div
@@ -733,63 +815,194 @@ function copyOrderSummary(order: Encomenda) {
             </button>
           </div>
 
-          <!-- History Log Entries (matching Screenshot 1) -->
+          <!-- Histórico Minimalista Expansível (Apenas ícone de relógio com setinha, sem robô) -->
           <div
-            v-if="order.historico && order.historico.length > 0"
+            v-if="filtrarHistoricoHumano(order.historico).length > 0"
             style="
               margin-top: 0.35rem;
-              padding-top: 0.65rem;
+              padding-top: 0.5rem;
               border-top: 1px solid #f1f5f9;
-              display: flex;
-              flex-direction: column;
-              gap: 0.35rem;
             "
           >
-            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: #64748b; font-weight: 600;">
-              <Clock :size="12" />
+            <!-- Botão Minimalista: Relógio + Setinha -->
+            <button
+              type="button"
+              @click="toggleHistorico(order.id)"
+              style="
+                display: inline-flex;
+                align-items: center;
+                gap: 0.35rem;
+                background: none;
+                border: none;
+                padding: 2px 4px;
+                color: #64748b;
+                font-size: 0.74rem;
+                font-weight: 600;
+                cursor: pointer;
+                border-radius: 6px;
+                transition: color 0.15s ease;
+              "
+              onmouseover="this.style.color='#2563eb'"
+              onmouseout="this.style.color='#64748b'"
+              title="Clique para ver/ocultar histórico de alterações"
+            >
+              <Clock :size="13" />
               <span>Histórico</span>
+              <ChevronUp v-if="historicoAbertoIds[order.id]" :size="13" />
+              <ChevronDown v-else :size="13" />
+            </button>
+
+            <!-- Lista de Histórico Ocultável -->
+            <div
+              v-if="historicoAbertoIds[order.id]"
+              style="
+                margin-top: 0.4rem;
+                padding: 0.5rem 0.65rem;
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+              "
+            >
+              <div
+                v-for="(hist, hIdx) in [...filtrarHistoricoHumano(order.historico)].reverse()"
+                :key="hIdx"
+                style="font-size: 0.73rem; color: #475569; line-height: 1.35;"
+              >
+                <strong style="color: #0f172a; text-transform: uppercase;">{{ hist.employee_name }}</strong>
+                <span> {{ hist.action }}</span>
+                <span style="opacity: 0.7; color: #64748b;"> {{ formatHistoryDate(hist.timestamp) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- CARD DE IDENTIFICAÇÃO DE AVISO AO CLIENTE (STATUS CHEGOU) -->
+          <div
+            v-if="order.status === 'Chegou'"
+            :style="{
+              background: order.cliente_avisado ? '#ecfdf5' : '#fffbeb',
+              borderColor: order.cliente_avisado ? '#a7f3d0' : '#fde68a',
+            }"
+            style="
+              display: flex;
+              flex-direction: column;
+              gap: 0.65rem;
+              border: 1px solid;
+              border-radius: 10px;
+              padding: 0.75rem 0.85rem;
+              margin-top: 0.25rem;
+              transition: all 0.2s ease;
+            "
+            :id="'card-aviso-chegada-' + order.id"
+          >
+            <!-- Topo do Card de Aviso: Status e Tag -->
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+              <div style="display: flex; align-items: center; gap: 0.45rem;">
+                <div
+                  :style="{
+                    background: order.cliente_avisado ? '#10b981' : '#f59e0b',
+                    color: '#ffffff',
+                  }"
+                  style="
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex-shrink: 0;
+                  "
+                >
+                  <Check v-if="order.cliente_avisado" :size="13" />
+                  <AlertTriangle v-else :size="13" />
+                </div>
+
+                <div>
+                  <div
+                    :style="{
+                      color: order.cliente_avisado ? '#065f46' : '#92400e',
+                    }"
+                    style="font-size: 0.82rem; font-weight: 700; line-height: 1.2;"
+                  >
+                    {{ order.cliente_avisado ? 'Cliente já avisado da chegada' : 'Cliente AINDA NÃO foi avisado!' }}
+                  </div>
+                  <div
+                    v-if="order.cliente_avisado && order.cliente_avisado_em"
+                    style="font-size: 0.72rem; color: #047857; margin-top: 1px;"
+                  >
+                    Avisado {{ formatHistoryDate(order.cliente_avisado_em) }}
+                    <span v-if="order.cliente_avisado_por"> por {{ order.cliente_avisado_por }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Botão de alternar manualmente com clique -->
+              <button
+                type="button"
+                @click="alternarAvisado(order)"
+                :style="{
+                  background: order.cliente_avisado ? '#d1fae5' : '#fef3c7',
+                  color: order.cliente_avisado ? '#065f46' : '#b45309',
+                  borderColor: order.cliente_avisado ? '#6ee7b7' : '#fcd34d',
+                }"
+                style="
+                  border: 1px solid;
+                  border-radius: 9999px;
+                  padding: 2px 8px;
+                  font-size: 0.7rem;
+                  font-weight: 600;
+                  cursor: pointer;
+                  white-space: nowrap;
+                "
+                title="Alternar estado de aviso do cliente"
+              >
+                {{ order.cliente_avisado ? 'Desmarcar' : 'Marcar como avisado' }}
+              </button>
             </div>
 
-            <div style="display: flex; flex-direction: column; gap: 2px;">
-              <div
-                v-for="(hist, hIdx) in [...order.historico].reverse().slice(0, 3)"
-                :key="hIdx"
-                style="font-size: 0.73rem; color: #64748b; line-height: 1.3;"
+            <!-- Botões de Ação Rápida de Notificação -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem;">
+              <button
+                type="button"
+                @click="enviarAvisoWhatsappRobo(order)"
+                :disabled="enviandoAvisoId === order.id"
+                class="btn-primary-pill"
+                style="
+                  justify-content: center;
+                  padding: 0.35rem 0.65rem;
+                  font-size: 0.75rem;
+                  background: #10b981;
+                  box-shadow: none;
+                "
+                :title="authStore.currentConfig.evolution_api_ativo ? 'Disparar via Evolution API' : 'Abrir conversa no WhatsApp Web'"
               >
-                <strong style="color: #1e293b;">{{ hist.employee_name }}</strong>
-                <span> {{ hist.action }}</span>
-                <span style="opacity: 0.7;"> {{ formatHistoryDate(hist.timestamp) }}</span>
-              </div>
+                <Loader2 v-if="enviandoAvisoId === order.id" class="animate-spin" :size="13" />
+                <Send v-else :size="13" />
+                <span>{{ enviandoAvisoId === order.id ? 'Disparando...' : 'Avisar no Zap' }}</span>
+              </button>
+
+              <button
+                type="button"
+                @click="copyArrivalMessage(order)"
+                class="btn-outline-neutral"
+                style="
+                  justify-content: center;
+                  padding: 0.35rem 0.65rem;
+                  font-size: 0.75rem;
+                  background: #ffffff;
+                "
+                title="Copiar texto padrão de notificação de chegada"
+              >
+                <Copy :size="13" />
+                <span>Copiar Texto</span>
+              </button>
             </div>
           </div>
 
           <!-- Bottom Action Buttons: Imprimir Cupom & Trash Delete -->
           <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.35rem; padding-top: 0.65rem; border-top: 1px solid #f1f5f9;">
-            <!-- Copiar Msg de Chegada / Pedido se aplicável -->
-            <button
-              v-if="order.status === 'Chegou'"
-              type="button"
-              @click="copyArrivalMessage(order)"
-              style="
-                width: 100%;
-                height: 34px;
-                border-radius: 8px;
-                border: 1px solid #93c5fd;
-                background: #eff6ff;
-                color: #2563eb;
-                font-size: 0.78rem;
-                font-weight: 600;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 0.35rem;
-                cursor: pointer;
-              "
-            >
-              <Copy :size="13" />
-              <span>Copiar msg chegada</span>
-            </button>
-
             <button
               v-if="order.status === 'Aguardando'"
               type="button"
@@ -814,58 +1027,61 @@ function copyOrderSummary(order: Encomenda) {
               <span>Copiar msg de pedido</span>
             </button>
 
-            <!-- Outline Blue: Imprimir Cupom -->
-            <button
-              type="button"
-              @click="openCupom(order)"
-              style="
-                width: 100%;
-                height: 36px;
-                border-radius: 8px;
-                border: 1px solid #bfdbfe;
-                background: #ffffff;
-                color: #2563eb;
-                font-size: 0.82rem;
-                font-weight: 600;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 0.45rem;
-                cursor: pointer;
-                transition: all 0.15s ease;
-              "
-              onmouseover="this.style.background='#eff6ff'"
-              onmouseout="this.style.background='#ffffff'"
-              :id="'btn-cupom-' + order.id"
-            >
-              <Printer :size="15" />
-              <span>Imprimir Cupom</span>
-            </button>
+            <div style="display: flex; gap: 0.5rem; width: 100%;">
+              <button
+                type="button"
+                @click="openCupom(order)"
+                class="btn-outline-neutral"
+                style="
+                  flex: 1;
+                  height: 36px;
+                  border-radius: 8px;
+                  border: 1px solid #bfdbfe;
+                  background: #ffffff;
+                  color: #2563eb;
+                  font-size: 0.8rem;
+                  font-weight: 600;
+                  display: inline-flex;
+                  align-items: center;
+                  justify-content: center;
+                  gap: 0.4rem;
+                  cursor: pointer;
+                  transition: all 0.15s ease;
+                "
+                onmouseover="this.style.background='#eff6ff'"
+                onmouseout="this.style.background='#ffffff'"
+                :id="'btn-cupom-' + order.id"
+              >
+                <Printer :size="15" />
+                <span>Cupom</span>
+              </button>
 
-            <!-- Outline Red: Trash Button -->
-            <button
-              type="button"
-              @click="requestDeleteOrder(order.id)"
-              style="
-                width: 100%;
-                height: 34px;
-                border-radius: 8px;
-                border: 1px solid #fecaca;
-                background: #ffffff;
-                color: #ef4444;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                cursor: pointer;
-                transition: all 0.15s ease;
-              "
-              onmouseover="this.style.background='#fef2f2'"
-              onmouseout="this.style.background='#ffffff'"
-              title="Excluir Encomenda"
-              :id="'btn-delete-order-' + order.id"
-            >
-              <Trash2 :size="15" />
-            </button>
+              <button
+                type="button"
+                @click="requestDeleteOrder(order.id)"
+                class="btn-outline-neutral"
+                style="
+                  width: 42px;
+                  height: 36px;
+                  border-radius: 8px;
+                  border: 1px solid #fecaca;
+                  background: #ffffff;
+                  color: #ef4444;
+                  display: inline-flex;
+                  align-items: center;
+                  justify-content: center;
+                  cursor: pointer;
+                  transition: all 0.15s ease;
+                  flex-shrink: 0;
+                "
+                onmouseover="this.style.background='#fef2f2'"
+                onmouseout="this.style.background='#ffffff'"
+                title="Excluir Encomenda"
+                :id="'btn-delete-order-' + order.id"
+              >
+                <Trash2 :size="15" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1167,15 +1383,20 @@ function copyOrderSummary(order: Encomenda) {
   flex-direction: column;
   gap: 0.75rem;
   position: relative;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+  max-width: 100%;
+  height: fit-content;
 }
 
-/* ANIMAÇÃO AO PASSAR O MOUSE: FICA MARCADO EM VOLTA DO BLOQUINHO COM BRILHO COBALTO */
+.encomenda-card-block * {
+  box-sizing: border-box;
+}
+
+/* ANIMAÇÃO AO PASSAR O MOUSE: Apenas realce de cor e sombra suave, sem alterar tamanho */
 .encomenda-card-block:hover {
   border-color: #2563eb;
-  box-shadow: 0 12px 28px -4px rgba(37, 99, 235, 0.16), 0 0 0 3px rgba(37, 99, 235, 0.22);
-  transform: translateY(-3px);
+  box-shadow: 0 6px 16px -2px rgba(37, 99, 235, 0.12);
 }
 
 /* BLOCO DE ENCOMENDA NA ABA DE PESQUISA */

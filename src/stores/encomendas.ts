@@ -149,6 +149,12 @@ export const useEncomendasStore = defineStore('encomendas', () => {
       mensagem
     );
 
+    if (resultado.sucesso) {
+      encomenda.cliente_avisado = true;
+      encomenda.cliente_avisado_em = new Date().toISOString();
+      encomenda.cliente_avisado_por = 'Robô Evolution API';
+    }
+
     if (!encomenda.historico) encomenda.historico = [];
     encomenda.historico.push({
       employee_name: 'Robô Evolution API',
@@ -511,6 +517,25 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     enc.atualizado_em = new Date().toISOString();
   }
 
+  // Toggle whether client was notified manually
+  function alternarClienteAvisado(encomendaId: string, avisado: boolean, funcionarioNome?: string) {
+    const enc = allEncomendas.value.find((e) => e.id === encomendaId);
+    if (!enc) return;
+
+    enc.cliente_avisado = avisado;
+    enc.cliente_avisado_em = avisado ? new Date().toISOString() : undefined;
+    enc.cliente_avisado_por = avisado ? (funcionarioNome || authStore.currentUser.nome) : undefined;
+
+    if (!enc.historico) enc.historico = [];
+    enc.historico.push({
+      employee_name: funcionarioNome || authStore.currentUser.nome,
+      action: avisado ? 'marcou que o cliente já foi avisado da chegada' : 'marcou que o cliente ainda NÃO foi avisado',
+      timestamp: new Date().toISOString(),
+    });
+
+    enc.atualizado_em = new Date().toISOString();
+  }
+
   // Definitively delete delivered orders (matching "Apagar Entregues" button in Base44)
   function apagarEntreguesDefinitivo(): number {
     const tenantId = authStore.activeTenantId;
@@ -538,6 +563,7 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     removerEncomenda,
     atualizarEncomenda,
     alternarPago,
+    alternarClienteAvisado,
     gerarLinkWhatsApp,
     obterTextoAvisoChegada,
     obterResumoEncomenda,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useEncomendasStore } from '../stores/encomendas';
@@ -13,7 +13,10 @@ import {
   Plus,
   Send,
   TrendingUp,
+  Loader2,
+  Check,
 } from 'lucide-vue-next';
+import { enviarMensagemEvolutionApi, formatarMensagemNotificacao } from '../services/evolutionApi';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -48,10 +51,61 @@ function formatarMoeda(valor: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
 }
 
-function abrirWhatsApp(encomenda: any) {
-  const url = encomendasStore.gerarLinkWhatsApp(encomenda);
-  if (url) {
-    window.open(url, '_blank');
+const enviandoAvisoId = ref<string | null>(null);
+
+async function dispararAvisoBot(enc: any) {
+  const cfg = authStore.currentConfig;
+  const cliente = clientesStore.allClientes.find((c) => c.id === enc.cliente_id) || enc.cliente;
+  if (!cliente || !cliente.telefone) {
+    alert('Cliente não possui telefone cadastrado.');
+    return;
+  }
+
+  // Se robô não estiver ativo, usa rota manual WhatsApp Web
+  if (!cfg.evolution_api_ativo || !cfg.evolution_api_url) {
+    const url = encomendasStore.gerarLinkWhatsApp(enc);
+    if (url) {
+      window.open(url, '_blank');
+      encomendasStore.alternarClienteAvisado(enc.id, true, authStore.currentUser.nome);
+    }
+    return;
+  }
+
+  enviandoAvisoId.value = enc.id;
+  try {
+    const itensDesc = enc.itens?.map((i: any) => i.descricao).join(', ') || '';
+    const saldo = Math.max(0, enc.valor_total - enc.valor_pago);
+    const msg = formatarMensagemNotificacao(
+      cfg.mensagem_whatsapp,
+      cliente.nome,
+      itensDesc,
+      saldo,
+      cfg.ocultar_medicamentos_notificacao
+    );
+
+    const res = await enviarMensagemEvolutionApi(
+      {
+        ativo: true,
+        apiUrl: cfg.evolution_api_url,
+        apiKey: cfg.evolution_api_key || '',
+        instanceName: cfg.evolution_api_instance || '',
+      },
+      cliente.telefone,
+      msg
+    );
+
+    if (res.sucesso) {
+      encomendasStore.alternarClienteAvisado(enc.id, true, 'Robô Evolution API');
+      alert(`✅ Mensagem de chegada enviada com sucesso para ${cliente.nome}!`);
+    } else {
+      alert(`❌ Falha no robô: ${res.mensagem}\nVocê pode abrir pelo WhatsApp Web.`);
+      const url = encomendasStore.gerarLinkWhatsApp(enc);
+      if (url) window.open(url, '_blank');
+    }
+  } catch (err: any) {
+    alert(`Erro ao comunicar com Evolution API: ${err?.message || err}`);
+  } finally {
+    enviandoAvisoId.value = null;
   }
 }
 </script>
@@ -170,16 +224,28 @@ function abrirWhatsApp(encomenda: any) {
               </div>
             </div>
 
-            <button
-              @click="abrirWhatsApp(enc)"
-              class="btn-outline-emerald"
-              style="padding: 0.35rem 0.85rem; font-size: 0.8rem;"
-              :id="'btn-whatsapp-' + enc.id"
-              title="Abrir WhatsApp Web / App com mensagem padrão"
-            >
-              <Send :size="13" />
-              <span>Avisar WhatsApp</span>
-            </button>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span
+                v-if="enc.cliente_avisado"
+                style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.73rem; font-weight: 600; color: #059669; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 2px 8px; border-radius: 9999px;"
+              >
+                <Check :size="12" />
+                <span>Já avisado</span>
+              </span>
+
+              <button
+                @click="dispararAvisoBot(enc)"
+                :disabled="enviandoAvisoId === enc.id"
+                class="btn-outline-emerald"
+                style="padding: 0.35rem 0.85rem; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.4rem;"
+                :id="'btn-whatsapp-' + enc.id"
+                :title="authStore.currentConfig.evolution_api_ativo ? 'Disparar WhatsApp pelo Robô' : 'Abrir no WhatsApp Web'"
+              >
+                <Loader2 v-if="enviandoAvisoId === enc.id" class="animate-spin" :size="13" />
+                <Send v-else :size="13" />
+                <span>{{ enviandoAvisoId === enc.id ? 'Enviando...' : (authStore.currentConfig.evolution_api_ativo ? 'Disparar Bot' : 'Avisar WhatsApp') }}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

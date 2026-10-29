@@ -1,5 +1,3 @@
-import type { Encomenda } from '../types';
-
 export interface EvolutionApiConfig {
   ativo: boolean;
   apiUrl: string;        // Ex: https://api.seudominio.com ou http://localhost:8080

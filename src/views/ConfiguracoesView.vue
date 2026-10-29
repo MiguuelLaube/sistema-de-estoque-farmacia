@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, onMounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { useComprasStore } from '../stores/compras';
 import {
@@ -23,19 +23,81 @@ const comprasStore = useComprasStore();
 
 const activeConfigTab = ref<'visual' | 'whatsapp' | 'cupom' | 'classificacoes' | 'funcionarios' | 'usuarios' | 'retencao'>('visual');
 
+watch(
+  () => activeConfigTab.value,
+  (tab) => {
+    if (tab === 'whatsapp') {
+      carregarQrCode();
+    }
+  }
+);
+
+onMounted(() => {
+  if (activeConfigTab.value === 'whatsapp') {
+    carregarQrCode();
+  }
+});
+
 // Form Identidade Visual
 const formNomeSistema = ref(authStore.currentConfig.nome_sistema);
 const formCorPrimaria = ref(authStore.currentConfig.cor_primaria);
 
-// Form WhatsApp
+// Form WhatsApp (Templates de mensagens)
 const formMsgWhatsapp = ref(authStore.currentConfig.mensagem_whatsapp);
-const formEvolutionAtivo = ref(authStore.currentConfig.evolution_api_ativo || false);
+const formMsgWhatsappPedido = ref(authStore.currentConfig.mensagem_whatsapp_pedido || 'Olá {cliente}! Confirmamos seu pedido de {medicamento} na farmácia. Em breve avisaremos assim que chegar.');
+const formMsgWhatsappCobranca = ref(authStore.currentConfig.mensagem_whatsapp_cobranca || 'Olá {cliente}! Lembrando que sua encomenda de {medicamento} está disponível. Saldo a acertar: {saldo}.');
+const formEvolutionAtivo = ref(authStore.currentConfig.evolution_api_ativo !== false);
 const formEvolutionUrl = ref(authStore.currentConfig.evolution_api_url || 'http://localhost:8080');
-const formEvolutionKey = ref(authStore.currentConfig.evolution_api_key || '');
-const formEvolutionInstance = ref(authStore.currentConfig.evolution_api_instance || '');
+const formEvolutionKey = ref(authStore.currentConfig.evolution_api_key || 'farmacia_secret_api_key_2026');
+const formEvolutionInstance = ref(authStore.currentConfig.evolution_api_instance || 'drogaria');
 const testandoConexao = ref(false);
 const testeResultado = ref<{ sucesso: boolean; mensagem: string } | null>(null);
 const numeroTeste = ref('');
+const qrcodeBase64 = ref<string | null>(null);
+const statusInstancia = ref<'connecting' | 'open' | 'close' | 'desconhecido'>('connecting');
+const carregandoQr = ref(false);
+
+async function carregarQrCode() {
+  carregandoQr.value = true;
+  try {
+    const baseUrl = (formEvolutionUrl.value || 'http://localhost:8080').trim().replace(/\/+$/, '');
+    const inst = (formEvolutionInstance.value || 'drogaria').trim();
+    const key = (formEvolutionKey.value || 'farmacia_secret_api_key_2026').trim();
+
+    // 1. Checa estado real da conexão primeiro
+    const stateRes = await fetch(`${baseUrl}/instance/connectionState/${encodeURIComponent(inst)}`, {
+      headers: { apikey: key }
+    });
+    const stateData = await stateRes.json().catch(() => null);
+    const estado = stateData?.instance?.state || stateData?.state;
+    if (estado) {
+      statusInstancia.value = estado;
+    }
+
+    // Se já estiver conectado (open), não precisa buscar QR Code
+    if (statusInstancia.value === 'open') {
+      qrcodeBase64.value = null;
+      return;
+    }
+
+    // 2. Se não estiver conectado, obtém QR code
+    const url = `${baseUrl}/instance/connect/${encodeURIComponent(inst)}`;
+    const res = await fetch(url, {
+      headers: { apikey: key }
+    });
+    const data = await res.json().catch(() => null);
+    if (data?.base64) {
+      qrcodeBase64.value = data.base64;
+    } else if (data?.instance?.state === 'open' || data?.state === 'open') {
+      statusInstancia.value = 'open';
+      qrcodeBase64.value = null;
+    }
+  } catch (err) {
+    console.error('Erro ao buscar QR Code ou status:', err);
+  } finally {
+    carregandoQr.value = false;
+  }
+}
 
 // Form PrintTemplate (Documento Seção 2 / Pág. 4 e 5)
 const formHeaderTitle = ref(authStore.currentConfig.header_title || 'DROGARIA AEROPORTO');
@@ -65,6 +127,8 @@ watch(
     formNomeSistema.value = cfg.nome_sistema;
     formCorPrimaria.value = cfg.cor_primaria;
     formMsgWhatsapp.value = cfg.mensagem_whatsapp;
+    formMsgWhatsappPedido.value = cfg.mensagem_whatsapp_pedido || 'Olá {cliente}! Confirmamos seu pedido de {medicamento} na farmácia. Em breve avisaremos assim que chegar.';
+    formMsgWhatsappCobranca.value = cfg.mensagem_whatsapp_cobranca || 'Olá {cliente}! Lembrando que sua encomenda de {medicamento} está disponível. Saldo a acertar: {saldo}.';
     formHeaderTitle.value = cfg.header_title || 'DROGARIA AEROPORTO';
     formHeaderSubtitle.value = cfg.header_subtitle || 'Sistema de Encomendas';
     formFooterText.value = cfg.footer_text || 'Obrigado pela preferencia!';
@@ -91,12 +155,16 @@ function salvarIdentidadeVisual() {
 
 function salvarWhatsapp() {
   authStore.currentConfig.mensagem_whatsapp = formMsgWhatsapp.value;
-  authStore.currentConfig.ocultar_medicamentos_notificacao = formOcultarMedicamentosNotificacao.value;
-  authStore.currentConfig.evolution_api_ativo = formEvolutionAtivo.value;
-  authStore.currentConfig.evolution_api_url = formEvolutionUrl.value;
-  authStore.currentConfig.evolution_api_key = formEvolutionKey.value;
-  authStore.currentConfig.evolution_api_instance = formEvolutionInstance.value;
-  alert('Configurações do WhatsApp e Robô Evolution API atualizadas com sucesso!');
+  authStore.currentConfig.mensagem_whatsapp_pedido = formMsgWhatsappPedido.value;
+  authStore.currentConfig.mensagem_whatsapp_cobranca = formMsgWhatsappCobranca.value;
+  if (authStore.isSuperAdmin) {
+    authStore.currentConfig.ocultar_medicamentos_notificacao = formOcultarMedicamentosNotificacao.value;
+    authStore.currentConfig.evolution_api_ativo = formEvolutionAtivo.value;
+    authStore.currentConfig.evolution_api_url = formEvolutionUrl.value;
+    authStore.currentConfig.evolution_api_key = formEvolutionKey.value;
+    authStore.currentConfig.evolution_api_instance = formEvolutionInstance.value;
+  }
+  alert('Modelos de mensagens do WhatsApp atualizados com sucesso!');
 }
 
 async function testarEvolutionApi() {
@@ -216,6 +284,7 @@ function removerClassificacao(id: string) {
       </button>
 
       <button
+        v-if="authStore.isSuperAdmin"
         @click="activeConfigTab = 'cupom'"
         class="sub-tab-btn"
         :class="{ active: activeConfigTab === 'cupom' }"
@@ -255,6 +324,7 @@ function removerClassificacao(id: string) {
       </button>
 
       <button
+        v-if="authStore.isSuperAdmin"
         @click="activeConfigTab = 'retencao'"
         class="sub-tab-btn"
         :class="{ active: activeConfigTab === 'retencao' }"
@@ -308,27 +378,65 @@ function removerClassificacao(id: string) {
     </div>
 
     <!-- TAB: WHATSAPP (Spec 8 & 3.1) -->
-    <div v-if="activeConfigTab === 'whatsapp'" class="card" style="max-width: 650px;">
-      <h3 style="font-size: 1.15rem; margin-bottom: 0.75rem;">Modelo de Notificação de Chegada</h3>
+    <div v-if="activeConfigTab === 'whatsapp'" class="card" style="max-width: 750px;">
+      <h3 style="font-size: 1.15rem; margin-bottom: 0.75rem;">Modelos de Mensagens do WhatsApp</h3>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">
-        Esta mensagem será carregada automaticamente no WhatsApp Web quando você clicar em "Avisar no WhatsApp".
+        Personalize o texto enviado em cada etapa operacional. As variáveis <code>{cliente}</code>, <code>{medicamento}</code> e <code>{saldo}</code> serão substituídas automaticamente.
       </p>
 
-      <div class="form-group">
-        <label class="form-label">Texto da Mensagem</label>
-        <textarea
-          v-model="formMsgWhatsapp"
-          rows="4"
-          class="form-textarea"
-          id="textarea-whatsapp-template"
-        ></textarea>
-        <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;">
-          Variáveis aceitas: <code>{cliente}</code> (primeiro nome do cliente), <code>{medicamento}</code> (itens que chegaram).
+      <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+        <!-- Função 1: Notificação de Chegada -->
+        <div class="form-group" style="margin: 0;">
+          <label class="form-label" style="font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 6px;">
+            <Package :size="15" style="color: #059669;" />
+            <span>1. Mensagem de Chegada (Retirada de Pedido)</span>
+          </label>
+          <textarea
+            v-model="formMsgWhatsapp"
+            rows="3"
+            class="form-textarea"
+            id="textarea-whatsapp-template-chegada"
+            placeholder="Texto quando o medicamento chega na loja..."
+          ></textarea>
+        </div>
+
+        <!-- Função 2: Confirmação de Novo Pedido -->
+        <div class="form-group" style="margin: 0;">
+          <label class="form-label" style="font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 6px;">
+            <CheckCircle :size="15" style="color: #2563eb;" />
+            <span>2. Mensagem de Confirmação de Pedido Realizado</span>
+          </label>
+          <textarea
+            v-model="formMsgWhatsappPedido"
+            rows="3"
+            class="form-textarea"
+            id="textarea-whatsapp-template-pedido"
+            placeholder="Texto quando uma nova encomenda é cadastrada..."
+          ></textarea>
+        </div>
+
+        <!-- Função 3: Lembrete / Saldo Pendente -->
+        <div class="form-group" style="margin: 0;">
+          <label class="form-label" style="font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 6px;">
+            <DollarSign :size="15" style="color: #d97706;" />
+            <span>3. Mensagem de Lembrete & Saldo a Acertar</span>
+          </label>
+          <textarea
+            v-model="formMsgWhatsappCobranca"
+            rows="3"
+            class="form-textarea"
+            id="textarea-whatsapp-template-cobranca"
+            placeholder="Texto para lembrar o cliente com saldo a acertar..."
+          ></textarea>
         </div>
       </div>
 
-      <!-- Privacidade e Sigilo Médico LGPD (Art. 11) -->
-      <div style="margin-top: 1rem; padding: 1rem; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0;">
+      <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 10px;">
+        💡 Variáveis disponíveis: <code>{cliente}</code> (primeiro nome), <code>{medicamento}</code> (itens da encomenda), <code>{saldo}</code> (valor a pagar).
+      </div>
+
+      <!-- Privacidade e Sigilo Médico LGPD (Restrito ao Super Admin) -->
+      <div v-if="authStore.isSuperAdmin" style="margin-top: 1.25rem; padding: 1rem; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0;">
         <label style="display: flex; align-items: flex-start; gap: 0.65rem; cursor: pointer;">
           <input
             v-model="formOcultarMedicamentosNotificacao"
@@ -338,7 +446,7 @@ function removerClassificacao(id: string) {
           />
           <div>
             <div style="font-size: 0.9rem; font-weight: 600; color: #0f172a;">
-              🛡️ Privacidade e Sigilo Médico (LGPD Art. 11)
+              🛡️ Privacidade e Sigilo Médico (LGPD Art. 11) - Configuração Restrita
             </div>
             <div style="font-size: 0.8rem; color: #64748b; margin-top: 2px;">
               Substituir nomes explícitos de medicamentos por termos genéricos (ex: <em>"sua encomenda"</em>) ao gerar links de WhatsApp e cópia de aviso, evitando expor diagnósticos e tratamentos a terceiros na tela de bloqueio do celular do paciente.
@@ -350,12 +458,12 @@ function removerClassificacao(id: string) {
       <div style="display: flex; justify-content: flex-end; margin-top: 1.5rem;">
         <button @click="salvarWhatsapp" class="btn-primary-pill" id="btn-salvar-whatsapp">
           <CheckCircle :size="16" />
-          <span>Salvar Mensagem</span>
+          <span>Salvar Mensagens do WhatsApp</span>
         </button>
       </div>
 
-      <!-- PAINEL: EVOLUTION API (ROBÔ AUTOMÁTICO DE WHATSAPP) -->
-      <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+      <!-- PAINEL: EVOLUTION API (ROBÔ AUTOMÁTICO DE WHATSAPP) - Restrito à Diretoria/TI -->
+      <div v-if="authStore.isSuperAdmin" style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
           <div style="display: flex; align-items: center; gap: 0.6rem;">
             <Bot :size="22" style="color: var(--color-primary);" />
@@ -410,6 +518,49 @@ function removerClassificacao(id: string) {
                 id="input-evolution-key"
                 placeholder="Sua Global API Key ou Token"
               />
+            </div>
+          </div>
+
+          <!-- Seção de Pareamento com WhatsApp (QR Code) -->
+          <div style="margin-top: 0.5rem; padding: 1.25rem; border-radius: 10px; background: #ffffff; border: 1px solid #cbd5e1;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+              <div>
+                <h5 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #1e293b;">
+                  Pareamento com WhatsApp da Drogaria
+                </h5>
+                <span style="font-size: 0.8rem; color: #64748b;">
+                  Status atual:
+                  <strong :style="{ color: statusInstancia === 'open' ? '#059669' : '#d97706' }">
+                    {{ statusInstancia === 'open' ? '🟢 Conectado ao WhatsApp' : '🟡 Aguardando leitura do QR Code' }}
+                  </strong>
+                </span>
+              </div>
+              <button
+                @click="carregarQrCode"
+                :disabled="carregandoQr"
+                class="btn-secondary-pill"
+                style="padding: 6px 14px; font-size: 0.8rem;"
+              >
+                <Loader2 v-if="carregandoQr" class="animate-spin" :size="14" />
+                <span v-else>🔄 Atualizar QR Code</span>
+              </button>
+            </div>
+
+            <div v-if="statusInstancia === 'open'" style="padding: 1rem; background: #ecfdf5; border-radius: 8px; color: #065f46; font-size: 0.88rem; text-align: center;">
+              🎉 <strong>Seu WhatsApp já está conectado e pronto!</strong> As notificações de chegada serão disparadas por este aparelho.
+            </div>
+
+            <div v-else style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem; padding: 1rem; background: #f8fafc; border-radius: 8px;">
+              <div v-if="qrcodeBase64" style="background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                <img :src="qrcodeBase64" alt="QR Code WhatsApp" style="width: 240px; height: 240px; display: block;" />
+              </div>
+              <div v-else style="padding: 2rem; color: var(--text-muted); font-size: 0.85rem;">
+                <Loader2 class="animate-spin" :size="24" style="margin: 0 auto 0.5rem;" />
+                Clique em "Atualizar QR Code" para gerar o código na tela.
+              </div>
+              <p style="font-size: 0.82rem; color: #475569; text-align: center; margin: 0; max-width: 400px;">
+                Abra o <strong>WhatsApp</strong> no celular &gt; Menu dos 3 pontinhos &gt; <strong>Aparelhos conectados</strong> &gt; <strong>Conectar um aparelho</strong> e aponte para o QR Code acima.
+              </p>
             </div>
           </div>
 

@@ -491,6 +491,15 @@ function rolarParaSecao(id: string) {
   font-family: var(--font-sans, 'Inter', -apple-system, sans-serif);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  hyphens: manual;
+  -webkit-hyphens: manual;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.landing-root * {
+  hyphens: manual;
+  -webkit-hyphens: manual;
 }
 
 .landing-shell {
@@ -654,6 +663,7 @@ function rolarParaSecao(id: string) {
   flex-direction: column;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
   transition: border-color var(--transition-smooth, 250ms ease), box-shadow var(--transition-smooth, 250ms ease);
+  min-width: 0;
 }
 
 .bento-card:hover {
@@ -698,47 +708,78 @@ function rolarParaSecao(id: string) {
   background-color: #f8fafc;
   border: 1px solid var(--border-color, #e2e8f0);
   border-radius: 16px;
-  padding: 1rem;
+  padding: 1.15rem;
   margin-bottom: 1.5rem;
 }
 
 .mini-item-card {
   background-color: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 0.9rem 1.15rem;
+  padding: 1rem 1.15rem;
   margin: 0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  align-items: stretch;
 }
 
 .item-info-col {
   min-width: 0;
-  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 .item-meta-top {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.15rem;
+  flex-wrap: wrap;
 }
 
 .patient-name {
-  font-size: 0.76rem;
+  font-size: 0.82rem;
   font-weight: 700;
-  color: #334155;
+  color: #1e293b;
   text-transform: uppercase;
+  letter-spacing: 0.01em;
 }
 
 .patient-contact {
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   color: #64748b;
+  font-weight: 500;
+}
+
+.mini-item-card .pedido-item-name {
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .status-pills-cluster {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  flex-shrink: 0;
+  gap: 0.4rem;
+  width: 100%;
+  padding-top: 0.65rem;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.status-pills-cluster .pedido-status-pill {
+  flex: 1;
+  justify-content: center;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.74rem;
 }
 
 .whatsapp-action-row {

@@ -26,6 +26,8 @@ export interface ConfigTenant {
   modelo_cupom: string;
   fuso: string;
   mensagem_whatsapp: string;
+  mensagem_whatsapp_pedido?: string;
+  mensagem_whatsapp_cobranca?: string;
   base_legal_padrao: string;
   bloquear_entrega_com_saldo: boolean;
   dias_retencao_arquivamento: number;
@@ -189,6 +191,9 @@ export interface Encomenda {
   itens?: EncomendaItem[];
   pagamentos?: Pagamento[];
   historico?: Array<{ employee_name: string; action: string; timestamp: string }>;
+  cliente_avisado?: boolean;
+  cliente_avisado_em?: string;
+  cliente_avisado_por?: string;
 }
 
 export interface Pagamento {
