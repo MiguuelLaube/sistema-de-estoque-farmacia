@@ -223,13 +223,13 @@ const listaAtendentesModal = computed<Funcionario[]>(() => {
 });
 
 // Confirm action with employee (BUG-09 FIX: respeita alçada real do usuário logado e exibe erro de governança)
-function confirmEmployeeAction(employee: Funcionario) {
+async function confirmEmployeeAction(employee: Funcionario) {
   if (!pendingAction.value) return;
 
   const { type, orderId, statusTarget, paidTarget } = pendingAction.value;
 
   if (type === 'status' && statusTarget) {
-    const res = encomendasStore.alterarStatus(orderId, statusTarget, {
+    const res = await encomendasStore.alterarStatus(orderId, statusTarget, {
       autorizacaoAdmin: authStore.isAdmin,
       funcionarioNome: employee.nome,
     });
@@ -237,7 +237,7 @@ function confirmEmployeeAction(employee: Funcionario) {
       alert(res.mensagem || 'Operação bloqueada pelas políticas de alçada da loja.');
     }
   } else if (type === 'togglePaid' && paidTarget !== undefined) {
-    encomendasStore.alternarPago(orderId, paidTarget, employee.nome);
+    await encomendasStore.alternarPago(orderId, paidTarget, employee.nome);
   }
 
   showEmployeeModal.value = false;

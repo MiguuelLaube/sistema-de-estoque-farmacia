@@ -11,7 +11,6 @@ import {
   renderizarModeloWhatsApp,
   gerarLinkWaMeComModelo,
   type TipoModeloWhatsApp,
-  type VariaveisModeloWhatsApp,
 } from '../services/evolutionApi';
 import { supabase, isLiveSupabaseConfigured } from '../services/supabase';
 
@@ -34,63 +33,80 @@ export const useEncomendasStore = defineStore('encomendas', () => {
   const activeTab = ref<StatusEncomenda | 'Todas'>('Todas');
   const searchQuery = ref<string>('');
   const paymentFilter = ref<string>('todos');
+  const isLoading = ref<boolean>(false);
+  const erroOperacao = ref<string | null>(null);
 
-  async function carregarEncomendas() {
+  /**
+   * Carrega encomendas ativas do tenant logado sob isolamento RLS
+   */
+  async function carregarEncomendas(): Promise<void> {
     if (!isLive || !authStore.isAuthenticated) {
       if (!isLive) allEncomendas.value = initialEncomendas;
       else allEncomendas.value = [];
       return;
     }
 
-    const [encRes, itemRes, pagRes] = await Promise.all([
-      supabase.from('encomenda').select('*').order('criado_em', { ascending: false }),
-      supabase.from('encomenda_item').select('*').order('criado_em', { ascending: true }),
-      supabase.from('pagamento').select('*').order('data', { ascending: true }),
-    ]);
+    isLoading.value = true;
+    erroOperacao.value = null;
 
-    if (encRes.data) {
-      const itensPorEnc = new Map<string, EncomendaItem[]>();
-      for (const it of (itemRes.data || []) as EncomendaItem[]) {
-        const arr = itensPorEnc.get(it.encomenda_id) || [];
-        arr.push({
-          ...it,
-          preco_unitario: Number(it.preco_unitario) || 0,
-          subtotal: Number(it.subtotal) || 0,
-        });
-        itensPorEnc.set(it.encomenda_id, arr);
-      }
+    try {
+      const [encRes, itemRes, pagRes] = await Promise.all([
+        supabase.from('encomenda').select('*').order('criado_em', { ascending: false }),
+        supabase.from('encomenda_item').select('*').order('criado_em', { ascending: true }),
+        supabase.from('pagamento').select('*').order('data', { ascending: true }),
+      ]);
 
-      const pagsPorEnc = new Map<string, Pagamento[]>();
-      for (const p of (pagRes.data || []) as Pagamento[]) {
-        const arr = pagsPorEnc.get(p.encomenda_id) || [];
-        arr.push({
-          ...p,
-          valor: Number(p.valor) || 0,
-        });
-        pagsPorEnc.set(p.encomenda_id, arr);
-      }
+      if (encRes.error) throw encRes.error;
 
-      allEncomendas.value = (encRes.data as any[]).map((e) => {
-        const vTotal = Number(e.valor_total) || 0;
-        let vPago = Number(e.valor_pago) || 0;
-        let sitPag = e.situacao_pagamento;
-
-        // Regra de Negócio: Encomenda entregue é considerada quitada e paga
-        if (e.status === 'Entregue') {
-          vPago = Math.max(vPago, vTotal);
-          sitPag = 'Pago';
+      if (encRes.data) {
+        const itensPorEnc = new Map<string, EncomendaItem[]>();
+        for (const it of (itemRes.data || []) as EncomendaItem[]) {
+          const arr = itensPorEnc.get(it.encomenda_id) || [];
+          arr.push({
+            ...it,
+            preco_unitario: Number(it.preco_unitario) || 0,
+            subtotal: Number(it.subtotal) || 0,
+          });
+          itensPorEnc.set(it.encomenda_id, arr);
         }
 
-        return {
-          ...e,
-          valor_total: vTotal,
-          valor_pago: vPago,
-          situacao_pagamento: sitPag,
-          historico: Array.isArray(e.historico) ? e.historico : [],
-          itens: itensPorEnc.get(e.id) || [],
-          pagamentos: pagsPorEnc.get(e.id) || [],
-        };
-      }) as Encomenda[];
+        const pagsPorEnc = new Map<string, Pagamento[]>();
+        for (const p of (pagRes.data || []) as Pagamento[]) {
+          const arr = pagsPorEnc.get(p.encomenda_id) || [];
+          arr.push({
+            ...p,
+            valor: Number(p.valor) || 0,
+          });
+          pagsPorEnc.set(p.encomenda_id, arr);
+        }
+
+        allEncomendas.value = (encRes.data as any[]).map((e) => {
+          const vTotal = Number(e.valor_total) || 0;
+          let vPago = Number(e.valor_pago) || 0;
+          let sitPag = e.situacao_pagamento;
+
+          // Regra de Negócio: Encomenda entregue é considerada quitada e paga
+          if (e.status === 'Entregue') {
+            vPago = Math.max(vPago, vTotal);
+            sitPag = 'Pago';
+          }
+
+          return {
+            ...e,
+            valor_total: vTotal,
+            valor_pago: vPago,
+            situacao_pagamento: sitPag,
+            historico: Array.isArray(e.historico) ? e.historico : [],
+            itens: itensPorEnc.get(e.id) || [],
+            pagamentos: pagsPorEnc.get(e.id) || [],
+          };
+        }) as Encomenda[];
+      }
+    } catch (err: any) {
+      console.error('[EncomendasStore] Falha ao carregar encomendas:', err);
+      erroOperacao.value = 'Não foi possível carregar as encomendas do servidor.';
+    } finally {
+      isLoading.value = false;
     }
   }
 
@@ -140,15 +156,19 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     return list;
   });
 
+  // CORREÇÃO CRÍTICA DE MÉTRICAS FINANCEIRAS: Canceladas não somam no faturamento
   const metricas = computed(() => {
     const list = currentTenantEncomendas.value.filter((e) => !e.arquivada_em);
+    const ativas = list.filter((e) => e.status !== 'Cancelada');
+
     const total = list.length;
     const pendentes = list.filter((e) => e.status !== 'Entregue' && e.status !== 'Cancelada').length;
     const entregues = list.filter((e) => e.status === 'Entregue').length;
     const aguardandoAviso = list.filter((e) => e.status === 'Chegou').length;
 
-    const valorTotalGeral = list.reduce((acc, curr) => acc + curr.valor_total, 0);
-    const valorPagoGeral = list.reduce((acc, curr) => acc + curr.valor_pago, 0);
+    // Apenas pedidos ativos somam no financeiro (evita distorção com cancelados)
+    const valorTotalGeral = ativas.reduce((acc, curr) => acc + curr.valor_total, 0);
+    const valorPagoGeral = ativas.reduce((acc, curr) => acc + curr.valor_pago, 0);
     const valorAReceber = Math.max(0, valorTotalGeral - valorPagoGeral);
 
     return {
@@ -169,7 +189,7 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     };
   });
 
-  function recalcularStatus(encomenda: Encomenda) {
+  function recalcularStatus(encomenda: Encomenda): void {
     if (encomenda.status === 'Cancelada') return;
 
     const itens = encomenda.itens || [];
@@ -200,42 +220,40 @@ export const useEncomendasStore = defineStore('encomendas', () => {
   function montarDadosWhatsAppEncomenda(encomenda: Encomenda): {
     telefone: string;
     nomeCliente: string;
-    variaveis: VariaveisModeloWhatsApp;
+    variaveis: Record<string, string>;
   } | null {
-    const cliente = clientesStore.allClientes.find((c) => c.id === encomenda.cliente_id) || encomenda.cliente;
-    if (!cliente) return null;
+    const cliente = clientesStore.allClientes.find((c) => c.id === encomenda.cliente_id);
+    if (!cliente || !cliente.telefone) return null;
 
     const cfg = authStore.currentConfig;
-    const itensDesc =
-      encomenda.itens
-        ?.map((i) => `${i.quantidade > 1 ? `${i.quantidade}x ` : ''}${i.descricao}`)
-        .join(', ') || 'seu medicamento';
+    const nomeLoja = cfg?.nome_sistema || 'Drogaria Aeroporto';
+    const medicamentosStr = encomenda.itens && encomenda.itens.length > 0
+      ? encomenda.itens.map((i) => `${i.quantidade}x ${i.descricao}`).join(', ')
+      : 'seus itens';
+
     const saldo = Math.max(0, encomenda.valor_total - encomenda.valor_pago);
-    const loja = cfg?.header_title || cfg?.nome_sistema || 'nossa farmácia';
+    const saldoFormatado = `R$ ${saldo.toFixed(2).replace('.', ',')}`;
+    const totalFormatado = `R$ ${encomenda.valor_total.toFixed(2).replace('.', ',')}`;
 
     return {
-      telefone: cliente.telefone || '',
-      nomeCliente: cliente.nome || 'Cliente',
+      telefone: cliente.telefone,
+      nomeCliente: cliente.nome,
       variaveis: {
-        cliente: cliente.nome || 'Cliente',
-        nomeCompleto: cliente.nome || 'Cliente',
-        medicamento: itensDesc,
-        itens: itensDesc,
-        saldo,
-        valorTotal: encomenda.valor_total,
-        valorPago: encomenda.valor_pago,
-        codigoRastreio: encomenda.codigo_rastreio || 'PEDIDO',
-        loja,
+        cliente: cliente.nome,
+        medicamento: medicamentosStr,
+        loja: nomeLoja,
+        codigo: encomenda.codigo_rastreio || '',
+        saldo: saldoFormatado,
+        total: totalFormatado,
       },
     };
   }
 
-  // Disparo via Proxy Backend (/api/whatsapp) adaptado aos modelos de mensagem do Tenant
   async function dispararNotificacaoModeloEvolution(
     encomenda: Encomenda,
-    modelo: TipoModeloWhatsApp = 'chegada',
+    modelo: TipoModeloWhatsApp,
     forcarEnvioManual: boolean = false
-  ): Promise<{ sucesso: boolean; mensagem: string; textoEnviado?: string }> {
+  ): Promise<{ sucesso: boolean; mensagem?: string }> {
     const cfg = authStore.currentConfig;
     if (!cfg || (!cfg.evolution_api_ativo && !forcarEnvioManual)) {
       return { sucesso: false, mensagem: 'Disparo automático do WhatsApp está desativado nas configurações.' };
@@ -277,25 +295,29 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     });
 
     if (isLive && authStore.isAuthenticated) {
-      await supabase
-        .from('encomenda')
-        .update({
-          cliente_avisado: encomenda.cliente_avisado || false,
-          cliente_avisado_em: encomenda.cliente_avisado_em || null,
-          cliente_avisado_por: encomenda.cliente_avisado_por || null,
-          historico: encomenda.historico,
-        })
-        .eq('id', encomenda.id);
+      try {
+        await supabase
+          .from('encomenda')
+          .update({
+            cliente_avisado: encomenda.cliente_avisado || false,
+            cliente_avisado_em: encomenda.cliente_avisado_em || null,
+            cliente_avisado_por: encomenda.cliente_avisado_por || null,
+            historico: encomenda.historico,
+          })
+          .eq('id', encomenda.id);
+      } catch (err) {
+        console.warn('[EncomendasStore] Falha ao atualizar histórico de disparo no banco:', err);
+      }
     }
 
     return resultado;
   }
 
-  async function dispararNotificacaoChegadaEvolution(encomenda: Encomenda) {
+  async function dispararNotificacaoChegadaEvolution(encomenda: Encomenda): Promise<{ sucesso: boolean; mensagem?: string }> {
     return dispararNotificacaoModeloEvolution(encomenda, 'chegada', false);
   }
 
-  function sincronizarStatusPorCompra(compraId: string, novoStatus: StatusCompra) {
+  function sincronizarStatusPorCompra(compraId: string, novoStatus: StatusCompra): void {
     for (const enc of allEncomendas.value) {
       if (enc.tenant_id !== authStore.activeTenantId) continue;
       let alterou = false;
@@ -315,7 +337,10 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     }
   }
 
-  function criarEncomenda(dados: {
+  /**
+   * Criação atômica de encomenda com persistência segura no Supabase e rollback
+   */
+  async function criarEncomenda(dados: {
     clienteId: string;
     observacao?: string;
     funcionarioNome?: string;
@@ -327,16 +352,17 @@ export const useEncomendasStore = defineStore('encomendas', () => {
       controlado: boolean;
       urgente: boolean;
     }>;
-  }): Encomenda {
+  }): Promise<Encomenda> {
     const tenantId = authStore.activeTenantId;
     const orderId = gerarUuidSeguro();
     const trackingCode = `ENC-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
     const agora = new Date().toISOString();
 
-    const itensCriados: EncomendaItem[] = dados.itens.map((it) => {
+    const itensCriados: EncomendaItem[] = [];
+    for (const it of dados.itens) {
       memoriaStore.registrarMedicamento(it.descricao, it.precoUnitario);
 
-      const compraItem = comprasStore.encontrarOuCriarCompraItem(
+      const compraItem = await comprasStore.encontrarOuCriarCompraItem(
         it.descricao,
         it.classificacaoId,
         it.quantidade,
@@ -344,7 +370,7 @@ export const useEncomendasStore = defineStore('encomendas', () => {
         it.controlado
       );
 
-      return {
+      itensCriados.push({
         id: gerarUuidSeguro(),
         tenant_id: tenantId,
         encomenda_id: orderId,
@@ -359,8 +385,8 @@ export const useEncomendasStore = defineStore('encomendas', () => {
         status_item: compraItem.status,
         atributos: {},
         criado_em: agora,
-      };
-    });
+      });
+    }
 
     const valorTotal = itensCriados.reduce((acc, curr) => acc + curr.subtotal, 0);
     const criadoPorId = authStore.currentUser.tenant_id ? authStore.activeUserId : undefined;
@@ -393,8 +419,9 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     recalcularStatus(novaEncomenda);
     allEncomendas.value.unshift(novaEncomenda);
 
+    // Persistência segura e síncrona com rollback em caso de falha no banco
     if (isLive && authStore.isAuthenticated) {
-      (async () => {
+      try {
         const { error: encErr } = await supabase.from('encomenda').insert({
           id: novaEncomenda.id,
           tenant_id: novaEncomenda.tenant_id,
@@ -408,8 +435,10 @@ export const useEncomendasStore = defineStore('encomendas', () => {
           historico: novaEncomenda.historico,
         });
 
-        if (!encErr && itensCriados.length > 0) {
-          await supabase.from('encomenda_item').insert(
+        if (encErr) throw encErr;
+
+        if (itensCriados.length > 0) {
+          const { error: itemErr } = await supabase.from('encomenda_item').insert(
             itensCriados.map((it) => ({
               id: it.id,
               tenant_id: it.tenant_id,
@@ -424,33 +453,46 @@ export const useEncomendasStore = defineStore('encomendas', () => {
               status_item: it.status_item,
             }))
           );
+          if (itemErr) throw itemErr;
         }
-      })();
+      } catch (err: any) {
+        console.error('[EncomendasStore] Falha ao persistir encomenda no banco, executando rollback:', err);
+        // Rollback: remove da memória para evitar estado fantasma
+        allEncomendas.value = allEncomendas.value.filter((e) => e.id !== novaEncomenda.id);
+        throw new Error(err.message || 'Não foi possível gravar a encomenda no banco de dados.');
+      }
     }
 
-    // Disparo automático do modelo "Confirmação de Pedido" caso ativado no tenant e a encomenda ainda não tenha chegado
+    // Notificação automática de confirmação
     const cfgAtual = authStore.currentConfig;
     if (cfgAtual?.evolution_api_ativo && cfgAtual?.auto_whatsapp_pedido && novaEncomenda.status !== 'Chegou') {
-      dispararNotificacaoModeloEvolution(novaEncomenda, 'pedido', false);
+      dispararNotificacaoModeloEvolution(novaEncomenda, 'pedido', false).catch(() => {});
     }
 
     return novaEncomenda;
   }
 
-  function alterarStatus(
+  /**
+   * Altera status de encomenda com consistência financeira e persistência garantida
+   */
+  async function alterarStatus(
     encomendaId: string,
     novoStatus: StatusEncomenda,
     options?: { autorizacaoAdmin?: boolean; entregaComSaldo?: boolean; funcionarioNome?: string }
-  ): { sucesso: boolean; mensagem?: string } {
+  ): Promise<{ sucesso: boolean; mensagem?: string }> {
     const enc = allEncomendas.value.find((e) => e.id === encomendaId);
     if (!enc) return { sucesso: false, mensagem: 'Encomenda não encontrada.' };
+
+    const statusAnterior = enc.status;
+    const valorPagoAnterior = enc.valor_pago;
+    const entregueEmAnterior = enc.entregue_em;
 
     // Regra: Quando a encomenda for marcada que foi entregue, então ela foi paga integralmente
     if (novoStatus === 'Entregue') {
       enc.entregue_em = new Date().toISOString();
       enc.entregue_por = authStore.currentUser.tenant_id ? authStore.activeUserId : undefined;
 
-      // Alinha automaticamente os itens para 'Chegou', pois o pedido já está sendo entregue ao cliente
+      // Alinha automaticamente os itens para 'Chegou'
       if (enc.itens) {
         for (const it of enc.itens) {
           it.status_item = 'Chegou';
@@ -460,7 +502,7 @@ export const useEncomendasStore = defineStore('encomendas', () => {
       // Quita automaticamente qualquer saldo devedor restante
       const faltaPagar = Math.max(0, Number((enc.valor_total - enc.valor_pago).toFixed(2)));
       if (faltaPagar > 0) {
-        registrarPagamento({
+        await registrarPagamento({
           encomendaId: enc.id,
           valor: faltaPagar,
           forma: 'dinheiro',
@@ -482,7 +524,6 @@ export const useEncomendasStore = defineStore('encomendas', () => {
       }
     }
 
-    // Se o atendente avançou manualmente o card para Pedido Feito ou Chegou, alinha os itens da encomenda
     if (novoStatus === 'Pedido Feito' || novoStatus === 'Chegou') {
       if (enc.itens) {
         for (const it of enc.itens) {
@@ -505,14 +546,14 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     });
 
     if (isLive && authStore.isAuthenticated) {
-      (async () => {
+      try {
         if (novoStatus === 'Pedido Feito' || novoStatus === 'Chegou' || novoStatus === 'Entregue') {
           await supabase
             .from('encomenda_item')
             .update({ status_item: novoStatus === 'Pedido Feito' ? 'Pedido Feito' : 'Chegou' })
             .eq('encomenda_id', enc.id);
         }
-        await supabase
+        const { error: updErr } = await supabase
           .from('encomenda')
           .update({
             status: enc.status,
@@ -524,36 +565,48 @@ export const useEncomendasStore = defineStore('encomendas', () => {
             atualizado_em: enc.atualizado_em,
           })
           .eq('id', enc.id);
-      })();
+
+        if (updErr) throw updErr;
+      } catch (err: any) {
+        console.error('[EncomendasStore] Erro ao atualizar status no banco, revertendo:', err);
+        // Rollback de estado em caso de falha de escrita no banco
+        enc.status = statusAnterior;
+        enc.valor_pago = valorPagoAnterior;
+        enc.entregue_em = entregueEmAnterior;
+        return { sucesso: false, mensagem: 'Falha ao sincronizar alteração de status com o servidor.' };
+      }
     }
 
     if (novoStatus === 'Chegou' && eraOutroStatus) {
-      dispararNotificacaoChegadaEvolution(enc);
+      dispararNotificacaoChegadaEvolution(enc).catch(() => {});
     } else if (
       novoStatus === 'Entregue' &&
       eraOutroStatus &&
       authStore.currentConfig?.evolution_api_ativo &&
       authStore.currentConfig?.auto_whatsapp_entregue
     ) {
-      dispararNotificacaoModeloEvolution(enc, 'entregue', false);
+      dispararNotificacaoModeloEvolution(enc, 'entregue', false).catch(() => {});
     }
 
     return { sucesso: true };
   }
 
-  function registrarPagamento(dados: {
+  /**
+   * Registra pagamento de forma atômica no banco de dados com reconciliação imediata
+   */
+  async function registrarPagamento(dados: {
     encomendaId: string;
     valor: number;
     forma: FormaPagamento;
     tipo?: 'pagamento' | 'estorno';
     motivoEstorno?: string;
     funcionarioNome?: string;
-  }) {
+  }): Promise<{ sucesso: boolean; mensagem?: string }> {
     const enc = allEncomendas.value.find((e) => e.id === dados.encomendaId);
-    if (!enc) return;
+    if (!enc) return { sucesso: false, mensagem: 'Encomenda não encontrada.' };
 
     const valorFinal = dados.tipo === 'estorno' ? -Math.abs(dados.valor) : Math.abs(dados.valor);
-    if (valorFinal === 0) return;
+    if (valorFinal === 0) return { sucesso: false, mensagem: 'Valor inválido.' };
 
     const agora = new Date().toISOString();
     const registradoPor = authStore.currentUser.tenant_id ? authStore.activeUserId : undefined;
@@ -574,7 +627,9 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     if (!enc.pagamentos) enc.pagamentos = [];
     enc.pagamentos.push(novoPag);
 
-    enc.valor_pago = Math.max(0, enc.pagamentos.reduce((acc, curr) => acc + curr.valor, 0));
+    enc.valor_pago = enc.pagamentos.reduce((acc, curr) => acc + curr.valor, 0);
+    enc.valor_pago = Math.max(0, Number(enc.valor_pago.toFixed(2)));
+
     if (enc.valor_pago >= enc.valor_total && enc.valor_total > 0) {
       enc.situacao_pagamento = 'Pago';
     } else if (enc.valor_pago > 0) {
@@ -584,15 +639,18 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     }
 
     if (!enc.historico) enc.historico = [];
+    const fmt = `R$ ${Math.abs(valorFinal).toFixed(2).replace('.', ',')}`;
     enc.historico.push({
       employee_name: dados.funcionarioNome || authStore.currentUser.nome,
-      action: `registrou ${dados.tipo || 'pagamento'} de R$ ${Math.abs(dados.valor).toFixed(2)} (${dados.forma})`,
+      action: dados.tipo === 'estorno'
+        ? `estornou ${fmt} (${dados.forma})`
+        : `recebeu pagamento de ${fmt} (${dados.forma})`,
       timestamp: agora,
     });
 
     if (isLive && authStore.isAuthenticated) {
-      (async () => {
-        await supabase.from('pagamento').insert({
+      try {
+        const { error: pagErr } = await supabase.from('pagamento').insert({
           id: novoPag.id,
           tenant_id: novoPag.tenant_id,
           encomenda_id: novoPag.encomenda_id,
@@ -603,19 +661,33 @@ export const useEncomendasStore = defineStore('encomendas', () => {
           registrado_por: registradoPor || null,
           data: novoPag.data,
         });
+
+        if (pagErr) throw pagErr;
+
         await supabase
           .from('encomenda')
-          .update({ historico: enc.historico, atualizado_em: agora })
+          .update({
+            valor_pago: enc.valor_pago,
+            situacao_pagamento: enc.situacao_pagamento,
+            historico: enc.historico,
+            atualizado_em: agora,
+          })
           .eq('id', enc.id);
-      })();
+      } catch (err: any) {
+        console.error('[EncomendasStore] Erro ao gravar pagamento no banco:', err);
+        return { sucesso: false, mensagem: 'Não foi possível salvar o pagamento no banco.' };
+      }
     }
+
+    return { sucesso: true };
   }
 
-  function arquivarEntregues(): number {
+  async function arquivarEntregues(): Promise<number> {
     const tenantId = authStore.activeTenantId;
     let count = 0;
     const ids: string[] = [];
     const agora = new Date().toISOString();
+
     for (const enc of allEncomendas.value) {
       if (enc.tenant_id === tenantId && enc.status === 'Entregue' && !enc.arquivada_em) {
         enc.arquivada_em = agora;
@@ -623,8 +695,13 @@ export const useEncomendasStore = defineStore('encomendas', () => {
         count++;
       }
     }
+
     if (ids.length > 0 && isLive && authStore.isAuthenticated) {
-      supabase.from('encomenda').update({ arquivada_em: agora }).in('id', ids).then(() => {});
+      try {
+        await supabase.from('encomenda').update({ arquivada_em: agora }).in('id', ids);
+      } catch (err) {
+        console.error('[EncomendasStore] Falha ao arquivar entregues:', err);
+      }
     }
     return count;
   }
@@ -652,28 +729,36 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     return gerarLinkWaMeComModelo(dados.telefone, modelo, authStore.currentConfig, dados.variaveis);
   }
 
-  function removerEncomenda(encomendaId: string) {
+  async function removerEncomenda(encomendaId: string): Promise<boolean> {
     const idx = allEncomendas.value.findIndex((e) => e.id === encomendaId);
-    if (idx !== -1) {
-      const removida = allEncomendas.value[idx];
-      allEncomendas.value.splice(idx, 1);
-      if (isLive && authStore.isAuthenticated) {
-        supabase.from('encomenda').delete().eq('id', encomendaId).then(() => {
-          authStore.registrarAuditoria('EXCLUSAO_ENCOMENDA', `Encomenda ${removida.codigo_rastreio || encomendaId}`);
-        });
+    if (idx === -1) return false;
+
+    const removida = allEncomendas.value[idx];
+    allEncomendas.value.splice(idx, 1);
+
+    if (isLive && authStore.isAuthenticated) {
+      try {
+        const { error } = await supabase.from('encomenda').delete().eq('id', encomendaId);
+        if (error) throw error;
+        await authStore.registrarAuditoria('EXCLUSAO_ENCOMENDA', `Encomenda ${removida.codigo_rastreio || encomendaId}`);
+      } catch (err) {
+        console.error('[EncomendasStore] Erro ao excluir encomenda, restaurando:', err);
+        allEncomendas.value.splice(idx, 0, removida);
+        return false;
       }
     }
+    return true;
   }
 
-  function atualizarEncomenda(
+  async function atualizarEncomenda(
     encomendaId: string,
     dados: Partial<Encomenda> & {
       itensNovos?: Array<{ descricao: string; quantidade: number; precoUnitario: number }>;
       funcionarioNome?: string;
     }
-  ) {
+  ): Promise<boolean> {
     const enc = allEncomendas.value.find((e) => e.id === encomendaId);
-    if (!enc) return;
+    if (!enc) return false;
 
     if (dados.cliente_id) enc.cliente_id = dados.cliente_id;
     if (dados.observacao !== undefined) enc.observacao = dados.observacao;
@@ -716,7 +801,7 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     }
 
     if (isLive && authStore.isAuthenticated) {
-      (async () => {
+      try {
         await supabase
           .from('encomenda')
           .update({
@@ -742,19 +827,22 @@ export const useEncomendasStore = defineStore('encomendas', () => {
             }))
           );
         }
-      })();
+      } catch (err) {
+        console.error('[EncomendasStore] Erro ao salvar edição no banco:', err);
+        return false;
+      }
     }
+    return true;
   }
 
-  // BUG-09 FIX: alternarPago reconcilia a tabela pagamento para manter integridade financeira no banco
-  function alternarPago(encomendaId: string, pago: boolean, funcionarioNome?: string) {
+  async function alternarPago(encomendaId: string, pago: boolean, funcionarioNome?: string): Promise<void> {
     const enc = allEncomendas.value.find((e) => e.id === encomendaId);
     if (!enc) return;
 
     if (pago) {
       const faltaPagar = Math.max(0, enc.valor_total - enc.valor_pago);
       if (faltaPagar > 0) {
-        registrarPagamento({
+        await registrarPagamento({
           encomendaId,
           valor: faltaPagar,
           forma: 'dinheiro',
@@ -763,7 +851,7 @@ export const useEncomendasStore = defineStore('encomendas', () => {
         });
       }
     } else if (enc.valor_pago > 0) {
-      registrarPagamento({
+      await registrarPagamento({
         encomendaId,
         valor: enc.valor_pago,
         forma: 'outros',
@@ -774,7 +862,7 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     }
   }
 
-  function alternarClienteAvisado(encomendaId: string, avisado: boolean, funcionarioNome?: string) {
+  async function alternarClienteAvisado(encomendaId: string, avisado: boolean, funcionarioNome?: string): Promise<void> {
     const enc = allEncomendas.value.find((e) => e.id === encomendaId);
     if (!enc) return;
 
@@ -793,36 +881,40 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     enc.atualizado_em = agora;
 
     if (isLive && authStore.isAuthenticated) {
-      supabase
-        .from('encomenda')
-        .update({
-          cliente_avisado: enc.cliente_avisado,
-          cliente_avisado_em: enc.cliente_avisado_em || null,
-          cliente_avisado_por: enc.cliente_avisado_por || null,
-          historico: enc.historico,
-          atualizado_em: agora,
-        })
-        .eq('id', enc.id)
-        .then(() => {});
+      try {
+        await supabase
+          .from('encomenda')
+          .update({
+            cliente_avisado: enc.cliente_avisado,
+            cliente_avisado_em: enc.cliente_avisado_em || null,
+            cliente_avisado_por: enc.cliente_avisado_por || null,
+            historico: enc.historico,
+            atualizado_em: agora,
+          })
+          .eq('id', enc.id);
+      } catch (err) {
+        console.error('[EncomendasStore] Erro ao sincronizar cliente avisado no banco:', err);
+      }
     }
   }
 
-  function apagarEntreguesDefinitivo(): number {
+  async function apagarEntreguesDefinitivo(): Promise<number> {
     const tenantId = authStore.activeTenantId;
-    const idsRemover = allEncomendas.value
-      .filter((e) => e.tenant_id === tenantId && e.status === 'Entregue')
-      .map((e) => e.id);
+    const entregues = allEncomendas.value.filter((e) => e.tenant_id === tenantId && e.status === 'Entregue');
+    const idsRemover = entregues.map((e) => e.id);
 
     allEncomendas.value = allEncomendas.value.filter((e) => !(e.tenant_id === tenantId && e.status === 'Entregue'));
 
     if (idsRemover.length > 0 && isLive && authStore.isAuthenticated) {
-      supabase
-        .from('encomenda')
-        .delete()
-        .in('id', idsRemover)
-        .then(() => {
-          authStore.registrarAuditoria('EXCLUSAO_LOTE_ENTREGUES', `${idsRemover.length} encomendas entregues`);
-        });
+      try {
+        const { error } = await supabase.from('encomenda').delete().in('id', idsRemover);
+        if (error) throw error;
+        await authStore.registrarAuditoria('EXCLUSAO_LOTE_ENTREGUES', `${idsRemover.length} encomendas entregues`);
+      } catch (err) {
+        console.error('[EncomendasStore] Falha ao apagar entregues em lote, revertendo:', err);
+        allEncomendas.value.push(...entregues);
+        return 0;
+      }
     }
     return idsRemover.length;
   }
@@ -833,6 +925,8 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     activeTab,
     searchQuery,
     paymentFilter,
+    isLoading,
+    erroOperacao,
     currentTenantEncomendas,
     filteredEncomendas,
     metricas,

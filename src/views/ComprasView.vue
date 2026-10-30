@@ -189,14 +189,14 @@ const gruposPorClassificacao = computed(() => {
   return Object.values(grupos).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 });
 
-function mudarStatusCompra(item: CompraItem, novoStatus: StatusCompra) {
-  comprasStore.atualizarStatus(item.id, novoStatus, (id, status) => {
+async function mudarStatusCompra(item: CompraItem, novoStatus: StatusCompra) {
+  await comprasStore.atualizarStatus(item.id, novoStatus, (id, status) => {
     encomendasStore.sincronizarStatusPorCompra(id, status);
   });
 }
 
-function alternarUrgencia(item: CompraItem) {
-  item.urgente = !item.urgente;
+async function alternarUrgencia(item: CompraItem) {
+  await comprasStore.alternarUrgencia(item.id);
 }
 
 function abrirEditarItem(item: CompraItem) {
@@ -204,9 +204,9 @@ function abrirEditarItem(item: CompraItem) {
   showEditarItemModal.value = true;
 }
 
-function salvarEdicaoItem() {
+async function salvarEdicaoItem() {
   if (!itemEmEdicao.value || !itemEmEdicao.value.descricao.trim()) return;
-  comprasStore.atualizarItemCompra(itemEmEdicao.value.id, {
+  await comprasStore.atualizarItemCompra(itemEmEdicao.value.id, {
     descricao: itemEmEdicao.value.descricao,
     classificacao_id: itemEmEdicao.value.classificacao_id,
     quantidade: itemEmEdicao.value.quantidade,
@@ -214,9 +214,9 @@ function salvarEdicaoItem() {
   showEditarItemModal.value = false;
 }
 
-function excluirItem(id: string) {
+async function excluirItem(id: string) {
   if (confirm('Deseja realmente remover este item da lista de compras?')) {
-    comprasStore.removerItemCompra(id);
+    await comprasStore.removerItemCompra(id);
     showEditarItemModal.value = false;
   }
 }
@@ -228,7 +228,7 @@ function abrirModalNovoItem() {
   showNovoItemModal.value = true;
 }
 
-function salvarNovoItem() {
+async function salvarNovoItem() {
   if (!novoItemNome.value.trim()) {
     alert('Informe o nome do medicamento.');
     return;
@@ -241,7 +241,7 @@ function salvarNovoItem() {
   const descUpper = novoItemNome.value.trim().toUpperCase();
   const qtd = typeof novoItemQuantidade.value === 'number' && novoItemQuantidade.value > 0 ? novoItemQuantidade.value : 1;
 
-  comprasStore.encontrarOuCriarCompraItem(
+  await comprasStore.encontrarOuCriarCompraItem(
     descUpper,
     novoItemClassificacaoId.value,
     qtd,
@@ -252,7 +252,7 @@ function salvarNovoItem() {
   showNovoItemModal.value = false;
 }
 
-function criarNovaClassificacao() {
+async function criarNovaClassificacao() {
   if (!novaClassificacaoNome.value.trim()) return;
   const nomeUpper = novaClassificacaoNome.value.trim().toUpperCase();
   const existe = comprasStore.currentClassificacoes.some((c) => c.nome === nomeUpper);
@@ -260,12 +260,12 @@ function criarNovaClassificacao() {
     alert('Classificação já cadastrada!');
     return;
   }
-  comprasStore.adicionarClassificacao(nomeUpper);
+  await comprasStore.adicionarClassificacao(nomeUpper);
   novaClassificacaoNome.value = '';
 }
 
-function removerClassificacao(id: string) {
-  comprasStore.removerClassificacao(id);
+async function removerClassificacao(id: string) {
+  await comprasStore.removerClassificacao(id);
 }
 
 function abrirImportacaoXML() {
@@ -377,8 +377,8 @@ function efetivarMudancaStatusChegouConfirmada() {
   );
 }
 
-function executarArquivarChegou() {
-  const qtd = comprasStore.arquivarChegou();
+async function executarArquivarChegou() {
+  const qtd = await comprasStore.arquivarChegou();
   showArquivarChegouModal.value = false;
   mostrarAvisoSucesso(`${qtd} item(ns) com status "Chegou" foram arquivados com sucesso.`);
 }

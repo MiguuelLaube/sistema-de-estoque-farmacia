@@ -115,7 +115,7 @@ onMounted(() => {
   }
 });
 
-function salvarCliente() {
+async function salvarCliente() {
   if (!formNome.value.trim() || !formTelefone.value.trim()) {
     alert('Nome e Telefone são campos obrigatórios.');
     return;
@@ -144,14 +144,14 @@ function salvarCliente() {
   }
 
   if (clienteEmEdicao.value) {
-    clientesStore.atualizarCliente(clienteEmEdicao.value.id, {
+    await clientesStore.atualizarCliente(clienteEmEdicao.value.id, {
       nome: formNome.value,
       telefone: formTelefone.value,
       cpf: formCpf.value.trim() || undefined,
       endereco: formEndereco.value.trim() || undefined,
     });
   } else {
-    clientesStore.adicionarCliente({
+    await clientesStore.adicionarCliente({
       nome: formNome.value,
       telefone: formTelefone.value,
       cpf: formCpf.value.trim() || undefined,
@@ -163,9 +163,9 @@ function salvarCliente() {
   showClienteModal.value = false;
 }
 
-function removerCliente(c: Cliente) {
+async function removerCliente(c: Cliente) {
   if (confirm(`Deseja arquivar o cliente "${c.nome}"?\n\n(Para exercer o direito de esquecimento/anonimização conforme a LGPD, abra a edição do cliente e clique em "Anonimizar Titular")`)) {
-    clientesStore.arquivarCliente(c.id);
+    await clientesStore.arquivarCliente(c.id);
   }
 }
 
@@ -180,17 +180,17 @@ function toggleRevealCpf(c: Cliente) {
 }
 
 // LGPD Art. 18, II e V: Exportação de dados do titular (DSAR / Portabilidade)
-function exportarDados(c: Cliente) {
-  clientesStore.exportarDadosTitular(c.id);
+async function exportarDados(c: Cliente) {
+  await clientesStore.exportarDadosTitular(c.id);
 }
 
 // LGPD Art. 18, IV e VI: Eliminação e anonimização irreversível
-function anonimizarTitular(c: Cliente) {
+async function anonimizarTitular(c: Cliente) {
   const confirmacao = confirm(
     `ATENÇÃO - AÇÃO IRREVERSÍVEL (LGPD Art. 18):\n\nConfirma a anonimização dos dados de "${c.nome}"?\n\nO nome, telefone, CPF e endereço serão apagados e substituídos por dados anônimos, preservando o histórico de encomendas.`
   );
   if (confirmacao) {
-    clientesStore.anonimizarCliente(c.id);
+    await clientesStore.anonimizarCliente(c.id);
     showClienteModal.value = false;
   }
 }

@@ -203,12 +203,12 @@ function handleSubmit() {
   showEmployeeModal.value = true;
 }
 
-function confirmCreateOrder(employee: Funcionario) {
+async function confirmCreateOrder(employee: Funcionario) {
   isCreating.value = true;
 
   let clientId = selectedClientId.value;
   if (!clientId && clientSearchText.value.trim()) {
-    const newClient = clientesStore.adicionarCliente({
+    const newClient = await clientesStore.adicionarCliente({
       nome: clientSearchText.value.trim().toUpperCase(),
       telefone: clientQuickPhone.value.trim(),
       base_legal: 'execucao_contrato',
@@ -224,26 +224,32 @@ function confirmCreateOrder(employee: Funcionario) {
     urgente: false,
   }));
 
-  const order = encomendasStore.criarEncomenda({
-    clienteId: clientId,
-    observacao: observacoes.value.trim() || undefined,
-    funcionarioNome: employee.nome,
-    itens: itemsData,
-  });
-
-  // Apply payment if paid or partially paid
-  if (valorJaPago.value > 0) {
-    encomendasStore.registrarPagamento({
-      encomendaId: order.id,
-      valor: valorJaPago.value,
-      forma: 'pix',
+  try {
+    const order = await encomendasStore.criarEncomenda({
+      clienteId: clientId,
+      observacao: observacoes.value.trim() || undefined,
       funcionarioNome: employee.nome,
+      itens: itemsData,
     });
-  }
 
-  showEmployeeModal.value = false;
-  isCreating.value = false;
-  router.push('/encomendas');
+    // Apply payment if paid or partially paid
+    if (valorJaPago.value > 0) {
+      await encomendasStore.registrarPagamento({
+        encomendaId: order.id,
+        valor: valorJaPago.value,
+        forma: 'pix',
+        funcionarioNome: employee.nome,
+      });
+    }
+
+    showEmployeeModal.value = false;
+    router.push('/encomendas');
+  } catch (err) {
+    console.error('Erro ao processar nova encomenda:', err);
+    alert('Erro ao registrar encomenda. Por favor, verifique a conexão e tente novamente.');
+  } finally {
+    isCreating.value = false;
+  }
 }
 
 function formatBRL(val: number): string {

@@ -27,6 +27,8 @@ export const useClientesStore = defineStore('clientes', () => {
   const authStore = useAuthStore();
   const isLive = isLiveSupabaseConfigured();
   const allClientes = ref<Cliente[]>(isLive ? [] : initialClientes);
+  const isLoading = ref<boolean>(false);
+  const erroOperacao = ref<string | null>(null);
 
   const currentTenantClientes = computed(() => {
     return allClientes.value.filter(
@@ -34,20 +36,34 @@ export const useClientesStore = defineStore('clientes', () => {
     );
   });
 
-  async function carregarClientes() {
+  /**
+   * Carrega clientes sob isolamento RLS multi-tenant
+   */
+  async function carregarClientes(): Promise<void> {
     if (!isLive || !authStore.isAuthenticated) {
       if (!isLive) allClientes.value = initialClientes;
       else allClientes.value = [];
       return;
     }
 
-    const { data, error } = await supabase
-      .from('cliente')
-      .select('*')
-      .order('criado_em', { ascending: false });
+    isLoading.value = true;
+    erroOperacao.value = null;
 
-    if (!error && data) {
-      allClientes.value = data as Cliente[];
+    try {
+      const { data, error } = await supabase
+        .from('cliente')
+        .select('*')
+        .order('criado_em', { ascending: false });
+
+      if (error) throw error;
+      if (data) {
+        allClientes.value = data as Cliente[];
+      }
+    } catch (err: any) {
+      console.error('[ClientesStore] Erro ao carregar base de clientes:', err);
+      erroOperacao.value = 'Falha ao sincronizar clientes cadastrados.';
+    } finally {
+      isLoading.value = false;
     }
   }
 
@@ -117,16 +133,20 @@ export const useClientesStore = defineStore('clientes', () => {
     return null;
   }
 
-  function adicionarCliente(dados: {
+  /**
+   * Adiciona cliente com cálculo assíncrono de SHA-256 e persistência atômica no Supabase
+   */
+  async function adicionarCliente(dados: {
     nome: string;
     telefone: string;
     cpf?: string;
     endereco?: string;
     base_legal?: string;
-  }): Cliente {
+  }): Promise<Cliente> {
     const cpfLimpo = dados.cpf ? dados.cpf.replace(/\D/g, '') : '';
     const cpfFormatado = cpfLimpo.length === 11 ? formatarCPF(cpfLimpo) : undefined;
     const agora = new Date().toISOString();
+    const hash = cpfLimpo.length === 11 ? await calcularSha256Hex(cpfLimpo) : undefined;
 
     const novoCliente: Cliente = {
       id: gerarUuidSeguro(),
@@ -134,7 +154,7 @@ export const useClientesStore = defineStore('clientes', () => {
       nome: dados.nome.trim().toUpperCase(),
       telefone: normalizarTelefone(dados.telefone || '(00) 00000-0000'),
       cpf: cpfFormatado,
-      cpf_hash: undefined,
+      cpf_hash: hash,
       endereco: dados.endereco ? dados.endereco.trim() : undefined,
       consentimento_em: agora,
       base_legal: dados.base_legal || 'execucao_contrato',
@@ -143,12 +163,9 @@ export const useClientesStore = defineStore('clientes', () => {
 
     allClientes.value.unshift(novoCliente);
 
-    (async () => {
-      const hash = cpfLimpo.length === 11 ? await calcularSha256Hex(cpfLimpo) : undefined;
-      if (hash) novoCliente.cpf_hash = hash;
-
-      if (isLive && authStore.isAuthenticated) {
-        await supabase.from('cliente').insert({
+    if (isLive && authStore.isAuthenticated) {
+      try {
+        const { error } = await supabase.from('cliente').insert({
           id: novoCliente.id,
           tenant_id: novoCliente.tenant_id,
           nome: novoCliente.nome,
@@ -159,67 +176,97 @@ export const useClientesStore = defineStore('clientes', () => {
           consentimento_em: novoCliente.consentimento_em,
           base_legal: novoCliente.base_legal,
         });
+        if (error) throw error;
+      } catch (err) {
+        console.error('[ClientesStore] Erro ao persistir cliente no Supabase:', err);
+        allClientes.value = allClientes.value.filter((c) => c.id !== novoCliente.id);
+        throw err;
       }
-    })();
+    }
 
     return novoCliente;
   }
 
-  function atualizarCliente(id: string, dados: Partial<Cliente>) {
-    const index = allClientes.value.findIndex((c) => c.id === id);
-    if (index !== -1) {
-      const cpfLimpo = dados.cpf !== undefined ? (dados.cpf ? dados.cpf.replace(/\D/g, '') : '') : undefined;
-      const cpfFinal =
-        cpfLimpo !== undefined ? (cpfLimpo.length === 11 ? formatarCPF(cpfLimpo) : undefined) : allClientes.value[index].cpf;
-
-      allClientes.value[index] = {
-        ...allClientes.value[index],
-        ...dados,
-        nome: dados.nome ? dados.nome.trim().toUpperCase() : allClientes.value[index].nome,
-        telefone: dados.telefone ? normalizarTelefone(dados.telefone) : allClientes.value[index].telefone,
-        cpf: cpfFinal,
-      };
-
-      const atualizado = allClientes.value[index];
-      (async () => {
-        const hash = cpfLimpo !== undefined ? (cpfLimpo.length === 11 ? await calcularSha256Hex(cpfLimpo) : null) : atualizado.cpf_hash || null;
-        if (hash) atualizado.cpf_hash = hash;
-        else atualizado.cpf_hash = undefined;
-
-        if (isLive && authStore.isAuthenticated) {
-          await supabase
-            .from('cliente')
-            .update({
-              nome: atualizado.nome,
-              telefone: atualizado.telefone,
-              cpf: atualizado.cpf || null,
-              cpf_hash: hash,
-              endereco: atualizado.endereco || null,
-              atualizado_em: new Date().toISOString(),
-            })
-            .eq('id', id);
-        }
-      })();
-    }
-  }
-
-  function arquivarCliente(id: string) {
-    const cliente = allClientes.value.find((c) => c.id === id);
-    if (cliente) {
-      const agora = new Date().toISOString();
-      cliente.arquivado_em = agora;
-      if (isLive && authStore.isAuthenticated) {
-        supabase.from('cliente').update({ arquivado_em: agora }).eq('id', id).then(() => {});
-      }
-    }
-  }
-
-  // Atendimento ao Direito de Eliminação / Anonimização (Art. 18, IV e VI da LGPD)
-  function anonimizarCliente(id: string): boolean {
+  /**
+   * Atualiza dados de cliente e recalcula hash criptográfico se CPF foi modificado
+   */
+  async function atualizarCliente(id: string, dados: Partial<Cliente>): Promise<boolean> {
     const index = allClientes.value.findIndex((c) => c.id === id);
     if (index === -1) return false;
 
-    const original = allClientes.value[index];
+    const snapshot = { ...allClientes.value[index] };
+    const cpfLimpo = dados.cpf !== undefined ? (dados.cpf ? dados.cpf.replace(/\D/g, '') : '') : undefined;
+    const cpfFinal =
+      cpfLimpo !== undefined ? (cpfLimpo.length === 11 ? formatarCPF(cpfLimpo) : undefined) : snapshot.cpf;
+
+    const hash = cpfLimpo !== undefined ? (cpfLimpo.length === 11 ? await calcularSha256Hex(cpfLimpo) : undefined) : snapshot.cpf_hash;
+
+    allClientes.value[index] = {
+      ...snapshot,
+      ...dados,
+      nome: dados.nome ? dados.nome.trim().toUpperCase() : snapshot.nome,
+      telefone: dados.telefone ? normalizarTelefone(dados.telefone) : snapshot.telefone,
+      cpf: cpfFinal,
+      cpf_hash: hash,
+    };
+
+    const atualizado = allClientes.value[index];
+
+    if (isLive && authStore.isAuthenticated) {
+      try {
+        const { error } = await supabase
+          .from('cliente')
+          .update({
+            nome: atualizado.nome,
+            telefone: atualizado.telefone,
+            cpf: atualizado.cpf || null,
+            cpf_hash: hash || null,
+            endereco: atualizado.endereco || null,
+            atualizado_em: new Date().toISOString(),
+          })
+          .eq('id', id);
+        if (error) throw error;
+      } catch (err) {
+        console.error('[ClientesStore] Erro ao sincronizar atualização de cliente:', err);
+        allClientes.value[index] = snapshot;
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Arquiva cliente de forma segura (preserva histórico financeiro e pedidos)
+   */
+  async function arquivarCliente(id: string): Promise<boolean> {
+    const cliente = allClientes.value.find((c) => c.id === id);
+    if (!cliente) return false;
+
+    const anterior = cliente.arquivado_em;
+    const agora = new Date().toISOString();
+    cliente.arquivado_em = agora;
+
+    if (isLive && authStore.isAuthenticated) {
+      try {
+        const { error } = await supabase.from('cliente').update({ arquivado_em: agora }).eq('id', id);
+        if (error) throw error;
+      } catch (err) {
+        console.error('[ClientesStore] Erro ao arquivar cliente no banco:', err);
+        cliente.arquivado_em = anterior;
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Atendimento ao Direito de Eliminação / Anonimização (Art. 18, IV e VI da LGPD)
+   */
+  async function anonimizarCliente(id: string): Promise<boolean> {
+    const index = allClientes.value.findIndex((c) => c.id === id);
+    if (index === -1) return false;
+
+    const original = { ...allClientes.value[index] };
     const agora = new Date().toISOString();
     const nomeAnonimo = `TITULAR ANONIMIZADO #${original.id.slice(-4)}`;
 
@@ -235,31 +282,40 @@ export const useClientesStore = defineStore('clientes', () => {
     };
 
     if (isLive && authStore.isAuthenticated) {
-      supabase
-        .from('cliente')
-        .update({
-          nome: nomeAnonimo,
-          cpf: null,
-          cpf_hash: null,
-          telefone: '(00) 00000-0000',
-          endereco: null,
-          excluido_em: agora,
-          arquivado_em: agora,
-        })
-        .eq('id', id)
-        .then(() => {
-          authStore.registrarAuditoria(
-            'ANONIMIZACAO_TITULAR_LGPD',
-            `Titular #${original.id.slice(-8)}`,
-            'Exercício do Direito de Eliminação/Anonimização (Art. 18, IV e VI LGPD)'
-          );
-        });
+      try {
+        const { error } = await supabase
+          .from('cliente')
+          .update({
+            nome: nomeAnonimo,
+            cpf: null,
+            cpf_hash: null,
+            telefone: '(00) 00000-0000',
+            endereco: null,
+            excluido_em: agora,
+            arquivado_em: agora,
+          })
+          .eq('id', id);
+
+        if (error) throw error;
+
+        await authStore.registrarAuditoria(
+          'ANONIMIZACAO_TITULAR_LGPD',
+          `Titular #${original.id.slice(-8)}`,
+          'Exercício do Direito de Eliminação/Anonimização (Art. 18, IV e VI LGPD)'
+        );
+      } catch (err) {
+        console.error('[ClientesStore] Erro na operação de anonimização no Supabase:', err);
+        allClientes.value[index] = original;
+        return false;
+      }
     }
     return true;
   }
 
-  // Atendimento ao Direito de Acesso e Portabilidade (Art. 18, II e V da LGPD)
-  function exportarDadosTitular(id: string) {
+  /**
+   * Atendimento ao Direito de Acesso e Portabilidade (Art. 18, II e V da LGPD)
+   */
+  async function exportarDadosTitular(id: string) {
     const cliente = allClientes.value.find((c) => c.id === id);
     if (!cliente) return null;
 
@@ -295,7 +351,7 @@ export const useClientesStore = defineStore('clientes', () => {
       URL.revokeObjectURL(url);
     }
 
-    authStore.registrarAuditoria(
+    await authStore.registrarAuditoria(
       'EXPORTACAO_PORTABILIDADE_LGPD',
       `Titular #${cliente.id.slice(-8)}`,
       'Atendimento ao Direito de Acesso e Portabilidade (Art. 18, II e V LGPD)'
@@ -314,6 +370,8 @@ export const useClientesStore = defineStore('clientes', () => {
   return {
     allClientes,
     currentTenantClientes,
+    isLoading,
+    erroOperacao,
     carregarClientes,
     normalizarTelefone,
     validarCPF,

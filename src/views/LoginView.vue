@@ -17,6 +17,8 @@ import {
   ArrowRight,
   KeyRound,
   ArrowLeft,
+  Eye,
+  EyeOff,
 } from 'lucide-vue-next';
 
 const router = useRouter();
@@ -39,6 +41,10 @@ const totpCode = ref('');
 const recoveryEmail = ref('');
 const newPassword = ref('');
 const newPasswordConfirm = ref('');
+
+const showPassword = ref(false);
+const showNewPassword = ref(false);
+const showNewPasswordConfirm = ref(false);
 
 const showForgotPassword = ref(false);
 const loading = ref(false);
@@ -69,9 +75,9 @@ async function handleLogin() {
     } else {
       errorMessage.value = res.message || 'Credenciais inválidas.';
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error('[Login Catch Exception]:', err);
-    errorMessage.value = 'Não foi possível concluir a autenticação no momento.';
+    errorMessage.value = err?.message || 'Falha de comunicação ou credenciais incorretas. Tente novamente.';
   } finally {
     loading.value = false;
   }
@@ -212,13 +218,22 @@ function fecharModalContato() {
             <input
               id="input-new-password"
               v-model="newPassword"
-              type="password"
+              :type="showNewPassword ? 'text' : 'password'"
               minlength="12"
               required
               autocomplete="new-password"
               class="form-field-input"
               placeholder="Digite sua nova senha"
             />
+            <button
+              type="button"
+              @click="showNewPassword = !showNewPassword"
+              style="background: none; border: none; padding: 0 0.5rem; cursor: pointer; color: #64748b; display: flex; align-items: center;"
+              :title="showNewPassword ? 'Ocultar senha' : 'Ver senha'"
+            >
+              <EyeOff v-if="showNewPassword" :size="16" />
+              <Eye v-else :size="16" />
+            </button>
           </div>
         </div>
 
@@ -229,13 +244,22 @@ function fecharModalContato() {
             <input
               id="input-confirm-password"
               v-model="newPasswordConfirm"
-              type="password"
+              :type="showNewPasswordConfirm ? 'text' : 'password'"
               minlength="12"
               required
               autocomplete="new-password"
               class="form-field-input"
               placeholder="Repita a nova senha"
             />
+            <button
+              type="button"
+              @click="showNewPasswordConfirm = !showNewPasswordConfirm"
+              style="background: none; border: none; padding: 0 0.5rem; cursor: pointer; color: #64748b; display: flex; align-items: center;"
+              :title="showNewPasswordConfirm ? 'Ocultar senha' : 'Ver senha'"
+            >
+              <EyeOff v-if="showNewPasswordConfirm" :size="16" />
+              <Eye v-else :size="16" />
+            </button>
           </div>
         </div>
 
@@ -376,12 +400,21 @@ function fecharModalContato() {
             <input
               id="input-login-password"
               v-model="password"
-              type="password"
+              :type="showPassword ? 'text' : 'password'"
               required
               autocomplete="current-password"
               class="form-field-input"
               placeholder="••••••••••••"
             />
+            <button
+              type="button"
+              @click="showPassword = !showPassword"
+              style="background: none; border: none; padding: 0 0.5rem; cursor: pointer; color: #64748b; display: flex; align-items: center;"
+              :title="showPassword ? 'Ocultar senha' : 'Ver senha'"
+            >
+              <EyeOff v-if="showPassword" :size="16" />
+              <Eye v-else :size="16" />
+            </button>
           </div>
         </div>
 

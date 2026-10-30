@@ -25,11 +25,17 @@ function sanitizarMensagemErroAuth(rawMsg?: string): string {
     console.warn('[Supabase Auth Debug]:', rawMsg);
   }
   const lower = (rawMsg || '').toLowerCase();
-  if (lower.includes('invalid login credentials') || lower.includes('invalid_credentials')) {
-    return 'Credenciais inválidas. Verifique o identificador e a senha informados.';
+  if (
+    lower.includes('invalid login credentials') ||
+    lower.includes('invalid_credentials') ||
+    lower.includes('invalid_grant') ||
+    lower.includes('invalid password') ||
+    lower.includes('invalid email')
+  ) {
+    return 'Identificador corporativo ou senha incorretos. Verifique suas credenciais.';
   }
   if (lower.includes('too many requests') || lower.includes('rate limit') || lower.includes('over_email_send_rate_limit')) {
-    return 'Limite de requisições excedido. O serviço gratuito de e-mails do Supabase limita envios a 3 por hora. Aguarde alguns minutos antes de tentar novamente.';
+    return 'Limite de requisições excedido. Por favor, aguarde alguns minutos antes de tentar novamente.';
   }
   if (lower.includes('email not confirmed')) {
     return 'Conta aguardando confirmação cadastral no Supabase.';
@@ -46,7 +52,7 @@ function sanitizarMensagemErroAuth(rawMsg?: string): string {
   if (lower.includes('failed to fetch') || lower.includes('network') || lower.includes('conexão')) {
     return 'Falha de comunicação com o servidor de autenticação. Verifique sua conexão com a internet.';
   }
-  return 'Não foi possível concluir a autenticação no momento.';
+  return rawMsg && rawMsg.length < 120 ? rawMsg : 'Não foi possível concluir a autenticação no momento.';
 }
 
 export const useAuthStore = defineStore('auth', () => {

@@ -701,16 +701,24 @@ function abrirGerenciadorCookiesModal() {
   }
 }
 
-function adicionarClassificacao() {
+async function adicionarClassificacao() {
   if (!novaClassificacaoNome.value.trim()) return;
-  comprasStore.adicionarClassificacao(novaClassificacaoNome.value);
-  novaClassificacaoNome.value = '';
-  exibirFeedback('sucesso', 'Classificação adicionada com sucesso.');
+  const res = await comprasStore.adicionarClassificacao(novaClassificacaoNome.value);
+  if (res) {
+    novaClassificacaoNome.value = '';
+    exibirFeedback('sucesso', 'Classificação adicionada com sucesso.');
+  } else {
+    exibirFeedback('erro', 'Não foi possível cadastrar a classificação.');
+  }
 }
 
-function removerClassificacao(id: string) {
-  comprasStore.removerClassificacao(id);
-  exibirFeedback('sucesso', 'Classificação removida.');
+async function removerClassificacao(id: string) {
+  const ok = await comprasStore.removerClassificacao(id);
+  if (ok) {
+    exibirFeedback('sucesso', 'Classificação removida.');
+  } else {
+    exibirFeedback('erro', 'Falha ao remover classificação.');
+  }
 }
 </script>
 
