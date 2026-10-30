@@ -229,19 +229,25 @@ BEGIN
 
     v_senha_final := COALESCE(NULLIF(TRIM(p_senha_provisoria), ''), 'EncoMed@' || LPAD(FLOOR(RANDOM() * 9000 + 1000)::TEXT, 4, '0'));
 
-    -- Atualiza em auth.users
-    IF v_user_row.auth_user_id IS NOT NULL THEN
+    -- Localiza ou cria em auth.users pelo e-mail
+    SELECT id INTO v_auth_user_id FROM auth.users WHERE LOWER(email) = LOWER(v_user_row.email) LIMIT 1;
+    IF v_auth_user_id IS NULL THEN
+        v_auth_user_id := gen_random_uuid();
+        INSERT INTO auth.users (id, instance_id, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, role, aud)
+        VALUES (v_auth_user_id, '00000000-0000-0000-0000-000000000000', LOWER(v_user_row.email), crypt(v_senha_final, gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, jsonb_build_object('nome', v_user_row.nome, 'exigir_troca_senha', true), now(), now(), 'authenticated', 'authenticated');
+    ELSE
         UPDATE auth.users
         SET encrypted_password = crypt(v_senha_final, gen_salt('bf')),
             email_confirmed_at = COALESCE(email_confirmed_at, now()),
             raw_user_meta_data = COALESCE(raw_user_meta_data, '{}'::jsonb) || jsonb_build_object('exigir_troca_senha', true),
             updated_at = now()
-        WHERE id = v_user_row.auth_user_id;
+        WHERE id = v_auth_user_id;
     END IF;
 
     -- Atualiza em public.usuario
     UPDATE public.usuario
-    SET exigir_troca_senha = true,
+    SET auth_user_id = v_auth_user_id,
+        exigir_troca_senha = true,
         senha_provisoria_ativa = true
     WHERE id = v_user_row.id;
 
