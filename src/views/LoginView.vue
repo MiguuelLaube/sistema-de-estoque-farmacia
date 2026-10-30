@@ -137,7 +137,11 @@ async function handleRedefinirSenha() {
       newPassword.value = '';
       newPasswordConfirm.value = '';
       successMessage.value = res.message;
-      router.push({ name: 'dashboard' });
+      if (authStore.isSuperAdmin) {
+        router.push({ name: 'plataforma' });
+      } else {
+        router.push({ name: 'dashboard' });
+      }
     } else {
       errorMessage.value = res.message;
     }
