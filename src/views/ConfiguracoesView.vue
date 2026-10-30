@@ -28,10 +28,15 @@ import {
   Layout,
   Type,
   Image as ImageIcon,
+  Unlink,
+  Server,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-vue-next';
 import {
   consultarStatusWhatsAppProxy,
   obterQrCodeWhatsAppProxy,
+  desconectarWhatsAppProxy,
   enviarModeloWhatsAppProxy,
   renderizarModeloWhatsApp,
   MODELOS_PADRAO_WHATSAPP,
@@ -315,6 +320,18 @@ const statusInstancia = ref<'connecting' | 'open' | 'close' | 'desconhecido'>('c
 const mensagemStatusProxy = ref<string>('');
 const carregandoQr = ref(false);
 
+// Isolamento Multi-Tenant de WhatsApp por Drogaria / Empresa
+const instanciaExclusivaWhatsApp = ref<string>('');
+const numeroConectadoWhatsApp = ref<string | null>(null);
+const perfilConectadoWhatsApp = ref<string | null>(null);
+const servidorDedicadoAtivo = ref<boolean>(false);
+const desconectandoWhatsApp = ref<boolean>(false);
+const showConfigAvancadaWhatsapp = ref<boolean>(false);
+
+const formWhatsappApiUrl = ref(authStore.currentConfig.whatsapp_api_url || '');
+const formWhatsappApiKey = ref(authStore.currentConfig.whatsapp_api_key || '');
+const formWhatsappInstanceName = ref(authStore.currentConfig.whatsapp_instance_name || '');
+
 const variaveisDisponiveis = [
   { tag: '{cliente}', desc: 'Primeiro nome' },
   { tag: '{nome_completo}', desc: 'Nome completo' },
@@ -381,7 +398,12 @@ async function carregarQrCode() {
   carregandoQr.value = true;
   mensagemStatusProxy.value = '';
   try {
-    const stateRes = await consultarStatusWhatsAppProxy();
+    const stateRes = await consultarStatusWhatsAppProxy(authStore.activeTenantId);
+    instanciaExclusivaWhatsApp.value = stateRes.instancia || '';
+    numeroConectadoWhatsApp.value = stateRes.numeroConectado || null;
+    perfilConectadoWhatsApp.value = stateRes.perfilConectado || null;
+    servidorDedicadoAtivo.value = Boolean(stateRes.servidorDedicado);
+
     if (stateRes.conectado || stateRes.estado === 'open') {
       statusInstancia.value = 'open';
       qrcodeBase64.value = null;
@@ -393,7 +415,8 @@ async function carregarQrCode() {
       mensagemStatusProxy.value = stateRes.mensagem;
     }
 
-    const qrRes = await obterQrCodeWhatsAppProxy();
+    const qrRes = await obterQrCodeWhatsAppProxy(authStore.activeTenantId);
+    instanciaExclusivaWhatsApp.value = qrRes.instancia || instanciaExclusivaWhatsApp.value;
     if (qrRes.conectado) {
       statusInstancia.value = 'open';
       qrcodeBase64.value = null;
@@ -406,6 +429,34 @@ async function carregarQrCode() {
     mensagemStatusProxy.value = 'Não foi possível consultar o serviço de WhatsApp no momento.';
   } finally {
     carregandoQr.value = false;
+  }
+}
+
+async function desconectarContaWhatsApp() {
+  const nomeLoja = authStore.currentConfig.header_title || authStore.currentTenant.nome_empresa || 'esta farmácia';
+  if (
+    !confirm(
+      `Deseja realmente desconectar a conta de WhatsApp vinculada à "${nomeLoja}"?\n\nEsta operação desconecta apenas a conta desta drogaria, mantendo as demais empresas 100% isoladas.`
+    )
+  ) {
+    return;
+  }
+
+  desconectandoWhatsApp.value = true;
+  try {
+    const res = await desconectarWhatsAppProxy(authStore.activeTenantId);
+    if (res.sucesso) {
+      statusInstancia.value = 'close';
+      numeroConectadoWhatsApp.value = null;
+      perfilConectadoWhatsApp.value = null;
+      qrcodeBase64.value = null;
+      exibirFeedback('sucesso', res.mensagem || 'WhatsApp desconectado com sucesso.');
+      await carregarQrCode();
+    } else {
+      exibirFeedback('erro', res.mensagem || 'Falha ao desconectar conta de WhatsApp.');
+    }
+  } finally {
+    desconectandoWhatsApp.value = false;
   }
 }
 
@@ -465,6 +516,9 @@ watch(
     formDiasRetencao.value = cfg.dias_retencao_arquivamento;
     formOcultarMedicamentosNotificacao.value = Boolean(cfg.ocultar_medicamentos_notificacao);
     formEvolutionAtivo.value = cfg.evolution_api_ativo !== false;
+    formWhatsappInstanceName.value = cfg.whatsapp_instance_name || '';
+    formWhatsappApiUrl.value = cfg.whatsapp_api_url || '';
+    formWhatsappApiKey.value = cfg.whatsapp_api_key || '';
   }
 );
 
@@ -501,12 +555,18 @@ async function salvarWhatsapp() {
     auto_whatsapp_entregue: formAutoWhatsappEntregue.value,
     ocultar_medicamentos_notificacao: formOcultarMedicamentosNotificacao.value,
     evolution_api_ativo: formEvolutionAtivo.value,
+    whatsapp_instance_name: formWhatsappInstanceName.value.trim() || undefined,
+    whatsapp_api_url: formWhatsappApiUrl.value.trim() || undefined,
+    whatsapp_api_key: formWhatsappApiKey.value.trim() || undefined,
   });
   salvando.value = false;
   exibirFeedback(
     res.sucesso ? 'sucesso' : 'erro',
     res.sucesso ? 'Modelos de mensagem e automações da API salvos com sucesso!' : res.mensagem || 'Erro ao salvar.'
   );
+  if (res.sucesso) {
+    carregarQrCode();
+  }
 }
 
 async function testarEvolutionApi() {
@@ -889,57 +949,63 @@ function removerClassificacao(id: string) {
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem;">
             <div>
               <label class="form-label">Cor Primária (Botões & Abas)</label>
-              <div style="display: flex; gap: 0.5rem; align-items: center;">
-                <input
-                  v-model="formCorPrimaria"
-                  @input="aplicarPreviewTempoReal"
-                  type="color"
-                  style="width: 44px; height: 38px; border: 1px solid #cbd5e1; cursor: pointer; border-radius: 8px; padding: 2px; background: #fff;"
-                />
+              <div class="color-picker-box">
+                <div class="color-swatch-trigger" :style="{ backgroundColor: formCorPrimaria }">
+                  <input
+                    v-model="formCorPrimaria"
+                    @input="aplicarPreviewTempoReal"
+                    type="color"
+                    class="color-native-overlay"
+                  />
+                </div>
                 <input
                   v-model="formCorPrimaria"
                   @change="aplicarPreviewTempoReal"
                   type="text"
-                  class="form-input"
-                  style="font-family: monospace; font-size: 0.85rem;"
+                  class="form-input color-hex-field"
+                  placeholder="#2563eb"
                 />
               </div>
             </div>
 
             <div>
               <label class="form-label">Cor Secundária (Menu & PDF)</label>
-              <div style="display: flex; gap: 0.5rem; align-items: center;">
-                <input
-                  v-model="formCorSecundaria"
-                  @input="aplicarPreviewTempoReal"
-                  type="color"
-                  style="width: 44px; height: 38px; border: 1px solid #cbd5e1; cursor: pointer; border-radius: 8px; padding: 2px; background: #fff;"
-                />
+              <div class="color-picker-box">
+                <div class="color-swatch-trigger" :style="{ backgroundColor: formCorSecundaria }">
+                  <input
+                    v-model="formCorSecundaria"
+                    @input="aplicarPreviewTempoReal"
+                    type="color"
+                    class="color-native-overlay"
+                  />
+                </div>
                 <input
                   v-model="formCorSecundaria"
                   @change="aplicarPreviewTempoReal"
                   type="text"
-                  class="form-input"
-                  style="font-family: monospace; font-size: 0.85rem;"
+                  class="form-input color-hex-field"
+                  placeholder="#1e3a8a"
                 />
               </div>
             </div>
 
             <div>
               <label class="form-label">Cor de Destaque (Detalhes)</label>
-              <div style="display: flex; gap: 0.5rem; align-items: center;">
-                <input
-                  v-model="formCorDestaque"
-                  @input="aplicarPreviewTempoReal"
-                  type="color"
-                  style="width: 44px; height: 38px; border: 1px solid #cbd5e1; cursor: pointer; border-radius: 8px; padding: 2px; background: #fff;"
-                />
+              <div class="color-picker-box">
+                <div class="color-swatch-trigger" :style="{ backgroundColor: formCorDestaque }">
+                  <input
+                    v-model="formCorDestaque"
+                    @input="aplicarPreviewTempoReal"
+                    type="color"
+                    class="color-native-overlay"
+                  />
+                </div>
                 <input
                   v-model="formCorDestaque"
                   @change="aplicarPreviewTempoReal"
                   type="text"
-                  class="form-input"
-                  style="font-family: monospace; font-size: 0.85rem;"
+                  class="form-input color-hex-field"
+                  placeholder="#38bdf8"
                 />
               </div>
             </div>
@@ -1346,25 +1412,32 @@ function removerClassificacao(id: string) {
           </div>
         </div>
 
-        <!-- PAINEL DE CONEXÃO EVOLUTION API / QR CODE -->
+        <!-- PAINEL DE CONEXÃO EVOLUTION API / QR CODE COM ISOLAMENTO POR EMPRESA -->
         <div v-if="authStore.isAdmin" class="card">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.75rem;">
             <div style="display: flex; align-items: center; gap: 0.6rem;">
               <Bot :size="22" style="color: var(--color-primary);" />
-              <h4 style="font-size: 1.05rem; font-weight: 700; margin: 0;">Conexão do Servidor WhatsApp (Proxy Seguro)</h4>
+              <div>
+                <h4 style="font-size: 1.05rem; font-weight: 700; margin: 0;">Conexão WhatsApp Exclusiva desta Farmácia</h4>
+                <div style="font-size: 0.76rem; color: var(--text-muted);">
+                  Instância isolada: <code>{{ instanciaExclusivaWhatsApp || ('encomed_' + authStore.currentTenant.slug) }}</code>
+                </div>
+              </div>
             </div>
-            <span
-              class="badge"
-              :class="statusInstancia === 'open' ? 'badge-chegou' : 'badge-aguardando'"
-            >
-              {{ statusInstancia === 'open' ? '🟢 Instância Conectada' : '🟡 Aguardando Pareamento' }}
-            </span>
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+              <span
+                class="badge"
+                :class="statusInstancia === 'open' ? 'badge-chegou' : 'badge-aguardando'"
+              >
+                {{ statusInstancia === 'open' ? '🟢 Conectado a esta Drogaria' : '🟡 Desconectado / Aguardando' }}
+              </span>
+            </div>
           </div>
 
           <div style="display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.85rem 1rem; border-radius: 10px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; font-size: 0.81rem; margin-bottom: 1rem; line-height: 1.45;">
             <Lock :size="17" style="flex-shrink: 0; margin-top: 2px; color: #2563eb;" />
             <div>
-              <strong>Arquitetura Zero-Trust:</strong> A API em <code>/api/whatsapp</code> valida sua sessão JWT, busca o modelo configurado da sua unidade no Supabase e dispara pela Evolution API sem expor chaves no navegador.
+              <strong>Isolamento Multi-Tenant Garantido:</strong> Cada empresa possui uma instância exclusiva. O número cadastrado nesta loja é 100% independente e nunca é compartilhado com as demais farmácias da rede.
             </div>
           </div>
 
@@ -1381,24 +1454,55 @@ function removerClassificacao(id: string) {
                 style="padding: 5px 14px; font-size: 0.78rem;"
               >
                 <Loader2 v-if="carregandoQr" class="animate-spin" :size="14" />
-                <span v-else>🔄 Verificar / Gerar QR Code</span>
+                <span v-else>🔄 Sincronizar Estado</span>
               </button>
             </div>
 
-            <div v-if="statusInstancia === 'open'" style="padding: 0.95rem; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px; color: #065f46; font-size: 0.86rem; text-align: center;">
-              🎉 <strong>WhatsApp da farmácia conectado e operacional!</strong> Todos os modelos acima já estão sincronizados com a API.
+            <!-- Cenário 1: Instância Conectada -->
+            <div v-if="statusInstancia === 'open'" style="padding: 1.1rem; background: #ecfdf5; border: 1.5px solid #a7f3d0; border-radius: 12px; color: #065f46;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                  <div style="font-size: 0.95rem; font-weight: 800;">
+                    🎉 WhatsApp desta Farmácia Conectado & Operacional!
+                  </div>
+                  <div style="font-size: 0.82rem; margin-top: 4px; color: #047857;">
+                    <span v-if="numeroConectadoWhatsApp">📱 <strong>Número Conectado:</strong> {{ numeroConectadoWhatsApp }}</span>
+                    <span v-if="perfilConectadoWhatsApp"> • 👤 <strong>Perfil:</strong> {{ perfilConectadoWhatsApp }}</span>
+                  </div>
+                  <div style="font-size: 0.76rem; color: #059669; margin-top: 2px;">
+                    Instância ativa: <code>{{ instanciaExclusivaWhatsApp || ('encomed_' + authStore.currentTenant.slug) }}</code>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  @click="desconectarContaWhatsApp"
+                  :disabled="desconectandoWhatsApp"
+                  class="btn-outline-neutral"
+                  style="color: #dc2626 !important; border-color: #fca5a5; background: #ffffff; padding: 6px 14px; font-size: 0.8rem; font-weight: 700;"
+                  title="Desconectar apenas esta conta de WhatsApp para parear outro aparelho"
+                >
+                  <Loader2 v-if="desconectandoWhatsApp" class="animate-spin" :size="14" />
+                  <Unlink v-else :size="14" />
+                  <span>{{ desconectandoWhatsApp ? 'Desconectando...' : 'Desconectar / Trocar Aparelho' }}</span>
+                </button>
+              </div>
             </div>
 
-            <div v-else style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem; padding: 1rem; background: #ffffff; border-radius: 10px; border: 1px solid #e2e8f0;">
-              <div v-if="qrcodeBase64" style="background: white; padding: 12px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
-                <img :src="qrcodeBase64" alt="QR Code WhatsApp" style="width: 220px; height: 220px; display: block;" />
+            <!-- Cenário 2: Instância Desconectada / Aguardando QR Code -->
+            <div v-else style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem; padding: 1.25rem; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0;">
+              <div v-if="qrcodeBase64" style="background: white; padding: 12px; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.08); text-align: center;">
+                <img :src="qrcodeBase64" alt="QR Code WhatsApp" style="width: 230px; height: 230px; display: block; margin: 0 auto;" />
+                <div style="font-size: 0.74rem; font-weight: 700; color: #2563eb; margin-top: 8px;">
+                  Instância: {{ instanciaExclusivaWhatsApp || ('encomed_' + authStore.currentTenant.slug) }}
+                </div>
               </div>
-              <div v-else style="padding: 1rem; color: var(--text-muted); font-size: 0.84rem; text-align: center;">
-                <Loader2 v-if="carregandoQr" class="animate-spin" :size="24" style="margin: 0 auto 0.5rem;" />
-                <div>{{ mensagemStatusProxy || 'Clique em "Verificar / Gerar QR Code" para parear o WhatsApp da loja.' }}</div>
+              <div v-else style="padding: 1.25rem; color: var(--text-muted); font-size: 0.84rem; text-align: center;">
+                <Loader2 v-if="carregandoQr" class="animate-spin" :size="26" style="margin: 0 auto 0.5rem; color: var(--color-primary);" />
+                <div>{{ mensagemStatusProxy || 'Clique em "Gerar QR Code Exclusivo" para parear o WhatsApp desta farmácia.' }}</div>
               </div>
-              <p style="font-size: 0.78rem; color: #64748b; text-align: center; margin: 0; max-width: 420px;">
-                No celular da farmácia: abra o <strong>WhatsApp</strong> &gt; <strong>Aparelhos conectados</strong> &gt; <strong>Conectar um aparelho</strong>.
+              <p style="font-size: 0.78rem; color: #64748b; text-align: center; margin: 0; max-width: 440px;">
+                No celular da loja: abra o <strong>WhatsApp</strong> &gt; <strong>Aparelhos conectados</strong> &gt; <strong>Conectar um aparelho</strong> e aponte para o código.
               </p>
             </div>
 
@@ -1453,6 +1557,63 @@ function removerClassificacao(id: string) {
                 <div>{{ testeResultado.sucesso ? '✅' : '❌' }} <strong>{{ testeResultado.mensagem }}</strong></div>
                 <div v-if="testeResultado.textoEnviado" style="margin-top: 6px; font-size: 0.77rem; opacity: 0.9; white-space: pre-line; background: rgba(255,255,255,0.65); padding: 6px 8px; border-radius: 6px;">
                   {{ testeResultado.textoEnviado }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Seção Expansível: Configurações Avançadas de Servidor Próprio (Opcional) -->
+            <div style="margin-top: 1.15rem; padding-top: 1rem; border-top: 1px dashed #cbd5e1;">
+              <button
+                type="button"
+                @click="showConfigAvancadaWhatsapp = !showConfigAvancadaWhatsapp"
+                style="display: flex; align-items: center; justify-content: space-between; width: 100%; background: none; border: none; padding: 0; cursor: pointer; text-align: left;"
+              >
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 0.82rem; font-weight: 700; color: #475569;">
+                  <Server :size="15" />
+                  <span>Servidor Próprio de Evolution API (Avançado / Opcional)</span>
+                </div>
+                <ChevronUp v-if="showConfigAvancadaWhatsapp" :size="16" style="color: #64748b;" />
+                <ChevronDown v-else :size="16" style="color: #64748b;" />
+              </button>
+
+              <div v-if="showConfigAvancadaWhatsapp" style="margin-top: 0.85rem; display: flex; flex-direction: column; gap: 0.75rem; background: #ffffff; padding: 1rem; border-radius: 10px; border: 1.5px solid #cbd5e1;">
+                <p style="font-size: 0.76rem; color: #64748b; margin: 0; line-height: 1.4;">
+                  Por padrão, sua farmácia já utiliza a infraestrutura isolada do SaaS (instância: <code>{{ instanciaExclusivaWhatsApp || ('encomed_' + authStore.currentTenant.slug) }}</code>). Se sua empresa possui seu próprio servidor Evolution API hospedado na nuvem, preencha os dados abaixo:
+                </p>
+
+                <div class="form-group" style="margin: 0;">
+                  <label class="form-label" style="font-size: 0.78rem;">URL do Servidor Evolution API Dedicado</label>
+                  <input
+                    v-model="formWhatsappApiUrl"
+                    type="text"
+                    placeholder="Ex: https://whatsapp.suafarmacia.com.br"
+                    class="form-input"
+                    style="font-size: 0.8rem;"
+                  />
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                  <div class="form-group" style="margin: 0;">
+                    <label class="form-label" style="font-size: 0.78rem;">Nome da Instância Exclusiva</label>
+                    <input
+                      v-model="formWhatsappInstanceName"
+                      type="text"
+                      :placeholder="'encomed_' + authStore.currentTenant.slug"
+                      class="form-input"
+                      style="font-family: monospace; font-size: 0.8rem;"
+                    />
+                  </div>
+
+                  <div class="form-group" style="margin: 0;">
+                    <label class="form-label" style="font-size: 0.78rem;">Chave de API (Global / Instance API Key)</label>
+                    <input
+                      v-model="formWhatsappApiKey"
+                      type="password"
+                      placeholder="••••••••••••••••••••"
+                      class="form-input"
+                      style="font-size: 0.8rem;"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -1959,6 +2120,56 @@ function removerClassificacao(id: string) {
 .var-tag-chip:hover {
   border-color: var(--color-primary, #2563eb);
   background: #eff6ff;
+}
+
+.color-picker-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 4px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.color-picker-box:focus-within {
+  border-color: var(--color-primary, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.color-swatch-trigger {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.color-native-overlay {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  width: 54px;
+  height: 54px;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.color-hex-field {
+  border: none !important;
+  background: transparent !important;
+  padding: 0 6px !important;
+  height: 34px !important;
+  font-family: monospace;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #0f172a;
+  box-shadow: none !important;
 }
 
 @media (max-width: 680px) {

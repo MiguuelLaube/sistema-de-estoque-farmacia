@@ -24,7 +24,9 @@ import {
   Pencil,
   Send,
   Loader2,
+  Copy,
 } from 'lucide-vue-next';
+import { gerarHtmlEmailCriarSenha } from '../utils/emailTemplates';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -237,6 +239,33 @@ async function salvarEdicaoTenant() {
   }
 }
 
+// Modal de Modelo de E-mail & Configuração de API
+const showEmailTemplateModal = ref(false);
+const htmlCopiado = ref(false);
+
+const htmlEmailExemplo = computed(() => {
+  return gerarHtmlEmailCriarSenha({
+    nomeAdmin: 'Carlos Eduardo (Gestor)',
+    emailAdmin: 'gestor@drogariaexemplo.com.br',
+    nomeEmpresa: 'Drogaria Exemplo Central',
+    slugEmpresa: 'drogariaexemplo',
+    planoEmpresa: 'Profissional',
+    linkCriarSenha: 'https://plataforma.encomed.com.br/login?modo=criar-senha&token=TOKEN_EXEMPLO',
+  });
+});
+
+async function copiarHtmlEmail() {
+  try {
+    await navigator.clipboard.writeText(htmlEmailExemplo.value);
+    htmlCopiado.value = true;
+    setTimeout(() => {
+      htmlCopiado.value = false;
+    }, 3500);
+  } catch {
+    notificar('erro', 'Não foi possível copiar o HTML para a área de transferência.');
+  }
+}
+
 async function enviarLinkSenha(tenant: Tenant) {
   if (!tenant.email_admin) {
     notificar('erro', `A empresa "${tenant.nome_empresa}" não possui e-mail cadastrado. Clique em Editar para cadastrar.`);
@@ -244,7 +273,11 @@ async function enviarLinkSenha(tenant: Tenant) {
   }
 
   enviandoLinkTenantId.value = tenant.id;
-  const res = await authStore.enviarLinkSenhaTenant(tenant.email_admin, tenant.nome_empresa);
+  const res = await authStore.enviarLinkSenhaTenant(tenant.email_admin, tenant.nome_empresa, {
+    nomeAdmin: 'Administrador',
+    slug: tenant.slug,
+    plano: tenant.plano,
+  });
   enviandoLinkTenantId.value = null;
 
   notificar(res.sucesso ? 'sucesso' : 'erro', res.mensagem);
@@ -297,16 +330,29 @@ async function confirmarBreakGlass() {
         </div>
       </div>
 
-      <button
-        v-if="activePlatformTab === 'tenants'"
-        @click="showNovoTenantModal = true"
-        class="btn-primary-pill"
-        id="btn-novo-tenant"
-        style="padding: 0.55rem 1.4rem; font-size: 0.88rem;"
-      >
-        <Plus :size="18" />
-        <span>Provisionar Nova Empresa</span>
-      </button>
+      <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+        <button
+          @click="showEmailTemplateModal = true"
+          class="btn-outline-neutral"
+          id="btn-modelo-email-api"
+          style="padding: 0.52rem 1.15rem; font-size: 0.85rem;"
+          title="Ver o modelo de e-mail corporativo de boas-vindas e como configurar uma API de e-mail 100% gratuita"
+        >
+          <Mail :size="16" />
+          <span>Modelo de E-mail & API</span>
+        </button>
+
+        <button
+          v-if="activePlatformTab === 'tenants'"
+          @click="showNovoTenantModal = true"
+          class="btn-primary-pill"
+          id="btn-novo-tenant"
+          style="padding: 0.55rem 1.4rem; font-size: 0.88rem;"
+        >
+          <Plus :size="18" />
+          <span>Provisionar Nova Empresa</span>
+        </button>
+      </div>
     </div>
 
     <!-- Feedback Toast -->
@@ -1117,6 +1163,86 @@ async function confirmarBreakGlass() {
           </button>
           <button @click="confirmarBreakGlass" class="btn-primary-pill" style="background-color: #dc2626 !important; border-color: #dc2626 !important; padding: 0.5rem 1.4rem;" id="btn-confirmar-break-glass">
             Confirmar Acesso Auditado
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- MODAL: MODELO DE E-MAIL "CRIAR SENHA" & GUIA API GRATUITA     -->
+    <!-- ============================================================== -->
+    <div v-if="showEmailTemplateModal" class="modal-backdrop">
+      <div class="base44-modal-dialog" style="max-width: 680px; max-height: 90vh; overflow-y: auto; border: 1.5px solid var(--border-color); border-radius: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; position: sticky; top: 0; background: #ffffff; z-index: 2; padding-bottom: 0.5rem; border-bottom: 1px solid #f1f5f9;">
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <div style="width: 36px; height: 36px; border-radius: 10px; background: #eff6ff; display: flex; align-items: center; justify-content: center; color: #2563eb; border: 1px solid #bfdbfe;">
+              <Mail :size="18" />
+            </div>
+            <div>
+              <h3 style="font-size: 1.15rem; font-weight: 800; color: #0f172a; margin: 0;">
+                Modelo de E-mail de Boas-Vindas & API
+              </h3>
+              <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
+                Template responsivo de criação de senha + guia de ativação de API gratuita
+              </p>
+            </div>
+          </div>
+          <button @click="showEmailTemplateModal = false" style="background: none; border: none; cursor: pointer; color: #94a3b8;">
+            <X :size="20" />
+          </button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 1.1rem;">
+          <!-- Card de Como Funciona o Disparo -->
+          <div style="padding: 0.85rem 1rem; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; font-size: 0.82rem; line-height: 1.5; color: #334155;">
+            💡 <strong>Envio Automático:</strong> Toda vez que você provisiona uma nova empresa ou clica em <em>"Enviar Link de Senha"</em>, o sistema gera um token seguro e despacha este e-mail corporativo para o endereço do gestor.
+          </div>
+
+          <!-- Preview em Miniatura do E-mail -->
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <span style="font-weight: 700; font-size: 0.85rem; color: #0f172a;">
+                Pré-visualização do E-mail Renderizado:
+              </span>
+              <button
+                type="button"
+                @click="copiarHtmlEmail"
+                class="btn-outline-neutral"
+                style="padding: 4px 12px; font-size: 0.76rem;"
+                title="Copiar código HTML completo para colar em Authentication > Email Templates do Supabase"
+              >
+                <CheckCircle v-if="htmlCopiado" :size="13" style="color: #16a34a;" />
+                <Copy v-else :size="13" />
+                <span>{{ htmlCopiado ? 'HTML Copiado!' : 'Copiar Código HTML' }}</span>
+              </button>
+            </div>
+
+            <div
+              style="border: 1.5px solid #cbd5e1; border-radius: 14px; overflow: hidden; background: #f1f5f9; padding: 12px; max-height: 380px; overflow-y: auto;"
+            >
+              <div v-html="htmlEmailExemplo"></div>
+            </div>
+          </div>
+
+          <!-- Resumo de Configuração de API de E-mail Gratuita -->
+          <div style="padding: 1rem; border-radius: 14px; background: #f0fdf4; border: 1.5px solid #a7f3d0; font-size: 0.82rem; color: #166534; line-height: 1.5;">
+            <div style="font-weight: 800; font-size: 0.88rem; margin-bottom: 0.35rem; color: #065f46;">
+              🚀 Como Ativar uma API de E-mail 100% Gratuita:
+            </div>
+            <p style="margin: 0 0 0.5rem 0;">
+              O sistema já está programado para integrar nativamente com <strong>Brevo (Sendinblue)</strong> ou <strong>Resend</strong> sem custos:
+            </p>
+            <ol style="margin: 0; padding-left: 1.25rem;">
+              <li><strong>Brevo (300 e-mails/dia grátis):</strong> Crie conta em <em>brevo.com</em> &gt; <em>SMTP & API</em> &gt; gere uma chave e adicione <code>BREVO_API_KEY</code> nas variáveis do servidor.</li>
+              <li><strong>Resend (3.000 e-mails/mês grátis):</strong> Crie conta em <em>resend.com</em> &gt; <em>API Keys</em> &gt; adicione <code>RESEND_API_KEY</code>.</li>
+              <li><strong>Supabase Auth SMTP:</strong> No Supabase &gt; <em>Project Settings</em> &gt; <em>Authentication</em> &gt; <em>SMTP</em>, insira o servidor e usuário do Brevo para que todos os disparos ocorram com entregabilidade máxima.</li>
+            </ol>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 1.25rem; border-top: 1px solid #f1f5f9; padding-top: 0.9rem;">
+          <button @click="showEmailTemplateModal = false" class="btn-primary-pill" style="padding: 0.48rem 1.4rem;">
+            Fechar
           </button>
         </div>
       </div>

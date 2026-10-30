@@ -20,6 +20,10 @@ export interface DisparoWhatsAppResultado {
   mensagem: string;
   conectado?: boolean;
   estado?: string;
+  instancia?: string;
+  numeroConectado?: string;
+  perfilConectado?: string;
+  servidorDedicado?: boolean;
   base64?: string;
   textoEnviado?: string;
   modeloUtilizado?: TipoModeloWhatsApp;
@@ -167,7 +171,7 @@ async function obterHeadersAutenticados(): Promise<Record<string, string> | null
 /**
  * Consulta o status da instância WhatsApp via Proxy Backend (sem expor URL/API Key no navegador)
  */
-export async function consultarStatusWhatsAppProxy(): Promise<DisparoWhatsAppResultado> {
+export async function consultarStatusWhatsAppProxy(tenantId?: string): Promise<DisparoWhatsAppResultado> {
   const headers = await obterHeadersAutenticados();
   if (!headers) {
     return { sucesso: false, conectado: false, mensagem: 'Sessão não autenticada.' };
@@ -177,13 +181,17 @@ export async function consultarStatusWhatsAppProxy(): Promise<DisparoWhatsAppRes
     const response = await fetch('/api/whatsapp', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ action: 'status' }),
+      body: JSON.stringify({ action: 'status', tenantId }),
     });
     const data = await response.json().catch(() => null);
     return {
       sucesso: Boolean(data?.sucesso),
       conectado: Boolean(data?.conectado),
       estado: data?.estado || 'desconhecido',
+      instancia: data?.instancia,
+      numeroConectado: data?.numeroConectado,
+      perfilConectado: data?.perfilConectado,
+      servidorDedicado: Boolean(data?.servidorDedicado),
       mensagem: data?.mensagem || (data?.conectado ? 'Conectado' : 'Desconectado'),
     };
   } catch {
@@ -198,7 +206,7 @@ export async function consultarStatusWhatsAppProxy(): Promise<DisparoWhatsAppRes
 /**
  * Solicita QR Code de pareamento via Proxy Backend (restrito a Administradores)
  */
-export async function obterQrCodeWhatsAppProxy(): Promise<DisparoWhatsAppResultado> {
+export async function obterQrCodeWhatsAppProxy(tenantId?: string): Promise<DisparoWhatsAppResultado> {
   const headers = await obterHeadersAutenticados();
   if (!headers) {
     return { sucesso: false, mensagem: 'Sessão não autenticada.' };
@@ -208,12 +216,13 @@ export async function obterQrCodeWhatsAppProxy(): Promise<DisparoWhatsAppResulta
     const response = await fetch('/api/whatsapp', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ action: 'qrcode' }),
+      body: JSON.stringify({ action: 'qrcode', tenantId }),
     });
     const data = await response.json().catch(() => null);
     return {
       sucesso: Boolean(data?.sucesso),
       conectado: Boolean(data?.conectado),
+      instancia: data?.instancia,
       base64: data?.base64 || undefined,
       mensagem: data?.mensagem || 'Solicitação processada.',
     };
@@ -226,12 +235,44 @@ export async function obterQrCodeWhatsAppProxy(): Promise<DisparoWhatsAppResulta
 }
 
 /**
+ * Desconecta/despareia exclusivamente a conta WhatsApp desta empresa (restrito a Administradores)
+ */
+export async function desconectarWhatsAppProxy(tenantId?: string): Promise<DisparoWhatsAppResultado> {
+  const headers = await obterHeadersAutenticados();
+  if (!headers) {
+    return { sucesso: false, mensagem: 'Sessão não autenticada.' };
+  }
+
+  try {
+    const response = await fetch('/api/whatsapp', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ action: 'disconnect', tenantId }),
+    });
+    const data = await response.json().catch(() => null);
+    return {
+      sucesso: Boolean(data?.sucesso),
+      conectado: Boolean(data?.conectado),
+      estado: data?.estado || 'close',
+      instancia: data?.instancia,
+      mensagem: data?.mensagem || 'Conta desconectada com sucesso.',
+    };
+  } catch {
+    return {
+      sucesso: false,
+      mensagem: 'Não foi possível desconectar o WhatsApp no momento.',
+    };
+  }
+}
+
+/**
  * Dispara mensagem pelo Proxy Backend (/api/whatsapp) adequando-se diretamente ao modelo configurado do Tenant!
  */
 export async function enviarModeloWhatsAppProxy(opcoes: {
   ativo: boolean;
   numeroDestino: string;
   modelo: TipoModeloWhatsApp;
+  tenantId?: string;
   variaveis?: VariaveisModeloWhatsApp;
   templateCustomizado?: string;
   texto?: string;
@@ -257,6 +298,7 @@ export async function enviarModeloWhatsAppProxy(opcoes: {
       headers,
       body: JSON.stringify({
         action: 'send',
+        tenantId: opcoes.tenantId,
         numeroDestino: numeroNormalizado,
         modelo: opcoes.modelo,
         variaveis: opcoes.variaveis,

@@ -669,6 +669,21 @@ export const useAuthStore = defineStore('auth', () => {
         .eq('tenant_id', tenantId);
 
       if (error) {
+        // Fallback defensivo: se colunas da migração 11 ainda não foram criadas no banco, salva as demais
+        if (error.message?.includes('does not exist')) {
+          const { whatsapp_instance_name, whatsapp_api_url, whatsapp_api_key, ...safePayload } = payloadLimpo as any;
+          const { error: retryErr } = await supabase
+            .from('config_tenant')
+            .update({
+              ...safePayload,
+              atualizado_em: new Date().toISOString(),
+            })
+            .eq('tenant_id', tenantId);
+          if (!retryErr) {
+            await registrarAuditoria('ATUALIZACAO_CONFIG_TENANT', `Tenant ${tenantId}`, Object.keys(safePayload).join(', '));
+            return { sucesso: true };
+          }
+        }
         return { sucesso: false, mensagem: 'Não foi possível salvar as configurações no servidor.' };
       }
       await registrarAuditoria('ATUALIZACAO_CONFIG_TENANT', `Tenant ${tenantId}`, Object.keys(payloadLimpo).join(', '));
@@ -891,15 +906,16 @@ export const useAuthStore = defineStore('auth', () => {
       });
     }
 
-    // Se informou e-mail de admin, envia o link seguro de definição de senha
-    let enviouLink = false;
+    // Se informou e-mail de admin, envia o link seguro de definição de senha com o template corporativo
+    let msgResultado = 'Nova empresa provisionada com sucesso!';
     if (emailLimpo) {
-      try {
-        const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined;
-        await supabase.auth.resetPasswordForEmail(emailLimpo, { redirectTo });
-        enviouLink = true;
-      } catch {
-        // Ignora se o SMTP estiver pendente
+      const conviteRes = await enviarLinkSenhaTenant(emailLimpo, dados.nomeEmpresa.trim(), {
+        nomeAdmin: dados.nomeAdmin?.trim(),
+        slug: slugLimpo,
+        plano: dados.plano,
+      });
+      if (conviteRes.sucesso) {
+        msgResultado = `Empresa provisionada com sucesso! ${conviteRes.mensagem}`;
       }
     }
 
@@ -910,19 +926,48 @@ export const useAuthStore = defineStore('auth', () => {
     );
     await carregarDadosContexto();
 
-    const msg = enviouLink
-      ? `Empresa provisionada com sucesso! Um link para definição de senha foi enviado para ${emailLimpo}.`
-      : 'Nova empresa provisionada com sucesso!';
-    return { sucesso: true, mensagem: msg };
+    return { sucesso: true, mensagem: msgResultado };
   }
 
-  async function enviarLinkSenhaTenant(email: string, nomeEmpresa: string): Promise<{ sucesso: boolean; mensagem: string }> {
+  async function enviarLinkSenhaTenant(
+    email: string,
+    nomeEmpresa: string,
+    extra?: { nomeAdmin?: string; slug?: string; plano?: string }
+  ): Promise<{ sucesso: boolean; mensagem: string; linkCriarSenha?: string }> {
     const limpo = (email || '').trim().toLowerCase();
     if (!limpo || !limpo.includes('@')) {
       return { sucesso: false, mensagem: 'Esta empresa não possui um e-mail de administrador válido cadastrado.' };
     }
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      if (token) {
+        const resp = await fetch('/api/convidar-empresa', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            action: 'send_invite',
+            emailAdmin: limpo,
+            nomeAdmin: extra?.nomeAdmin || 'Administrador',
+            nomeEmpresa,
+            slugEmpresa: extra?.slug || 'loja',
+            planoEmpresa: extra?.plano || 'Profissional',
+          }),
+        });
+
+        const data = await resp.json().catch(() => null);
+        if (resp.ok && data?.sucesso) {
+          await registrarAuditoria('ENVIO_LINK_SENHA_TENANT', nomeEmpresa, `Destinatário: ${limpo} (${data.provedor || 'API'})`);
+          return { sucesso: true, mensagem: data.mensagem, linkCriarSenha: data.linkCriarSenha };
+        }
+      }
+
+      // Fallback via cliente Supabase se o endpoint não estiver respondendo
       const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined;
       const { error } = await supabase.auth.resetPasswordForEmail(limpo, { redirectTo });
       if (error) {

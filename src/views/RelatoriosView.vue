@@ -27,6 +27,21 @@ const clientesStore = useClientesStore();
 const activeRelatorioTab = ref<'financeiro' | 'produtos' | 'auditoria'>('financeiro');
 const feedbackExportacao = ref<string | null>(null);
 const enviandoCobrancaClienteId = ref<string | null>(null);
+const atualizandoRelatorio = ref(false);
+
+async function atualizarDadosRelatorio() {
+  atualizandoRelatorio.value = true;
+  try {
+    await Promise.all([
+      encomendasStore.carregarEncomendas(),
+      clientesStore.carregarClientes(),
+      authStore.isAdmin ? authStore.carregarLogsAuditoriaTenant() : Promise.resolve(),
+    ]);
+    mostrarFeedback('Dados do relatório sincronizados com sucesso!');
+  } finally {
+    atualizandoRelatorio.value = false;
+  }
+}
 
 function mostrarFeedback(msg: string) {
   feedbackExportacao.value = msg;
@@ -325,7 +340,7 @@ async function dispararCobrancaWhatsapp(item: {
       <div>
         <h2 style="font-size: 1.55rem; font-weight: 800; font-family: var(--font-heading);">Relatórios Gerenciais</h2>
         <p style="color: var(--text-muted); font-size: 0.9rem;">
-          Exportação executiva em PDF e Excel (.xlsx) de carteira a receber, curva de demanda e auditoria LGPD
+          Exportação executiva em PDF e Excel (.xlsx) de carteira a receber e curva de demanda de medicamentos
         </p>
       </div>
 
@@ -362,38 +377,69 @@ async function dispararCobrancaWhatsapp(item: {
       <span>{{ feedbackExportacao }}</span>
     </div>
 
-    <!-- Navigation Tabs -->
-    <div class="sub-tabs-container" style="margin-bottom: 1.5rem; flex-wrap: wrap;">
-      <button
-        @click="activeRelatorioTab = 'financeiro'"
-        class="sub-tab-btn"
-        :class="{ active: activeRelatorioTab === 'financeiro' }"
-        style="display: inline-flex; align-items: center; gap: 6px;"
-      >
-        <DollarSign :size="15" />
-        <span>Valores a Receber por Cliente</span>
-      </button>
+    <!-- Navigation Tabs + Ações Discretas à Direita -->
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+      <div class="sub-tabs-container" style="margin-bottom: 0; flex-wrap: wrap;">
+        <button
+          @click="activeRelatorioTab = 'financeiro'"
+          class="sub-tab-btn"
+          :class="{ active: activeRelatorioTab === 'financeiro' }"
+          style="display: inline-flex; align-items: center; gap: 6px;"
+        >
+          <DollarSign :size="15" />
+          <span>Valores a Receber por Cliente</span>
+        </button>
 
-      <button
-        @click="activeRelatorioTab = 'produtos'"
-        class="sub-tab-btn"
-        :class="{ active: activeRelatorioTab === 'produtos' }"
-        style="display: inline-flex; align-items: center; gap: 6px;"
-      >
-        <TrendingUp :size="15" />
-        <span>Curva de Medicamentos Mais Pedidos</span>
-      </button>
+        <button
+          @click="activeRelatorioTab = 'produtos'"
+          class="sub-tab-btn"
+          :class="{ active: activeRelatorioTab === 'produtos' }"
+          style="display: inline-flex; align-items: center; gap: 6px;"
+        >
+          <TrendingUp :size="15" />
+          <span>Curva de Medicamentos Mais Pedidos</span>
+        </button>
+      </div>
 
-      <button
-        v-if="authStore.isAdmin"
-        @click="activeRelatorioTab = 'auditoria'"
-        class="sub-tab-btn"
-        :class="{ active: activeRelatorioTab === 'auditoria' }"
-        style="display: inline-flex; align-items: center; gap: 6px;"
-      >
-        <ShieldCheck :size="15" />
-        <span>Trilha de Auditoria & LGPD</span>
-      </button>
+      <!-- Canto Direito: Atualizar + Ícone Discreto LGPD -->
+      <div style="display: flex; align-items: center; gap: 0.45rem; margin-left: auto;">
+        <button
+          type="button"
+          @click="atualizarDadosRelatorio"
+          :disabled="atualizandoRelatorio"
+          class="btn-outline-neutral"
+          id="btn-atualizar-relatorios"
+          style="padding: 6px 14px; font-size: 0.8rem;"
+          title="Sincronizar dados atualizados"
+        >
+          <RefreshCw :size="14" :class="{ 'animate-spin': atualizandoRelatorio }" />
+          <span>{{ atualizandoRelatorio ? 'Atualizando...' : 'Atualizar' }}</span>
+        </button>
+
+        <button
+          v-if="authStore.isAdmin"
+          type="button"
+          @click="activeRelatorioTab = activeRelatorioTab === 'auditoria' ? 'financeiro' : 'auditoria'"
+          id="btn-relatorio-lgpd-discreto"
+          :title="activeRelatorioTab === 'auditoria' ? 'Fechar trilha LGPD e voltar ao financeiro' : 'Registros de Conformidade & LGPD'"
+          :style="{
+            width: '34px',
+            height: '34px',
+            borderRadius: '9999px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            transition: 'all 0.18s ease',
+            background: activeRelatorioTab === 'auditoria' ? '#eff6ff' : 'transparent',
+            border: `1.5px solid ${activeRelatorioTab === 'auditoria' ? '#93c5fd' : '#e2e8f0'}`,
+            color: activeRelatorioTab === 'auditoria' ? 'var(--color-primary)' : '#94a3b8',
+            opacity: activeRelatorioTab === 'auditoria' ? 1 : 0.72,
+          }"
+        >
+          <ShieldCheck :size="15" />
+        </button>
+      </div>
     </div>
 
     <!-- TAB 1: VALORES A RECEBER -->

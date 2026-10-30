@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, onMounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import {
   Lock,
@@ -19,7 +19,19 @@ import {
 } from 'lucide-vue-next';
 
 const router = useRouter();
+const route = useRoute();
 const authStore = useAuthStore();
+
+const emailConviteModo = ref('');
+
+onMounted(() => {
+  if (route.query.modo === 'criar-senha') {
+    authStore.passwordRecoveryMode = true;
+    if (typeof route.query.email === 'string') {
+      emailConviteModo.value = route.query.email.trim();
+    }
+  }
+});
 
 // Credenciais limpas por padrão (sem pré-preenchimento ou exposição de e-mails administrativos)
 const email = ref('');
@@ -187,8 +199,12 @@ function fecharModalContato() {
         <span>{{ successMessage }}</span>
       </div>
 
-      <!-- FLUXO 1: REDEFINIÇÃO DE SENHA VIA LINK DE RECUPERAÇÃO -->
+      <!-- FLUXO 1: REDEFINIÇÃO DE SENHA VIA LINK DE RECUPERAÇÃO / CONVITE -->
       <form v-if="authStore.passwordRecoveryMode" @submit.prevent="handleRedefinirSenha" class="login-form-body">
+        <div v-if="emailConviteModo" style="padding: 0.75rem 1rem; border-radius: 12px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; font-size: 0.82rem; line-height: 1.45;">
+          👋 <strong>Primeiro Acesso Farmácia:</strong> Crie sua senha de administrador para a conta <strong>{{ emailConviteModo }}</strong>.
+        </div>
+
         <div class="form-field-group">
           <label class="form-field-label" for="input-new-password">Nova Senha Forte (mín. 12 caracteres)</label>
           <div class="input-wrapper">

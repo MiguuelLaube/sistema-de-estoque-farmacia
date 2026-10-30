@@ -50,8 +50,11 @@ export interface ConfigTenant {
   bloquear_entrega_com_saldo: boolean;
   dias_retencao_arquivamento: number;
   ocultar_medicamentos_notificacao?: boolean;
-  // Integração WhatsApp via Proxy Server-Side (Segredos isolados em variáveis de ambiente do servidor)
+  // Integração WhatsApp Isolada por Empresa (Multi-Tenant) via Proxy Server-Side
   evolution_api_ativo?: boolean;
+  whatsapp_instance_name?: string;
+  whatsapp_api_url?: string;
+  whatsapp_api_key?: string;
   // Campos de PrintTemplate (Documento Seção 2)
   header_title?: string;
   header_subtitle?: string;

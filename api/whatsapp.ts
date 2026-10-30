@@ -17,7 +17,8 @@ export interface VariaveisModeloWhatsApp {
 }
 
 export interface ProxyRequestBody {
-  action?: 'status' | 'qrcode' | 'send' | 'preview';
+  action?: 'status' | 'qrcode' | 'send' | 'preview' | 'disconnect';
+  tenantId?: string;
   numeroDestino?: string;
   texto?: string;
   modelo?: TipoModeloWhatsApp;
@@ -256,18 +257,50 @@ export async function processWhatsAppProxyRequest(
     };
   }
 
-  // Carrega os modelos de mensagem e política LGPD diretamente do banco para adequar a API aos templates do Tenant
-  let configBanco: Record<string, any> | null = null;
-  if (usuarioRow.tenant_id) {
-    const { data: cfgRow } = await supa
-      .from('config_tenant')
-      .select(
-        'nome_sistema, header_title, mensagem_whatsapp, mensagem_whatsapp_pedido, mensagem_whatsapp_cobranca, mensagem_whatsapp_entregue, ocultar_medicamentos_notificacao, evolution_api_ativo'
-      )
-      .eq('tenant_id', usuarioRow.tenant_id)
-      .maybeSingle();
-    configBanco = cfgRow || null;
+  // ============================================================================
+  // ISOLAMENTO MULTI-TENANT ESTRITO: Cada empresa possui sua própria instância/API
+  // ============================================================================
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  let targetTenantId: string | null = null;
+
+  if (usuarioRow.perfil === 'super_admin') {
+    if (body?.tenantId && uuidRegex.test(body.tenantId.trim())) {
+      targetTenantId = body.tenantId.trim();
+    }
+  } else {
+    // Zero-Trust: Usuários de loja sempre operam estritamente no próprio tenant_id do banco
+    targetTenantId = usuarioRow.tenant_id || null;
   }
+
+  if (!targetTenantId) {
+    return {
+      status: 400,
+      payload: {
+        sucesso: false,
+        conectado: false,
+        mensagem: 'Contexto de empresa (tenant) não identificado para operação do WhatsApp.',
+      },
+    };
+  }
+
+  // Carrega dados da Empresa (slug exclusivo) e Configurações do Tenant sob RLS
+  const [{ data: tenantRow }, { data: cfgRow }] = await Promise.all([
+    supa.from('tenant').select('id, slug, nome_empresa').eq('id', targetTenantId).maybeSingle(),
+    supa.from('config_tenant').select('*').eq('tenant_id', targetTenantId).maybeSingle(),
+  ]);
+
+  if (!tenantRow) {
+    return {
+      status: 403,
+      payload: {
+        sucesso: false,
+        conectado: false,
+        mensagem: 'Acesso não autorizado aos recursos de WhatsApp desta empresa.',
+      },
+    };
+  }
+
+  const configBanco: Record<string, any> | null = cfgRow || null;
 
   // Ação de pré-visualização server-side do modelo renderizado (não exige Evolution API online)
   if (action === 'preview') {
@@ -290,19 +323,47 @@ export async function processWhatsAppProxyRequest(
     };
   }
 
-  const evoUrl = (env.EVOLUTION_API_URL || '').trim().replace(/\/+$/, '');
-  const evoKey = (env.EVOLUTION_API_KEY || '').trim();
-  const evoInstance = (env.EVOLUTION_INSTANCE_NAME || '').trim();
+  // Determina a instância e credenciais EXCLUSIVAS desta empresa (nunca compartilha conta entre empresas!)
+  const slugLimpo = (tenantRow.slug || targetTenantId.slice(0, 8))
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '');
+  const instanciaCustom = String(configBanco?.whatsapp_instance_name || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '');
+  const evoInstance = instanciaCustom || `encomed_${slugLimpo}`;
+
+  const customApiUrl = String(configBanco?.whatsapp_api_url || '').trim().replace(/\/+$/, '');
+  const customApiKey = String(configBanco?.whatsapp_api_key || '').trim();
+
+  // Proteção anti-SSRF caso o tenant configure URL própria de API
+  if (customApiUrl) {
+    try {
+      const parsed = new URL(customApiUrl);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return { status: 400, payload: { sucesso: false, mensagem: 'URL de API WhatsApp da empresa inválida (use http ou https).' } };
+      }
+      if (parsed.hostname === '169.254.169.254' || parsed.hostname === 'metadata.google.internal') {
+        return { status: 400, payload: { sucesso: false, mensagem: 'Endereço de servidor não permitido.' } };
+      }
+    } catch {
+      return { status: 400, payload: { sucesso: false, mensagem: 'Formato de URL da API WhatsApp inválido.' } };
+    }
+  }
+
+  const usandoServidorProprio = Boolean(customApiUrl && customApiKey);
+  const evoUrl = usandoServidorProprio ? customApiUrl : (env.EVOLUTION_API_URL || '').trim().replace(/\/+$/, '');
+  const evoKey = usandoServidorProprio ? customApiKey : (env.EVOLUTION_API_KEY || '').trim();
   const proxyOrigin = (env.ALLOWED_PROXY_ORIGIN || 'http://localhost:5173').trim();
 
-  if (!evoUrl || !evoKey || !evoInstance) {
+  if (!evoUrl || !evoKey) {
     return {
       status: 503,
       payload: {
         sucesso: false,
         conectado: false,
+        instancia: evoInstance,
         mensagem:
-          'Serviço de WhatsApp não configurado nas variáveis do servidor (EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE_NAME).',
+          'Servidor de WhatsApp ainda não configurado. Informe a URL e API Key da empresa em Configurações > WhatsApp ou nas variáveis globais (EVOLUTION_API_URL / EVOLUTION_API_KEY).',
       },
     };
   }
@@ -312,6 +373,19 @@ export async function processWhatsAppProxyRequest(
     apikey: evoKey,
     Origin: proxyOrigin,
   };
+
+  function formatarNumeroJid(jid?: string | null): string | undefined {
+    if (!jid) return undefined;
+    const digitos = jid.split('@')[0]?.split(':')[0]?.replace(/\D/g, '') || '';
+    if (!digitos) return undefined;
+    if (digitos.startsWith('55') && digitos.length === 13) {
+      return `+55 (${digitos.slice(2, 4)}) ${digitos.slice(4, 9)}-${digitos.slice(9)}`;
+    }
+    if (digitos.startsWith('55') && digitos.length === 12) {
+      return `+55 (${digitos.slice(2, 4)}) ${digitos.slice(4, 8)}-${digitos.slice(8)}`;
+    }
+    return `+${digitos}`;
+  }
 
   try {
     if (action === 'status') {
@@ -324,21 +398,72 @@ export async function processWhatsAppProxyRequest(
         headers: evoHeaders,
       });
 
+      // 404 significa que a instância exclusiva desta empresa ainda não foi criada/pareada
+      if (resp.status === 404) {
+        return {
+          status: 200,
+          payload: {
+            sucesso: true,
+            conectado: false,
+            estado: 'close',
+            instancia: evoInstance,
+            servidorDedicado: usandoServidorProprio,
+            mensagem: `Instância exclusiva (${evoInstance}) pronta para primeiro pareamento.`,
+          },
+        };
+      }
+
       if (!resp.ok) {
         return {
           status: 200,
-          payload: { sucesso: false, conectado: false, estado: 'indisponivel', mensagem: 'Serviço WhatsApp indisponível no momento.' },
+          payload: {
+            sucesso: false,
+            conectado: false,
+            estado: 'indisponivel',
+            instancia: evoInstance,
+            servidorDedicado: usandoServidorProprio,
+            mensagem: 'Serviço WhatsApp indisponível no momento.',
+          },
         };
       }
 
       const data: any = await resp.json().catch(() => ({}));
       const estado = data?.instance?.state || data?.state || 'close';
+      const conectado = estado === 'open';
+
+      let numeroConectado: string | undefined;
+      let perfilConectado: string | undefined;
+
+      if (conectado) {
+        try {
+          const infoResp = await fetch(
+            `${evoUrl}/instance/fetchInstances?instanceName=${encodeURIComponent(evoInstance)}`,
+            { method: 'GET', headers: evoHeaders }
+          );
+          if (infoResp.ok) {
+            const infoData: any = await infoResp.json().catch(() => null);
+            const item = Array.isArray(infoData)
+              ? infoData.find((i: any) => (i?.name || i?.instance?.instanceName) === evoInstance) || infoData[0]
+              : infoData?.instance || infoData;
+            const ownerRaw = item?.ownerJid || item?.owner || item?.number || item?.instance?.owner;
+            numeroConectado = formatarNumeroJid(ownerRaw);
+            perfilConectado = item?.profileName || item?.instance?.profileName || undefined;
+          }
+        } catch {
+          // Metadados opcionais da conta conectada
+        }
+      }
+
       return {
         status: 200,
         payload: {
           sucesso: true,
-          conectado: estado === 'open',
+          conectado,
           estado,
+          instancia: evoInstance,
+          servidorDedicado: usandoServidorProprio,
+          numeroConectado,
+          perfilConectado,
         },
       };
     }
@@ -348,18 +473,68 @@ export async function processWhatsAppProxyRequest(
         return { status: 403, payload: { sucesso: false, mensagem: 'Apenas administradores podem gerar QR Code de pareamento.' } };
       }
 
-      const resp = await fetch(`${evoUrl}/instance/connect/${encodeURIComponent(evoInstance)}`, {
+      let resp = await fetch(`${evoUrl}/instance/connect/${encodeURIComponent(evoInstance)}`, {
         method: 'GET',
         headers: evoHeaders,
       });
 
+      // Se a instância exclusiva desta empresa ainda não existe na Evolution API, provisiona automaticamente!
+      if (resp.status === 404) {
+        const createResp = await fetch(`${evoUrl}/instance/create`, {
+          method: 'POST',
+          headers: evoHeaders,
+          body: JSON.stringify({
+            instanceName: evoInstance,
+            qrcode: true,
+            integration: 'WHATSAPP-BAILEYS',
+          }),
+        });
+
+        if (createResp.ok) {
+          const createData: any = await createResp.json().catch(() => ({}));
+          const createdQr = createData?.qrcode?.base64 || createData?.base64 || null;
+          if (createdQr) {
+            return {
+              status: 200,
+              payload: {
+                sucesso: true,
+                conectado: false,
+                instancia: evoInstance,
+                base64: createdQr,
+                mensagem: `Instância exclusiva "${evoInstance}" criada! Escaneie o QR Code com o WhatsApp desta farmácia.`,
+              },
+            };
+          }
+          // Caso não tenha vindo no create, solicita o connect logo em seguida
+          resp = await fetch(`${evoUrl}/instance/connect/${encodeURIComponent(evoInstance)}`, {
+            method: 'GET',
+            headers: evoHeaders,
+          });
+        }
+      }
+
       if (!resp.ok) {
-        return { status: 502, payload: { sucesso: false, mensagem: 'Não foi possível solicitar pareamento ao serviço WhatsApp.' } };
+        return {
+          status: 502,
+          payload: {
+            sucesso: false,
+            instancia: evoInstance,
+            mensagem: 'Não foi possível solicitar pareamento ao serviço WhatsApp desta empresa.',
+          },
+        };
       }
 
       const data: any = await resp.json().catch(() => ({}));
       if (data?.instance?.state === 'open') {
-        return { status: 200, payload: { sucesso: true, conectado: true, mensagem: 'Instância já está conectada.' } };
+        return {
+          status: 200,
+          payload: {
+            sucesso: true,
+            conectado: true,
+            instancia: evoInstance,
+            mensagem: 'O WhatsApp desta empresa já está conectado.',
+          },
+        };
       }
 
       const qrBase64 = data?.base64 || data?.qrcode?.base64 || null;
@@ -368,8 +543,42 @@ export async function processWhatsAppProxyRequest(
         payload: {
           sucesso: Boolean(qrBase64),
           conectado: false,
+          instancia: evoInstance,
           base64: qrBase64,
-          mensagem: qrBase64 ? 'QR Code gerado com sucesso.' : 'Aguardando geração do QR Code pelo serviço.',
+          mensagem: qrBase64 ? 'QR Code exclusivo gerado com sucesso.' : 'Aguardando geração do QR Code pelo serviço.',
+        },
+      };
+    }
+
+    if (action === 'disconnect') {
+      if (usuarioRow.perfil !== 'admin' && usuarioRow.perfil !== 'super_admin') {
+        return { status: 403, payload: { sucesso: false, mensagem: 'Apenas administradores podem desconectar o WhatsApp da loja.' } };
+      }
+
+      const logoutResp = await fetch(`${evoUrl}/instance/logout/${encodeURIComponent(evoInstance)}`, {
+        method: 'DELETE',
+        headers: evoHeaders,
+      });
+
+      if (!logoutResp.ok && logoutResp.status !== 404) {
+        return {
+          status: 502,
+          payload: {
+            sucesso: false,
+            instancia: evoInstance,
+            mensagem: 'Não foi possível desconectar a sessão atual. Tente novamente em instantes.',
+          },
+        };
+      }
+
+      return {
+        status: 200,
+        payload: {
+          sucesso: true,
+          conectado: false,
+          estado: 'close',
+          instancia: evoInstance,
+          mensagem: `Conta de WhatsApp desconectada da instância "${evoInstance}". Você já pode parear outro aparelho!`,
         },
       };
     }
