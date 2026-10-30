@@ -3,6 +3,7 @@ import { onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from './stores/auth';
 import { useEncomendasStore } from './stores/encomendas';
+import CookieBanner from './components/CookieBanner.vue';
 import {
   LayoutDashboard,
   PackageOpen,
@@ -251,4 +252,7 @@ async function encerrarSuporteBreakGlass() {
       </main>
     </div>
   </div>
+
+  <!-- Banner Global de Cookies & Privacidade LGPD -->
+  <CookieBanner />
 </template>

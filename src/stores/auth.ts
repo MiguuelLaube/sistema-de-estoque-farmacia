@@ -9,7 +9,7 @@ import type {
   LogAuditoria,
 } from '../types';
 import { initialTenants, initialConfigs, initialUsuarios, initialFuncionarios } from '../data/mockData';
-import { supabase, isLiveSupabaseConfigured } from '../services/supabase';
+import { supabase, isLiveSupabaseConfigured, CARREGADO_COM_LINK_DE_RECUPERACAO } from '../services/supabase';
 
 const DEVICE_TOKEN_STORAGE_KEY = 'pharma_sa_device_token_v1';
 
@@ -21,15 +21,27 @@ function gerarUuidSeguro(): string {
 }
 
 function sanitizarMensagemErroAuth(rawMsg?: string): string {
+  if (rawMsg) {
+    console.warn('[Supabase Auth Debug]:', rawMsg);
+  }
   const lower = (rawMsg || '').toLowerCase();
   if (lower.includes('invalid login credentials') || lower.includes('invalid_credentials')) {
     return 'Credenciais inválidas. Verifique o identificador e a senha informados.';
   }
-  if (lower.includes('too many requests') || lower.includes('rate limit')) {
-    return 'Muitas tentativas em curto intervalo. Aguarde alguns minutos antes de tentar novamente.';
+  if (lower.includes('too many requests') || lower.includes('rate limit') || lower.includes('over_email_send_rate_limit')) {
+    return 'Limite de requisições excedido. O serviço gratuito de e-mails do Supabase limita envios a 3 por hora. Aguarde alguns minutos antes de tentar novamente.';
   }
   if (lower.includes('email not confirmed')) {
-    return 'Conta aguardando confirmação cadastral.';
+    return 'Conta aguardando confirmação cadastral no Supabase.';
+  }
+  if (lower.includes('user not found')) {
+    return 'Usuário não cadastrado ou não encontrado no sistema.';
+  }
+  if (lower.includes('redirect') || lower.includes('url not allowed')) {
+    return 'URL de redirecionamento não autorizada. Adicione https://encomed.vercel.app/** na lista de Redirect URLs do Supabase.';
+  }
+  if (lower.includes('expired') || lower.includes('invalid token') || lower.includes('otp')) {
+    return 'O link de recuperação ou acesso expirou. Solicite um novo link.';
   }
   return 'Não foi possível concluir a autenticação no momento.';
 }
@@ -432,13 +444,38 @@ export const useAuthStore = defineStore('auth', () => {
       return { autenticado: false };
     }
 
-    const { data: profile, error: profErr } = await supabase
+    let { data: profile, error: profErr } = await supabase
       .from('usuario')
       .select('*')
       .eq('auth_user_id', session.user.id)
       .maybeSingle();
 
+    // Auto-vinculação caso o usuário tenha sido provisionado pelo e-mail
+    if (!profile && session.user.email) {
+      const emailNormalizado = session.user.email.toLowerCase().trim();
+      const { data: profileByEmail } = await supabase
+        .from('usuario')
+        .select('*')
+        .eq('email', emailNormalizado)
+        .maybeSingle();
+
+      if (profileByEmail) {
+        await supabase
+          .from('usuario')
+          .update({ auth_user_id: session.user.id })
+          .eq('id', profileByEmail.id);
+        profile = { ...profileByEmail, auth_user_id: session.user.id };
+        profErr = null;
+      }
+    }
+
     if (profErr || !profile || !profile.ativo || profile.excluido_em) {
+      if (passwordRecoveryMode.value) {
+        // Durante redefinição de senha, não desloga para não destruir a sessão de recuperação
+        isAuthenticated.value = false;
+        currentUserProfile.value = null;
+        return { autenticado: false };
+      }
       await supabase.auth.signOut();
       isAuthenticated.value = false;
       currentUserProfile.value = null;
@@ -466,6 +503,21 @@ export const useAuthStore = defineStore('auth', () => {
 
     isAuthenticated.value = true;
     await carregarDadosContexto();
+
+    // Empresa suspensa/cancelada: o banco já bloqueia (RLS); aqui encerramos a sessão com mensagem clara
+    if (profile.perfil !== 'super_admin' && profile.tenant_id) {
+      const empresaVisivel = tenants.value.some((t) => t.id === profile.tenant_id);
+      if (!empresaVisivel) {
+        await supabase.auth.signOut();
+        isAuthenticated.value = false;
+        currentUserProfile.value = null;
+        activeUserId.value = '';
+        return {
+          autenticado: false,
+          erro: 'O acesso desta empresa está suspenso ou indisponível. Entre em contato com o suporte.',
+        };
+      }
+    }
     return { autenticado: true };
   }
 
@@ -477,7 +529,11 @@ export const useAuthStore = defineStore('auth', () => {
         localStorage.removeItem('pharma_auth_logged');
       }
       if (isLive) {
-        await sincronizarSessaoAtiva();
+        // Registra o listener ANTES de sincronizar a sessão: o evento PASSWORD_RECOVERY é emitido durante
+        // a inicialização do supabase-js e seria perdido se o listener fosse criado depois.
+        if (CARREGADO_COM_LINK_DE_RECUPERACAO) {
+          passwordRecoveryMode.value = true;
+        }
         supabase.auth.onAuthStateChange((event) => {
           if (event === 'PASSWORD_RECOVERY') {
             passwordRecoveryMode.value = true;
@@ -487,8 +543,10 @@ export const useAuthStore = defineStore('auth', () => {
             activeUserId.value = '';
             mfaStage.value = 'none';
             breakGlassTenantId.value = null;
+            passwordRecoveryMode.value = false;
           }
         });
+        await sincronizarSessaoAtiva();
       }
       isAuthInitialized.value = true;
     })();
@@ -607,13 +665,23 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined;
-      await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo });
-      // Resposta sempre genérica para impedir enumeração de contas existentes (OWASP)
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo });
+      if (error) {
+        console.warn('[Supabase resetPasswordForEmail Error]:', error);
+        if (error.message?.toLowerCase().includes('redirect') || error.message?.toLowerCase().includes('url not allowed')) {
+          return {
+            success: false,
+            message: 'Erro de configuração do servidor: a URL https://encomed.vercel.app/** não está cadastrada em Redirect URLs no painel do Supabase.',
+          };
+        }
+      }
+      // Resposta padrão (OWASP)
       return {
         success: true,
         message: 'Se o endereço informado estiver associado a uma conta ativa, um link seguro de redefinição foi enviado.',
       };
-    } catch {
+    } catch (err) {
+      console.warn('[Supabase resetPasswordForEmail Exception]:', err);
       return {
         success: true,
         message: 'Se o endereço informado estiver associado a uma conta ativa, um link seguro de redefinição foi enviado.',
@@ -671,7 +739,7 @@ export const useAuthStore = defineStore('auth', () => {
       if (error) {
         // Fallback defensivo: se colunas da migração 11 ainda não foram criadas no banco, salva as demais
         if (error.message?.includes('does not exist')) {
-          const { whatsapp_instance_name, whatsapp_api_url, whatsapp_api_key, ...safePayload } = payloadLimpo as any;
+          const { whatsapp_instance_name, ...safePayload } = payloadLimpo as any;
           const { error: retryErr } = await supabase
             .from('config_tenant')
             .update({
@@ -933,7 +1001,7 @@ export const useAuthStore = defineStore('auth', () => {
     email: string,
     nomeEmpresa: string,
     extra?: { nomeAdmin?: string; slug?: string; plano?: string }
-  ): Promise<{ sucesso: boolean; mensagem: string; linkCriarSenha?: string }> {
+  ): Promise<{ sucesso: boolean; mensagem: string }> {
     const limpo = (email || '').trim().toLowerCase();
     if (!limpo || !limpo.includes('@')) {
       return { sucesso: false, mensagem: 'Esta empresa não possui um e-mail de administrador válido cadastrado.' };
@@ -963,7 +1031,11 @@ export const useAuthStore = defineStore('auth', () => {
         const data = await resp.json().catch(() => null);
         if (resp.ok && data?.sucesso) {
           await registrarAuditoria('ENVIO_LINK_SENHA_TENANT', nomeEmpresa, `Destinatário: ${limpo} (${data.provedor || 'API'})`);
-          return { sucesso: true, mensagem: data.mensagem, linkCriarSenha: data.linkCriarSenha };
+          return { sucesso: true, mensagem: data.mensagem };
+        }
+        // O servidor respondeu com uma recusa explícita (limite, permissão, destinatário inválido): respeita-a
+        if (data?.mensagem && [400, 403, 404, 429, 502].includes(resp.status)) {
+          return { sucesso: false, mensagem: data.mensagem };
         }
       }
 

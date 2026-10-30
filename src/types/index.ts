@@ -52,9 +52,8 @@ export interface ConfigTenant {
   ocultar_medicamentos_notificacao?: boolean;
   // Integração WhatsApp Isolada por Empresa (Multi-Tenant) via Proxy Server-Side
   evolution_api_ativo?: boolean;
+  // Nome de instância só é honrado em servidor próprio; URL/Chave ficam em tabela blindada (nunca no navegador)
   whatsapp_instance_name?: string;
-  whatsapp_api_url?: string;
-  whatsapp_api_key?: string;
   // Campos de PrintTemplate (Documento Seção 2)
   header_title?: string;
   header_subtitle?: string;

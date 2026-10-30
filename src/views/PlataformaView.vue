@@ -1217,11 +1217,15 @@ async function confirmarBreakGlass() {
               </button>
             </div>
 
-            <div
-              style="border: 1.5px solid #cbd5e1; border-radius: 14px; overflow: hidden; background: #f1f5f9; padding: 12px; max-height: 380px; overflow-y: auto;"
-            >
-              <div v-html="htmlEmailExemplo"></div>
-            </div>
+            <!-- iframe sandbox: o <style> do e-mail fica ISOLADO e não restiliza o sistema; scripts bloqueados -->
+            <iframe
+              :srcdoc="htmlEmailExemplo"
+              sandbox=""
+              title="Pré-visualização do e-mail de criação de senha"
+              loading="lazy"
+              referrerpolicy="no-referrer"
+              style="width: 100%; height: 420px; border: 1.5px solid #cbd5e1; border-radius: 14px; background: #f1f5f9;"
+            ></iframe>
           </div>
 
           <!-- Resumo de Configuração de API de E-mail Gratuita -->

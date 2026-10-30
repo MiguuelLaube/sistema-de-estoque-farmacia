@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
+import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { supabase } from '../services/supabase';
 import {
   Lock,
   Mail,
@@ -19,18 +20,16 @@ import {
 } from 'lucide-vue-next';
 
 const router = useRouter();
-const route = useRoute();
 const authStore = useAuthStore();
 
 const emailConviteModo = ref('');
 
-onMounted(() => {
-  if (route.query.modo === 'criar-senha') {
-    authStore.passwordRecoveryMode = true;
-    if (typeof route.query.email === 'string') {
-      emailConviteModo.value = route.query.email.trim();
-    }
-  }
+// Só exibe o boas-vindas de primeiro acesso se houver sessão REAL de recuperação (link com token do e-mail).
+// Nunca ativamos o modo "criar senha" a partir de parâmetro de URL (poderia ser forjado).
+onMounted(async () => {
+  if (!authStore.passwordRecoveryMode) return;
+  const { data } = await supabase.auth.getSession();
+  emailConviteModo.value = data.session?.user?.email || '';
 });
 
 // Credenciais limpas por padrão (sem pré-preenchimento ou exposição de e-mails administrativos)
@@ -70,7 +69,8 @@ async function handleLogin() {
     } else {
       errorMessage.value = res.message || 'Credenciais inválidas.';
     }
-  } catch {
+  } catch (err) {
+    console.error('[Login Catch Exception]:', err);
     errorMessage.value = 'Não foi possível concluir a autenticação no momento.';
   } finally {
     loading.value = false;

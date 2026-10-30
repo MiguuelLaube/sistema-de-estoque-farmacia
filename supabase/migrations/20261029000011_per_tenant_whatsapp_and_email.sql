@@ -196,3 +196,4 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.provisionar_empresa_com_admin(TEXT, TEXT, TEXT, INTEGER, TEXT, TEXT) TO authenticated;
+

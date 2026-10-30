@@ -235,6 +235,44 @@ export async function obterQrCodeWhatsAppProxy(tenantId?: string): Promise<Dispa
 }
 
 /**
+ * Consulta (sem nunca receber a chave) se a empresa possui servidor WhatsApp próprio configurado.
+ */
+export async function consultarCredenciaisWhatsappStatus(
+  tenantId: string
+): Promise<{ apiUrl: string; chaveConfigurada: boolean } | null> {
+  try {
+    const { data, error } = await supabase.rpc('status_whatsapp_credenciais', { p_tenant_id: tenantId });
+    if (error || !data) return null;
+    return { apiUrl: String(data.api_url || ''), chaveConfigurada: Boolean(data.chave_configurada) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Grava URL/Chave do servidor próprio via RPC blindada. `apiKey` undefined mantém a chave atual.
+ */
+export async function salvarCredenciaisWhatsappProxy(
+  tenantId: string,
+  apiUrl: string,
+  apiKey?: string
+): Promise<{ sucesso: boolean; mensagem: string }> {
+  try {
+    const { error } = await supabase.rpc('salvar_whatsapp_credenciais', {
+      p_tenant_id: tenantId,
+      p_api_url: apiUrl,
+      p_api_key: apiKey === undefined ? null : apiKey,
+    });
+    if (error) {
+      return { sucesso: false, mensagem: error.message || 'Não foi possível salvar as credenciais.' };
+    }
+    return { sucesso: true, mensagem: 'Credenciais do servidor próprio salvas com segurança.' };
+  } catch {
+    return { sucesso: false, mensagem: 'Falha de conexão ao salvar as credenciais.' };
+  }
+}
+
+/**
  * Desconecta/despareia exclusivamente a conta WhatsApp desta empresa (restrito a Administradores)
  */
 export async function desconectarWhatsAppProxy(tenantId?: string): Promise<DisparoWhatsAppResultado> {

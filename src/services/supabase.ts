@@ -1,7 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
+import { supabaseCookieStorage } from './cookieStorage';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key';
+
+/**
+ * Capturado ANTES de createClient(): o supabase-js limpa o #hash da URL ao processar o link do e-mail.
+ * Sem isso, o evento PASSWORD_RECOVERY pode ser perdido e o gestor entraria direto, sem definir a senha.
+ */
+export const CARREGADO_COM_LINK_DE_RECUPERACAO =
+  typeof window !== 'undefined' && /(^|[#&])type=recovery(&|$)/.test(window.location.hash || '');
 
 export const isLiveSupabaseConfigured = () => {
   return (
@@ -136,6 +144,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
+    storage: supabaseCookieStorage,
   },
   global: {
     fetch: rateLimitedFetch,

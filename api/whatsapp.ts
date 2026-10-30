@@ -35,7 +35,33 @@ export interface ProxyEnv {
   VITE_SUPABASE_URL?: string;
   SUPABASE_ANON_KEY?: string;
   VITE_SUPABASE_ANON_KEY?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
   ALLOWED_PROXY_ORIGIN?: string;
+}
+
+/**
+ * Anti-SSRF: aceita apenas https com host público. Bloqueia localhost, IPs privados/loopback/link-local,
+ * endpoints de metadata de nuvem e sufixos internos.
+ */
+export function urlPublicaSegura(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:') return false;
+    const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (!host || host === 'localhost' || host.endsWith('.localhost')) return false;
+    if (/\.(internal|local|lan|intranet|corp|home|localdomain)$/.test(host)) return false;
+    if (host.includes(':')) return false; // literais IPv6 (::1, fe80::, fc00::) não são permitidos
+    const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (m) {
+      const [a, b] = [Number(m[1]), Number(m[2])];
+      if (a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224) {
+        return false;
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ============================================================================
@@ -264,8 +290,13 @@ export async function processWhatsAppProxyRequest(
   let targetTenantId: string | null = null;
 
   if (usuarioRow.perfil === 'super_admin') {
-    if (body?.tenantId && uuidRegex.test(body.tenantId.trim())) {
-      targetTenantId = body.tenantId.trim();
+    // Zero-Trust: Super Admin só opera o WhatsApp de uma empresa com sessão Break-Glass ATIVA (auditada) nela
+    const { data: bgTenant } = await supa.rpc('active_break_glass_tenant_id');
+    if (bgTenant && typeof bgTenant === 'string') {
+      const pedido = typeof body?.tenantId === 'string' ? body.tenantId.trim() : '';
+      if (!pedido || (uuidRegex.test(pedido) && pedido.toLowerCase() === bgTenant.toLowerCase())) {
+        targetTenantId = bgTenant;
+      }
     }
   } else {
     // Zero-Trust: Usuários de loja sempre operam estritamente no próprio tenant_id do banco
@@ -327,30 +358,50 @@ export async function processWhatsAppProxyRequest(
   const slugLimpo = (tenantRow.slug || targetTenantId.slice(0, 8))
     .toLowerCase()
     .replace(/[^a-z0-9_-]/g, '');
-  const instanciaCustom = String(configBanco?.whatsapp_instance_name || '')
-    .trim()
-    .replace(/[^a-zA-Z0-9_-]/g, '');
-  const evoInstance = instanciaCustom || `encomed_${slugLimpo}`;
 
-  const customApiUrl = String(configBanco?.whatsapp_api_url || '').trim().replace(/\/+$/, '');
-  const customApiKey = String(configBanco?.whatsapp_api_key || '').trim();
-
-  // Proteção anti-SSRF caso o tenant configure URL própria de API
-  if (customApiUrl) {
+  // Credenciais de servidor próprio ficam em tabela blindada (sem acesso pelo navegador).
+  // Só o backend lê, com a service_role (variável exclusiva de servidor) e DEPOIS de o tenant
+  // ter sido validado sob RLS acima.
+  let customApiUrl = '';
+  let customApiKey = '';
+  if (env.SUPABASE_SERVICE_ROLE_KEY) {
     try {
-      const parsed = new URL(customApiUrl);
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-        return { status: 400, payload: { sucesso: false, mensagem: 'URL de API WhatsApp da empresa inválida (use http ou https).' } };
-      }
-      if (parsed.hostname === '169.254.169.254' || parsed.hostname === 'metadata.google.internal') {
-        return { status: 400, payload: { sucesso: false, mensagem: 'Endereço de servidor não permitido.' } };
-      }
+      const adminSupa = createClient(supabaseUrl, env.SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const { data: seg } = await adminSupa
+        .from('config_tenant_whatsapp_segredo')
+        .select('api_url, api_key')
+        .eq('tenant_id', targetTenantId)
+        .maybeSingle();
+      customApiUrl = String(seg?.api_url || '').trim().replace(/\/+$/, '');
+      customApiKey = String(seg?.api_key || '').trim();
     } catch {
-      return { status: 400, payload: { sucesso: false, mensagem: 'Formato de URL da API WhatsApp inválido.' } };
+      // Sem segredo próprio: segue com a infraestrutura compartilhada isolada por instância
     }
   }
 
   const usandoServidorProprio = Boolean(customApiUrl && customApiKey);
+
+  // ANTI-SEQUESTRO DE SESSÃO: no servidor compartilhado da plataforma a instância é SEMPRE derivada do
+  // slug da empresa (imutável pelo usuário). Nome de instância customizado só vale em servidor próprio.
+  const instanciaCustom = String(configBanco?.whatsapp_instance_name || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '');
+  const evoInstance = usandoServidorProprio && instanciaCustom ? instanciaCustom : `encomed_${slugLimpo}`;
+
+  // Proteção anti-SSRF para URL própria: somente https público (sem IPs privados/loopback/metadata)
+  if (usandoServidorProprio && !urlPublicaSegura(customApiUrl)) {
+    return {
+      status: 400,
+      payload: {
+        sucesso: false,
+        conectado: false,
+        mensagem: 'URL do servidor WhatsApp próprio não é permitida (use um endereço https público).',
+      },
+    };
+  }
+
   const evoUrl = usandoServidorProprio ? customApiUrl : (env.EVOLUTION_API_URL || '').trim().replace(/\/+$/, '');
   const evoKey = usandoServidorProprio ? customApiKey : (env.EVOLUTION_API_KEY || '').trim();
   const proxyOrigin = (env.ALLOWED_PROXY_ORIGIN || 'http://localhost:5173').trim();
@@ -741,7 +792,14 @@ export default async function handler(
     }
   }
 
-  const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined;
+  const authHeader = (typeof req.headers.authorization === 'string' && req.headers.authorization.startsWith('Bearer '))
+    ? req.headers.authorization
+    : typeof req.headers.cookie === 'string'
+      ? (() => {
+          const m = req.headers.cookie.match(/(?:^|;\s*)(?:sb-access-token|sb_access_token)=([^;]*)/);
+          return m ? `Bearer ${decodeURIComponent(m[1])}` : undefined;
+        })()
+      : undefined;
   const result = await processWhatsAppProxyRequest(req.method, authHeader, parsedBody, process.env as ProxyEnv);
 
   res.statusCode = result.status;

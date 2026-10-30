@@ -602,7 +602,14 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
     }
   }
 
-  const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined;
+  const authHeader = (typeof req.headers.authorization === 'string' && req.headers.authorization.startsWith('Bearer '))
+    ? req.headers.authorization
+    : typeof req.headers.cookie === 'string'
+      ? (() => {
+          const m = req.headers.cookie.match(/(?:^|;\s*)(?:sb-access-token|sb_access_token)=([^;]*)/);
+          return m ? `Bearer ${decodeURIComponent(m[1])}` : undefined;
+        })()
+      : undefined;
   const result = await processXmlAiMatchRequest(req.method, authHeader, body, process.env as XmlAiMatchEnv);
 
   res.statusCode = result.status;

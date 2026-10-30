@@ -32,11 +32,15 @@ import {
   Server,
   ChevronDown,
   ChevronUp,
+  Cookie as CookieIcon,
+  Settings2,
 } from 'lucide-vue-next';
 import {
   consultarStatusWhatsAppProxy,
   obterQrCodeWhatsAppProxy,
   desconectarWhatsAppProxy,
+  consultarCredenciaisWhatsappStatus,
+  salvarCredenciaisWhatsappProxy,
   enviarModeloWhatsAppProxy,
   renderizarModeloWhatsApp,
   MODELOS_PADRAO_WHATSAPP,
@@ -328,9 +332,21 @@ const servidorDedicadoAtivo = ref<boolean>(false);
 const desconectandoWhatsApp = ref<boolean>(false);
 const showConfigAvancadaWhatsapp = ref<boolean>(false);
 
-const formWhatsappApiUrl = ref(authStore.currentConfig.whatsapp_api_url || '');
-const formWhatsappApiKey = ref(authStore.currentConfig.whatsapp_api_key || '');
+const formWhatsappApiUrl = ref('');
+// A chave NUNCA é lida de volta do servidor: o campo só envia valor novo (vazio = manter a atual)
+const formWhatsappApiKey = ref('');
+const whatsappChaveConfigurada = ref(false);
 const formWhatsappInstanceName = ref(authStore.currentConfig.whatsapp_instance_name || '');
+
+async function carregarCredenciaisWhatsapp() {
+  if (!authStore.isAdmin) return;
+  const status = await consultarCredenciaisWhatsappStatus(authStore.activeTenantId);
+  if (status) {
+    formWhatsappApiUrl.value = status.apiUrl;
+    whatsappChaveConfigurada.value = status.chaveConfigurada;
+    formWhatsappApiKey.value = '';
+  }
+}
 
 const variaveisDisponiveis = [
   { tag: '{cliente}', desc: 'Primeiro nome' },
@@ -517,8 +533,6 @@ watch(
     formOcultarMedicamentosNotificacao.value = Boolean(cfg.ocultar_medicamentos_notificacao);
     formEvolutionAtivo.value = cfg.evolution_api_ativo !== false;
     formWhatsappInstanceName.value = cfg.whatsapp_instance_name || '';
-    formWhatsappApiUrl.value = cfg.whatsapp_api_url || '';
-    formWhatsappApiKey.value = cfg.whatsapp_api_key || '';
   }
 );
 
@@ -556,10 +570,31 @@ async function salvarWhatsapp() {
     ocultar_medicamentos_notificacao: formOcultarMedicamentosNotificacao.value,
     evolution_api_ativo: formEvolutionAtivo.value,
     whatsapp_instance_name: formWhatsappInstanceName.value.trim() || undefined,
-    whatsapp_api_url: formWhatsappApiUrl.value.trim() || undefined,
-    whatsapp_api_key: formWhatsappApiKey.value.trim() || undefined,
   });
+
+  // Credenciais de servidor próprio seguem por RPC blindada (somente Admin; nunca ficam legíveis no navegador)
+  let credenciaisOk = true;
+  let credenciaisMsg = '';
+  if (res.sucesso && authStore.isAdmin && showConfigAvancadaWhatsapp.value) {
+    const novaChave = formWhatsappApiKey.value.trim();
+    const credRes = await salvarCredenciaisWhatsappProxy(
+      authStore.activeTenantId,
+      formWhatsappApiUrl.value.trim(),
+      novaChave ? novaChave : undefined
+    );
+    credenciaisOk = credRes.sucesso;
+    credenciaisMsg = credRes.mensagem;
+    if (credRes.sucesso) {
+      formWhatsappApiKey.value = '';
+      await carregarCredenciaisWhatsapp();
+    }
+  }
   salvando.value = false;
+
+  if (res.sucesso && !credenciaisOk) {
+    exibirFeedback('erro', credenciaisMsg || 'Modelos salvos, mas as credenciais do servidor próprio foram rejeitadas.');
+    return;
+  }
   exibirFeedback(
     res.sucesso ? 'sucesso' : 'erro',
     res.sucesso ? 'Modelos de mensagem e automações da API salvos com sucesso!' : res.mensagem || 'Erro ao salvar.'
@@ -658,6 +693,12 @@ async function salvarPoliticas() {
     res.sucesso ? 'sucesso' : 'erro',
     res.sucesso ? 'Políticas de retenção e governança atualizadas!' : res.mensagem || 'Erro ao salvar.'
   );
+}
+
+function abrirGerenciadorCookiesModal() {
+  if (typeof window !== 'undefined' && typeof (window as any).abrirGerenciadorCookies === 'function') {
+    (window as any).abrirGerenciadorCookies();
+  }
 }
 
 function adicionarClassificacao() {
@@ -1565,7 +1606,7 @@ function removerClassificacao(id: string) {
             <div style="margin-top: 1.15rem; padding-top: 1rem; border-top: 1px dashed #cbd5e1;">
               <button
                 type="button"
-                @click="showConfigAvancadaWhatsapp = !showConfigAvancadaWhatsapp"
+                @click="showConfigAvancadaWhatsapp = !showConfigAvancadaWhatsapp; if (showConfigAvancadaWhatsapp) carregarCredenciaisWhatsapp();"
                 style="display: flex; align-items: center; justify-content: space-between; width: 100%; background: none; border: none; padding: 0; cursor: pointer; text-align: left;"
               >
                 <div style="display: flex; align-items: center; gap: 6px; font-size: 0.82rem; font-weight: 700; color: #475569;">
@@ -1582,7 +1623,7 @@ function removerClassificacao(id: string) {
                 </p>
 
                 <div class="form-group" style="margin: 0;">
-                  <label class="form-label" style="font-size: 0.78rem;">URL do Servidor Evolution API Dedicado</label>
+                  <label class="form-label" style="font-size: 0.78rem;">URL do Servidor Evolution API Dedicado (https)</label>
                   <input
                     v-model="formWhatsappApiUrl"
                     type="text"
@@ -1609,10 +1650,14 @@ function removerClassificacao(id: string) {
                     <input
                       v-model="formWhatsappApiKey"
                       type="password"
-                      placeholder="••••••••••••••••••••"
+                      autocomplete="new-password"
+                      :placeholder="whatsappChaveConfigurada ? '•••••• configurada (deixe vazio para manter)' : 'Cole a chave do seu servidor'"
                       class="form-input"
                       style="font-size: 0.8rem;"
                     />
+                    <small v-if="whatsappChaveConfigurada" style="color: #059669; font-size: 0.72rem;">
+                      🔒 Chave armazenada com segurança — por proteção ela nunca é exibida novamente.
+                    </small>
                   </div>
                 </div>
               </div>
@@ -2017,6 +2062,30 @@ function removerClassificacao(id: string) {
           <CheckCircle :size="16" />
           <span>Salvar Políticas</span>
         </button>
+      </div>
+
+      <!-- Seção LGPD: Gerenciamento de Cookies e Consentimento -->
+      <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color, #e2e8f0);">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+          <div>
+            <div style="font-weight: 600; font-size: 0.95rem; color: #0f172a; display: flex; align-items: center; gap: 0.4rem;">
+              <CookieIcon :size="16" style="color: #d97706;" />
+              <span>Cookies &amp; Consentimento LGPD</span>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+              Gerencie a autorização de cookies de sessão corporativa, segurança e preferências locais desta estação.
+            </div>
+          </div>
+          <button
+            type="button"
+            @click="abrirGerenciadorCookiesModal"
+            class="btn-outline-neutral"
+            style="border-radius: 9999px; padding: 0.4rem 1rem; font-size: 0.82rem; font-weight: 600;"
+          >
+            <Settings2 :size="14" />
+            <span>Gerenciar Cookies</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

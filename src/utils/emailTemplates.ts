@@ -11,8 +11,29 @@ export interface DadosEmailCriarSenha {
  * Retorna o template HTML corporativo responsivo para primeiro acesso e criação de senha.
  * Compatível com clientes de e-mail modernos (Gmail, Outlook, Apple Mail, Webmail).
  */
-export function gerarHtmlEmailCriarSenha(dados: DadosEmailCriarSenha): string {
-  const planoFmt = (dados.planoEmpresa || 'Profissional').toUpperCase();
+/** Escapa HTML para impedir injeção de marcação via nome de empresa/gestor. */
+export function escaparHtml(valor: string): string {
+  return String(valor ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function urlSegura(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : '#';
+}
+
+export function gerarHtmlEmailCriarSenha(entrada: DadosEmailCriarSenha): string {
+  const dados = {
+    nomeAdmin: escaparHtml(entrada.nomeAdmin),
+    emailAdmin: escaparHtml(entrada.emailAdmin),
+    nomeEmpresa: escaparHtml(entrada.nomeEmpresa),
+    slugEmpresa: escaparHtml(entrada.slugEmpresa),
+    linkCriarSenha: escaparHtml(urlSegura(entrada.linkCriarSenha)),
+  };
+  const planoFmt = escaparHtml((entrada.planoEmpresa || 'Profissional').toUpperCase());
   const subdominio = `${dados.slugEmpresa}.plataforma.com.br`;
 
   return `<!DOCTYPE html>
@@ -195,3 +216,5 @@ export function gerarHtmlEmailCriarSenha(dados: DadosEmailCriarSenha): string {
 </body>
 </html>`;
 }
+
+
