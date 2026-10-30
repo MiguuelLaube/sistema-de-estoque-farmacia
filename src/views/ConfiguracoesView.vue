@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { useComprasStore } from '../stores/compras';
 import type { VisualOpcoesTenant } from '../types';
@@ -191,6 +191,11 @@ function aplicarPreviewTempoReal() {
     visual_opcoes: montarVisualOpcoesForm(),
   });
 }
+
+onUnmounted(() => {
+  // Se o usuário sair de Configurações sem salvar ou descartar, restaura o tema real persistido
+  authStore.applyTheme();
+});
 
 function restaurarPadraoEncomed() {
   formNomeSistema.value = 'EncoMed';

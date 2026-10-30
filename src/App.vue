@@ -27,8 +27,9 @@ onMounted(() => {
   authStore.applyTheme();
 });
 
+// Atualiza o tema imediatamente sempre que mudar o tenant, o status de Super Admin, Break-Glass ou a rota
 watch(
-  () => authStore.activeTenantId,
+  () => [authStore.activeTenantId, authStore.isSuperAdmin, authStore.breakGlassTenantId, route.path],
   () => {
     authStore.applyTheme();
   }
