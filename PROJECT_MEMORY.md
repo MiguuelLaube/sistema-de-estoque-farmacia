@@ -114,7 +114,8 @@ Todas as páginas devem respeitar rigorosamente os padrões visuais estabelecido
 | `d35f3fe` | 30/10/2026 | Criação do documento central de memória do projeto (`PROJECT_MEMORY.md`). |
 | `11afb77` | 30/10/2026 | **Anti-Cache Definitivo & UX de Autenticação:** Headers anti-cache em `vercel.json` (`s-maxage=0`, `Vercel-CDN-Cache-Control: no-store`) eliminando cache persistente de borda, meta tags anti-cache em `index.html`, botão de visibilidade de senha com alinhamento absoluto dentro do campo, pré-preenchimento automático no fluxo "Esqueci minha senha" e suporte a links de recuperação via URL query/hash. |
 | `676e923` | 30/10/2026 | **Provisionamento com Senha Provisória & Primeiro Acesso Obrigatório:** Criação de empresas pelo Super Admin sem dependência de envio de e-mail, geração automática de senha provisória amigável, modal de cópia de credenciais para WhatsApp em 1 clique, e modal de definição obrigatória de senha definitiva (`PrimeiroAcessoModal.vue`) no primeiro login da drogaria. |
-| `master` | 30/10/2026 | **Correção de Diagnóstico RLS & Restauração Super Admin:** Detalhamento transparente de erros de banco (código 23505 e 42501) no provisionamento, contorno de limitação de e-mails gratuitos do Supabase (`over_email_send_rate_limit`) via script SQL direto e vinculação definitiva de `auth_user_id` em `public.usuario`. |
+| `6d3d439` | 30/10/2026 | **Bypass de Gatilho e Vinculação Segura de Super Admin:** Desativação e reativação pontual do trigger `trg_usuario_proteger_super_admin` e validação direta de super admin pelo claim de e-mail do JWT. |
+| `master` | 30/10/2026 | **Resolução Definitiva de 'Database error querying schema' & Testes de Senha Provisória:** Saneamento preventivo de tokens `NULL` em `auth.users`, vinculação automática em `auth.identities`, governança com `senha_provisoria_expira_em` e criação da bateria automatizada `npm run test:auth`. |
 
 ---
 

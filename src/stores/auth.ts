@@ -30,6 +30,9 @@ function sanitizarMensagemErroAuth(rawMsg?: string): string {
     console.warn('[Supabase Auth Debug]:', rawMsg);
   }
   const lower = (rawMsg || '').toLowerCase();
+  if (lower.includes('database error querying schema') || lower.includes('querying schema')) {
+    return 'Falha interna de integridade no schema de autenticação do Supabase. Execute a migração de saneamento de tokens em auth.users.';
+  }
   if (
     lower.includes('invalid login credentials') ||
     lower.includes('invalid_credentials') ||
@@ -571,8 +574,27 @@ export const useAuthStore = defineStore('auth', () => {
       return { autenticado: false, erro: 'Conta de e-mail não vinculada ou inativa no sistema.' };
     }
 
+    // Validação de expiração da senha provisória
+    if (profile.senha_provisoria_ativa && profile.senha_provisoria_expira_em) {
+      const expiraEm = new Date(profile.senha_provisoria_expira_em).getTime();
+      if (!Number.isNaN(expiraEm) && Date.now() > expiraEm) {
+        await supabase.auth.signOut();
+        isAuthenticated.value = false;
+        currentUserProfile.value = null;
+        activeUserId.value = '';
+        return {
+          autenticado: false,
+          erro: 'Sua senha provisória de acesso expirou. Solicite ao administrador a emissão de uma nova senha de primeiro acesso.',
+        };
+      }
+    }
+
     currentUserProfile.value = profile as Usuario;
-    if (session.user.user_metadata?.exigir_troca_senha === true) {
+    if (
+      session.user.user_metadata?.exigir_troca_senha === true ||
+      profile.senha_provisoria_ativa === true ||
+      profile.exigir_troca_senha === true
+    ) {
       currentUserProfile.value.exigir_troca_senha = true;
     }
     activeUserId.value = profile.id;
@@ -852,6 +874,7 @@ export const useAuthStore = defineStore('auth', () => {
           .update({
             exigir_troca_senha: false,
             senha_provisoria_ativa: false,
+            senha_provisoria_expira_em: null,
           })
           .eq('id', currentUserProfile.value.id);
       }

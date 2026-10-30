@@ -125,6 +125,7 @@ export interface Usuario {
   ativo: boolean;
   exigir_troca_senha?: boolean;
   senha_provisoria_ativa?: boolean;
+  senha_provisoria_expira_em?: string | null;
   excluido_em?: string | null;
   criado_em: string;
 }
