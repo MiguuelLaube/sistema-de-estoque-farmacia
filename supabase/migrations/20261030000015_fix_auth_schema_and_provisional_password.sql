@@ -24,8 +24,7 @@ SET
     reauthentication_token = COALESCE(reauthentication_token, ''),
     raw_app_meta_data = COALESCE(raw_app_meta_data, '{"provider":"email","providers":["email"]}'::jsonb),
     raw_user_meta_data = COALESCE(raw_user_meta_data, '{}'::jsonb),
-    email_confirmed_at = COALESCE(email_confirmed_at, now()),
-    confirmed_at = COALESCE(confirmed_at, now())
+    email_confirmed_at = COALESCE(email_confirmed_at, now())
 WHERE 
     confirmation_token IS NULL 
     OR recovery_token IS NULL 
@@ -114,7 +113,6 @@ BEGIN
             phone_change,
             phone_change_token,
             phone_change_sent_at,
-            confirmed_at,
             email_change_token_current,
             email_change_confirm_status,
             banned_until,
@@ -150,7 +148,6 @@ BEGIN
             '',    -- phone_change
             '',    -- phone_change_token
             NULL,
-            now(), -- confirmed_at
             '',    -- email_change_token_current
             0,
             NULL,
@@ -164,7 +161,6 @@ BEGIN
         UPDATE auth.users
         SET encrypted_password = v_hash,
             email_confirmed_at = COALESCE(email_confirmed_at, now()),
-            confirmed_at = COALESCE(confirmed_at, now()),
             confirmation_token = COALESCE(confirmation_token, ''),
             recovery_token = COALESCE(recovery_token, ''),
             email_change = COALESCE(email_change, ''),
@@ -356,3 +352,4 @@ GRANT EXECUTE ON FUNCTION public.redefinir_senha_provisoria_tenant(UUID, TEXT) T
 
 -- 7. Atualiza o cache do PostgREST
 NOTIFY pgrst, 'reload schema';
+
