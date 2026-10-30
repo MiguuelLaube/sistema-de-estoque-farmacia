@@ -112,7 +112,8 @@ Todas as páginas devem respeitar rigorosamente os padrões visuais estabelecido
 | `3a8ba92` | 30/10/2026 | Refinamento responsivo do dashboard (grades `auto-fit`), substituição de logos antigos por SVGs transparentes na Landing Page e App. |
 | `ea9a32e` | 30/10/2026 | **Blindagem Definitiva de Login:** Eliminação do deadlock de RLS para o proprietário (`miguuel.laube@gmail.com`), proteção com `try/catch` em todas as RPCs de autenticação e redirecionamento de senha. |
 | `d35f3fe` | 30/10/2026 | Criação do documento central de memória do projeto (`PROJECT_MEMORY.md`). |
-| `master` | 30/10/2026 | **Anti-Cache Definitivo & UX de Autenticação:** Headers anti-cache em `vercel.json` (`s-maxage=0`, `Vercel-CDN-Cache-Control: no-store`) eliminando cache persistente de borda, meta tags anti-cache em `index.html`, botão de visibilidade de senha com alinhamento absoluto dentro do campo, pré-preenchimento automático no fluxo "Esqueci minha senha" e suporte a links de recuperação via URL query/hash. |
+| `11afb77` | 30/10/2026 | **Anti-Cache Definitivo & UX de Autenticação:** Headers anti-cache em `vercel.json` (`s-maxage=0`, `Vercel-CDN-Cache-Control: no-store`) eliminando cache persistente de borda, meta tags anti-cache em `index.html`, botão de visibilidade de senha com alinhamento absoluto dentro do campo, pré-preenchimento automático no fluxo "Esqueci minha senha" e suporte a links de recuperação via URL query/hash. |
+| `master` | 30/10/2026 | **Provisionamento com Senha Provisória & Primeiro Acesso Obrigatório:** Criação de empresas pelo Super Admin sem dependência de envio de e-mail, geração automática de senha provisória amigável, modal de cópia de credenciais para WhatsApp em 1 clique, e modal de definição obrigatória de senha definitiva (`PrimeiroAcessoModal.vue`) no primeiro login da drogaria. |
 
 ---
 

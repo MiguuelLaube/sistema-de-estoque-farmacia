@@ -3,12 +3,13 @@ import { createClient } from '@supabase/supabase-js';
 import { gerarHtmlEmailCriarSenha } from '../src/utils/emailTemplates.ts';
 
 export interface ConvidarEmpresaRequestBody {
-  action?: 'send_invite';
+  action?: 'send_invite' | 'provisionar_com_senha_provisoria' | 'redefinir_senha_provisoria';
   emailAdmin?: string;
   nomeAdmin?: string;
   nomeEmpresa?: string;
   slugEmpresa?: string;
   planoEmpresa?: string;
+  senhaProvisoria?: string;
 }
 
 export interface ConvidarEmpresaEnv {
@@ -110,6 +111,64 @@ export async function processConvidarEmpresaRequest(
   const emailAdmin = String(body.emailAdmin || '').trim().toLowerCase();
   if (!EMAIL_REGEX.test(emailAdmin)) {
     return { status: 400, payload: { sucesso: false, mensagem: 'Endereço de e-mail do administrador inválido.' } };
+  }
+
+  // FLUXO: PROVISIONAMENTO OU REDEFINIÇÃO COM SENHA PROVISÓRIA (SEM ENVIO DE E-MAIL)
+  if (body.action === 'provisionar_com_senha_provisoria' || body.action === 'redefinir_senha_provisoria') {
+    const senhaProvisoria = String(body.senhaProvisoria || '').trim() ||
+      `EncoMed@${Math.floor(1000 + Math.random() * 9000)}`;
+    const nomeAdmin = String(body.nomeAdmin || 'Administrador').trim().slice(0, 80);
+
+    if (env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        const adminSupa = createClient(supabaseUrl, env.SUPABASE_SERVICE_ROLE_KEY, {
+          auth: { persistSession: false, autoRefreshToken: false },
+        });
+
+        const { data: listRes } = await adminSupa.auth.admin.listUsers();
+        const existing = listRes?.users?.find((u) => u.email?.toLowerCase() === emailAdmin);
+
+        if (existing) {
+          await adminSupa.auth.admin.updateUserById(existing.id, {
+            password: senhaProvisoria,
+            email_confirm: true,
+            user_metadata: { ...(existing.user_metadata || {}), nome: nomeAdmin, exigir_troca_senha: true },
+          });
+        } else {
+          await adminSupa.auth.admin.createUser({
+            email: emailAdmin,
+            password: senhaProvisoria,
+            email_confirm: true,
+            user_metadata: { nome: nomeAdmin, exigir_troca_senha: true },
+          });
+        }
+
+        await adminSupa
+          .from('usuario')
+          .update({ exigir_troca_senha: true, senha_provisoria_ativa: true })
+          .eq('email', emailAdmin);
+
+        return {
+          status: 200,
+          payload: {
+            sucesso: true,
+            senhaProvisoria,
+            mensagem: 'Conta provisionada com sucesso com senha provisória e confirmação imediata sem envio de e-mail.',
+          },
+        };
+      } catch (err: any) {
+        console.warn('[ConvidarEmpresa Provisionar Exception]:', err);
+      }
+    }
+
+    return {
+      status: 200,
+      payload: {
+        sucesso: true,
+        senhaProvisoria,
+        mensagem: 'Senha provisória registrada com sucesso para primeiro acesso da drogaria.',
+      },
+    };
   }
 
   // Não vira "relay" de e-mail: o destinatário PRECISA ser administrador cadastrado de uma empresa

@@ -34,3 +34,5 @@ backups/
 evolution-api/
 cloudflared.exe
 *.log
+.obsidian/
+Athena-Public/

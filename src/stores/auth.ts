@@ -20,6 +20,11 @@ function gerarUuidSeguro(): string {
   return '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0').slice(-12);
 }
 
+export function gerarSenhaProvisoriaAmigavel(): string {
+  const sufixo = Math.floor(1000 + Math.random() * 9000);
+  return `EncoMed@${sufixo}`;
+}
+
 function sanitizarMensagemErroAuth(rawMsg?: string): string {
   if (rawMsg) {
     console.warn('[Supabase Auth Debug]:', rawMsg);
@@ -182,6 +187,13 @@ export const useAuthStore = defineStore('auth', () => {
   const isAdmin = computed(() => isAuthenticated.value && (currentUser.value.perfil === 'admin' || (isSuperAdmin.value && !!breakGlassTenantId.value)));
   const isComprador = computed(() => isAuthenticated.value && (currentUser.value.perfil === 'comprador' || isAdmin.value));
   const isOperador = computed(() => isAuthenticated.value && (currentUser.value.perfil === 'operador' || isAdmin.value));
+
+  // Detecta se o usuário precisa definir nova senha no primeiro acesso
+  const exigeTrocaSenha = computed(() => {
+    if (!isAuthenticated.value) return false;
+    if (isSuperAdmin.value) return false;
+    return Boolean(currentUser.value.exigir_troca_senha || currentUserProfile.value?.exigir_troca_senha);
+  });
 
   // BUG-06 FIX: Super Admin é estritamente invisível na listagem de equipe de qualquer tenant
   const tenantUsers = computed(() => {
@@ -560,6 +572,9 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     currentUserProfile.value = profile as Usuario;
+    if (session.user.user_metadata?.exigir_troca_senha === true) {
+      currentUserProfile.value.exigir_troca_senha = true;
+    }
     activeUserId.value = profile.id;
     if (profile.tenant_id) {
       activeTenantId.value = profile.tenant_id;
@@ -811,6 +826,49 @@ export const useAuthStore = defineStore('auth', () => {
     return { success: true, message: 'Senha atualizada com sucesso!' };
   }
 
+  async function concluirTrocaSenhaPrimeiroAcesso(
+    novaSenha: string
+  ): Promise<{ sucesso: boolean; mensagem: string }> {
+    if (!novaSenha || novaSenha.length < 8) {
+      return { sucesso: false, mensagem: 'A nova senha deve possuir no mínimo 8 caracteres.' };
+    }
+
+    try {
+      // 1. Atualiza no Supabase Auth e desmarca a flag de primeiro acesso
+      const { error: authErr } = await supabase.auth.updateUser({
+        password: novaSenha,
+        data: { exigir_troca_senha: false },
+      });
+
+      if (authErr) {
+        console.warn('[Supabase updateUser First Access Error]:', authErr);
+        return { sucesso: false, mensagem: sanitizarMensagemErroAuth(authErr.message) };
+      }
+
+      // 2. Atualiza a tabela public.usuario
+      if (currentUserProfile.value?.id) {
+        await supabase
+          .from('usuario')
+          .update({
+            exigir_troca_senha: false,
+            senha_provisoria_ativa: false,
+          })
+          .eq('id', currentUserProfile.value.id);
+      }
+
+      if (currentUserProfile.value) {
+        currentUserProfile.value.exigir_troca_senha = false;
+        currentUserProfile.value.senha_provisoria_ativa = false;
+      }
+
+      await registrarAuditoria('PRIMEIRO_ACESSO_SENHA_DEFINITIVA', 'Credencial de Acesso', 'Senha definitiva cadastrada com sucesso');
+
+      return { sucesso: true, mensagem: 'Senha definitiva cadastrada com sucesso! Bem-vindo ao EncoMed.' };
+    } catch (err: any) {
+      return { sucesso: false, mensagem: err?.message || 'Falha ao salvar a nova senha definitiva.' };
+    }
+  }
+
   async function registrarAuditoria(acao: string, recurso: string, justificativa?: string) {
     if (!isLive || !isAuthenticated.value) return;
     await supabase.rpc('registrar_auditoria', {
@@ -1040,13 +1098,15 @@ export const useAuthStore = defineStore('auth', () => {
     limite: number;
     emailAdmin?: string;
     nomeAdmin?: string;
-  }): Promise<{ sucesso: boolean; mensagem: string }> {
+    senhaProvisoria?: string;
+  }): Promise<{ sucesso: boolean; mensagem: string; senhaProvisoria?: string; emailAdmin?: string }> {
     if (!isSuperAdmin.value) return { sucesso: false, mensagem: 'Acesso negado.' };
     const id = gerarUuidSeguro();
     const slugLimpo = dados.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
     const emailLimpo = dados.emailAdmin?.trim().toLowerCase() || undefined;
+    const senhaFinal = dados.senhaProvisoria?.trim() || gerarSenhaProvisoriaAmigavel();
 
-    // Tenta primeiro via RPC provisionar_empresa_com_admin
+    // 1. Tenta via RPC provisionar_empresa_com_admin
     const { error: rpcErr } = await supabase.rpc('provisionar_empresa_com_admin', {
       p_nome_empresa: dados.nomeEmpresa.trim(),
       p_slug: slugLimpo,
@@ -1054,6 +1114,7 @@ export const useAuthStore = defineStore('auth', () => {
       p_limite: dados.limite,
       p_email_admin: emailLimpo || null,
       p_nome_admin: dados.nomeAdmin?.trim() || 'Administrador',
+      p_senha_provisoria: senhaFinal,
     });
 
     if (rpcErr) {
@@ -1078,30 +1139,132 @@ export const useAuthStore = defineStore('auth', () => {
         cor_primaria: '#2563eb',
         cor_secundaria: '#1e293b',
         header_title: dados.nomeEmpresa.trim().toUpperCase(),
+        whatsapp_instance_name: `encomed_${slugLimpo}`,
       });
+
+      if (emailLimpo) {
+        try {
+          await supabase.from('usuario').insert({
+            id: gerarUuidSeguro(),
+            tenant_id: id,
+            nome: dados.nomeAdmin?.trim() || 'Administrador',
+            email: emailLimpo,
+            perfil: 'admin',
+            ativo: true,
+            exigir_troca_senha: true,
+            senha_provisoria_ativa: true,
+          });
+        } catch {
+          // prossegue
+        }
+      }
     }
 
-    // Se informou e-mail de admin, envia o link seguro de definição de senha com o template corporativo
-    let msgResultado = 'Nova empresa provisionada com sucesso!';
+    // 2. Chama a API serverless para criar a credencial com a senha provisória e sem envio de email
     if (emailLimpo) {
-      const conviteRes = await enviarLinkSenhaTenant(emailLimpo, dados.nomeEmpresa.trim(), {
-        nomeAdmin: dados.nomeAdmin?.trim(),
-        slug: slugLimpo,
-        plano: dados.plano,
-      });
-      if (conviteRes.sucesso) {
-        msgResultado = `Empresa provisionada com sucesso! ${conviteRes.mensagem}`;
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (token) {
+          await fetch('/api/convidar-empresa', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              action: 'provisionar_com_senha_provisoria',
+              emailAdmin: emailLimpo,
+              senhaProvisoria: senhaFinal,
+              nomeAdmin: dados.nomeAdmin?.trim() || 'Administrador',
+              nomeEmpresa: dados.nomeEmpresa.trim(),
+            }),
+          });
+        }
+      } catch {
+        // silencioso
       }
     }
 
     await registrarAuditoria(
-      'PROVISIONAMENTO_TENANT',
+      'PROVISIONAMENTO_TENANT_SENHA_PROVISORIA',
       dados.nomeEmpresa.trim(),
-      `Plano ${dados.plano} • Gestor: ${emailLimpo || 'Nenhum'}`
+      `Plano ${dados.plano} • Gestor: ${emailLimpo || 'Nenhum'} • Senha provisória gerada`
     );
     await carregarDadosContexto();
 
-    return { sucesso: true, mensagem: msgResultado };
+    return {
+      sucesso: true,
+      mensagem: `Empresa "${dados.nomeEmpresa.trim()}" provisionada com sucesso com senha provisória!`,
+      senhaProvisoria: senhaFinal,
+      emailAdmin: emailLimpo,
+    };
+  }
+
+  async function redefinirSenhaProvisoriaTenant(
+    tenantId: string,
+    email: string,
+    senhaProvisoria?: string
+  ): Promise<{ sucesso: boolean; mensagem: string; senhaProvisoria?: string }> {
+    if (!isSuperAdmin.value) return { sucesso: false, mensagem: 'Acesso negado.' };
+    const emailLimpo = email.trim().toLowerCase();
+    const senhaFinal = senhaProvisoria?.trim() || gerarSenhaProvisoriaAmigavel();
+
+    // 1. Tenta RPC
+    try {
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('redefinir_senha_provisoria_tenant', {
+        p_tenant_id: tenantId,
+        p_senha_provisoria: senhaFinal,
+      });
+      if (!rpcErr && rpcData?.sucesso) {
+        await registrarAuditoria('REDEFINICAO_SENHA_PROVISORIA', emailLimpo, `Tenant: ${tenantId}`);
+        await carregarDadosContexto();
+        return {
+          sucesso: true,
+          senhaProvisoria: rpcData.senha_provisoria || senhaFinal,
+          mensagem: 'Nova senha provisória gerada com sucesso!',
+        };
+      }
+    } catch {
+      // fallback
+    }
+
+    // 2. Fallback via tabela e API
+    try {
+      await supabase
+        .from('usuario')
+        .update({ exigir_troca_senha: true, senha_provisoria_ativa: true })
+        .eq('tenant_id', tenantId)
+        .eq('email', emailLimpo);
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (token) {
+        await fetch('/api/convidar-empresa', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            action: 'redefinir_senha_provisoria',
+            emailAdmin: emailLimpo,
+            senhaProvisoria: senhaFinal,
+          }),
+        });
+      }
+
+      await registrarAuditoria('REDEFINICAO_SENHA_PROVISORIA', emailLimpo, `Tenant: ${tenantId}`);
+      await carregarDadosContexto();
+
+      return {
+        sucesso: true,
+        senhaProvisoria: senhaFinal,
+        mensagem: 'Nova senha provisória gerada com sucesso!',
+      };
+    } catch (err: any) {
+      return { sucesso: false, mensagem: err?.message || 'Falha ao redefinir senha provisória.' };
+    }
   }
 
   async function enviarLinkSenhaTenant(
@@ -1275,6 +1438,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAdmin,
     isComprador,
     isOperador,
+    exigeTrocaSenha,
     tenantUsers,
     tenantFuncionarios,
     initAuth,
@@ -1283,6 +1447,8 @@ export const useAuthStore = defineStore('auth', () => {
     verificarCodigoMfa,
     solicitarRecuperacaoSenha,
     redefinirSenhaRecuperacao,
+    concluirTrocaSenhaPrimeiroAcesso,
+    gerarSenhaProvisoriaAmigavel,
     registrarAuditoria,
     salvarConfigTenant,
     adicionarFuncionario,
@@ -1294,6 +1460,7 @@ export const useAuthStore = defineStore('auth', () => {
     revogarDispositivo,
     salvarPoliticaZeroTrust,
     provisionarTenant,
+    redefinirSenhaProvisoriaTenant,
     enviarLinkSenhaTenant,
     atualizarDadosTenant,
     alternarStatusTenant,

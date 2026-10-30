@@ -25,6 +25,10 @@ import {
   Send,
   Loader2,
   Copy,
+  Check,
+  CheckCircle2,
+  Eye,
+  EyeOff,
 } from 'lucide-vue-next';
 import { gerarHtmlEmailCriarSenha } from '../utils/emailTemplates';
 
@@ -75,6 +79,22 @@ const nomeAdminNovo = ref('Administrador');
 const planoNovo = ref<'basico' | 'profissional' | 'enterprise'>('profissional');
 const limiteNovo = ref(1000);
 const salvandoTenant = ref(false);
+
+// Senha Provisória e Credenciais Prontas
+const senhaProvisoriaNovo = ref(authStore.gerarSenhaProvisoriaAmigavel());
+const showSenhaProvisoriaNovo = ref(false);
+const showCredenciaisModal = ref(false);
+const credenciaisResultado = ref<{
+  nomeEmpresa: string;
+  email: string;
+  senhaProvisoria: string;
+  linkAcesso: string;
+} | null>(null);
+const textoCopiado = ref(false);
+
+function regenerarSenhaProvisoriaNovo() {
+  senhaProvisoriaNovo.value = authStore.gerarSenhaProvisoriaAmigavel();
+}
 
 // Form Edição Tenant
 const tenantEmEdicao = ref<Tenant | null>(null);
@@ -189,17 +209,80 @@ async function salvarNovoTenant() {
     limite: limitePorPlano,
     emailAdmin: emailAdminNovo.value.trim() || undefined,
     nomeAdmin: nomeAdminNovo.value.trim() || undefined,
+    senhaProvisoria: senhaProvisoriaNovo.value.trim() || undefined,
   });
 
   salvandoTenant.value = false;
 
   if (res.sucesso) {
     showNovoTenantModal.value = false;
+
+    // Abre o modal com as credenciais prontas para enviar à drogaria
+    credenciaisResultado.value = {
+      nomeEmpresa: nomeEmpresaNovo.value.trim(),
+      email: emailAdminNovo.value.trim() || 'Não cadastrado',
+      senhaProvisoria: res.senhaProvisoria || senhaProvisoriaNovo.value.trim(),
+      linkAcesso: typeof window !== 'undefined' ? `${window.location.origin}/login` : 'https://encomed.vercel.app/login',
+    };
+    showCredenciaisModal.value = true;
+
     nomeEmpresaNovo.value = '';
     slugNovo.value = '';
     emailAdminNovo.value = '';
     nomeAdminNovo.value = 'Administrador';
+    senhaProvisoriaNovo.value = authStore.gerarSenhaProvisoriaAmigavel();
     notificar('sucesso', res.mensagem);
+  } else {
+    notificar('erro', res.mensagem);
+  }
+}
+
+async function copiarCredenciaisParaWhatsApp() {
+  if (!credenciaisResultado.value) return;
+  const c = credenciaisResultado.value;
+  const texto = `🏥 *Acesso ao EncoMed SaaS — ${c.nomeEmpresa}*
+
+Olá! Seu acesso à plataforma de gestão de encomendas e medicamentos foi liberado:
+
+🔗 *Link de Acesso:* ${c.linkAcesso}
+👤 *Usuário / E-mail:* ${c.email}
+🔑 *Senha Provisória:* ${c.senhaProvisoria}
+
+⚠️ *Aviso de Segurança:* No seu primeiro login, o sistema solicitará que você defina sua nova senha definitiva da drogaria.`;
+
+  try {
+    await navigator.clipboard.writeText(texto);
+    textoCopiado.value = true;
+    setTimeout(() => {
+      textoCopiado.value = false;
+    }, 3500);
+    notificar('sucesso', 'Credenciais copiadas com sucesso! Pronto para colar no WhatsApp.');
+  } catch {
+    notificar('erro', 'Não foi possível copiar para a área de transferência.');
+  }
+}
+
+async function gerarNovaSenhaProvisoria(tenant: Tenant) {
+  if (!tenant.email_admin) {
+    notificar('erro', `A empresa "${tenant.nome_empresa}" não possui e-mail cadastrado.`);
+    return;
+  }
+
+  const confirmar = window.confirm(
+    `Deseja gerar uma NOVA senha provisória para "${tenant.nome_empresa}" (${tenant.email_admin})?\n\nA senha anterior será substituída e a farmácia definirá sua senha definitiva no próximo acesso.`
+  );
+  if (!confirmar) return;
+
+  const res = await authStore.redefinirSenhaProvisoriaTenant(tenant.id, tenant.email_admin);
+  if (res.sucesso && res.senhaProvisoria) {
+    credenciaisResultado.value = {
+      nomeEmpresa: tenant.nome_empresa,
+      email: tenant.email_admin,
+      senhaProvisoria: res.senhaProvisoria,
+      linkAcesso: typeof window !== 'undefined' ? `${window.location.origin}/login` : 'https://encomed.vercel.app/login',
+    };
+    showCredenciaisModal.value = true;
+    notificar('sucesso', 'Nova senha provisória gerada com sucesso!');
   } else {
     notificar('erro', res.mensagem);
   }
@@ -670,7 +753,20 @@ async function confirmarBreakGlass() {
 
           <!-- Lado Direito: Ações em Botões em Pílula (rounded-full) -->
           <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end;">
-            <!-- Botão Enviar Link de Senha -->
+            <!-- Botão Gerar Senha Provisória (Sem Dependência de E-mail) -->
+            <button
+              v-if="t.email_admin"
+              type="button"
+              @click="gerarNovaSenhaProvisoria(t)"
+              class="btn-outline-emerald"
+              style="padding: 0.42rem 0.95rem; font-size: 0.79rem;"
+              title="Gerar nova senha provisória de acesso e copiar para enviar no WhatsApp"
+            >
+              <KeyRound :size="13" />
+              <span>Senha Provisória</span>
+            </button>
+
+            <!-- Botão Enviar Link de Senha (Opcional por E-mail) -->
             <button
               v-if="t.email_admin"
               type="button"
@@ -936,7 +1032,7 @@ async function confirmarBreakGlass() {
                 Provisionar Nova Empresa
               </h3>
               <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
-                Configure o tenant e envie o link de senha diretamente para o gestor
+                Configure a farmácia e gere a senha provisória de primeiro acesso
               </p>
             </div>
           </div>
@@ -969,9 +1065,9 @@ async function confirmarBreakGlass() {
             <small style="color: var(--text-muted); font-size: 0.74rem;">Ficará acessível como: <strong>{{ slugNovo ? slugNovo.toLowerCase() : 'slug' }}.plataforma.com.br</strong></small>
           </div>
 
-          <!-- Campo Principal: E-mail do Administrador da Loja -->
-          <div class="form-group" style="background: #f0fdf4; border: 1.5px solid #a7f3d0; padding: 0.75rem 0.9rem; border-radius: 14px;">
-            <label class="form-label" style="font-weight: 800; font-size: 0.82rem; color: #065f46; display: flex; align-items: center; gap: 5px;">
+          <!-- Campo: E-mail do Administrador da Drogaria -->
+          <div class="form-group">
+            <label class="form-label" style="font-weight: 700; font-size: 0.82rem; display: flex; align-items: center; gap: 5px;">
               <Mail :size="14" />
               <span>E-mail do Administrador / Gestor da Empresa *</span>
             </label>
@@ -980,10 +1076,48 @@ async function confirmarBreakGlass() {
               type="email"
               placeholder="gestor@drogariaexemplo.com.br"
               class="form-input"
-              style="border: 1.5px solid #86efac; border-radius: 10px; background: #ffffff;"
+              style="border: 1.5px solid var(--border-color); border-radius: 12px;"
             />
-            <p style="font-size: 0.75rem; color: #166534; margin: 0.4rem 0 0 0; line-height: 1.35;">
-              ✉️ <strong>Envio Automático:</strong> Um link seguro será enviado para este e-mail para que o gestor defina sua senha no primeiro acesso.
+          </div>
+
+          <!-- Campo Principal: Senha Provisória de Acesso (Sem envio de e-mail) -->
+          <div class="form-group" style="background: #f0fdf4; border: 1.5px solid #a7f3d0; padding: 0.85rem 1rem; border-radius: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+              <label class="form-label" style="font-weight: 800; font-size: 0.82rem; color: #065f46; display: flex; align-items: center; gap: 5px; margin: 0;">
+                <KeyRound :size="14" />
+                <span>Senha Provisória de Primeiro Acesso *</span>
+              </label>
+              <button
+                type="button"
+                @click="regenerarSenhaProvisoriaNovo"
+                style="background: none; border: none; color: #059669; font-size: 0.74rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 0;"
+                title="Gerar nova combinação aleatória"
+              >
+                <RefreshCw :size="12" />
+                <span>Gerar outra</span>
+              </button>
+            </div>
+
+            <div style="position: relative; display: flex; align-items: center;">
+              <input
+                v-model="senhaProvisoriaNovo"
+                :type="showSenhaProvisoriaNovo ? 'text' : 'password'"
+                class="form-input"
+                style="border: 1.5px solid #86efac; border-radius: 10px; background: #ffffff; padding-right: 2.75rem; font-family: monospace; font-weight: 700; font-size: 0.95rem; letter-spacing: 0.05em;"
+              />
+              <button
+                type="button"
+                @click="showSenhaProvisoriaNovo = !showSenhaProvisoriaNovo"
+                style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: #64748b; padding: 4px; display: flex; align-items: center;"
+                :title="showSenhaProvisoriaNovo ? 'Ocultar senha' : 'Ver senha'"
+              >
+                <EyeOff v-if="showSenhaProvisoriaNovo" :size="16" />
+                <Eye v-else :size="16" />
+              </button>
+            </div>
+
+            <p style="font-size: 0.74rem; color: #166534; margin: 0.45rem 0 0 0; line-height: 1.4;">
+              🔒 <strong>Sem envio de e-mail:</strong> A drogaria fará login imediatamente com esta senha provisória e o sistema solicitará o cadastro da senha definitiva no primeiro acesso.
             </p>
           </div>
 
@@ -1022,8 +1156,79 @@ async function confirmarBreakGlass() {
             style="padding: 0.5rem 1.4rem;"
           >
             <Loader2 v-if="salvandoTenant" class="animate-spin" :size="16" />
-            <Send v-else :size="16" />
-            <span>{{ salvandoTenant ? 'Provisionando...' : 'Provisionar e Enviar Link' }}</span>
+            <CheckCircle2 v-else :size="16" />
+            <span>{{ salvandoTenant ? 'Provisionando...' : 'Provisionar com Senha Provisória' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- MODAL: CREDENCIAIS DE ACESSO DA DROGARIA (PÓS-PROVISIONAMENTO) -->
+    <!-- ============================================================== -->
+    <div v-if="showCredenciaisModal && credenciaisResultado" class="modal-backdrop">
+      <div class="base44-modal-dialog" style="max-width: 500px; border: 1.5px solid var(--border-color); border-radius: 20px;">
+        <div style="text-align: center; margin-bottom: 1.25rem;">
+          <div style="width: 52px; height: 52px; border-radius: 16px; background: #ecfdf5; border: 1.5px solid #a7f3d0; color: #059669; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.85rem auto;">
+            <CheckCircle2 :size="28" />
+          </div>
+          <h3 style="font-size: 1.25rem; font-weight: 800; color: #0f172a; margin: 0 0 0.25rem 0;">
+            Credenciais Prontas para Envio
+          </h3>
+          <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0;">
+            Empresa <strong>{{ credenciaisResultado.nomeEmpresa }}</strong> provisionada com sucesso!
+          </p>
+        </div>
+
+        <!-- Card de Credenciais -->
+        <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1.15rem; display: flex; flex-direction: column; gap: 0.75rem;">
+          <div>
+            <div style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.05em;">Link de Acesso Oficial</div>
+            <div style="font-size: 0.88rem; font-weight: 600; color: #2563eb; word-break: break-all;">
+              {{ credenciaisResultado.linkAcesso }}
+            </div>
+          </div>
+
+          <div>
+            <div style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.05em;">Identificador / E-mail de Login</div>
+            <div style="font-size: 0.95rem; font-weight: 700; color: #0f172a;">
+              {{ credenciaisResultado.email }}
+            </div>
+          </div>
+
+          <div>
+            <div style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.05em;">Senha Provisória de Primeiro Acesso</div>
+            <div style="font-size: 1.15rem; font-weight: 800; color: #047857; font-family: monospace; letter-spacing: 0.08em; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 0.4rem 0.75rem; border-radius: 8px; margin-top: 0.25rem; display: inline-block;">
+              {{ credenciaisResultado.senhaProvisoria }}
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 1rem; background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 0.75rem 0.9rem; font-size: 0.78rem; color: #92400e; line-height: 1.45;">
+          ℹ️ <strong>Fluxo de Primeiro Acesso:</strong> Ao fazer o login com esta senha provisória, a drogaria verá um aviso imediato na tela com o formulário para cadastrar a senha definitiva.
+        </div>
+
+        <!-- Botões de Ação -->
+        <div style="display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1.25rem;">
+          <button
+            type="button"
+            @click="copiarCredenciaisParaWhatsApp"
+            class="btn-outline-emerald"
+            style="width: 100%; justify-content: center; height: 44px; font-size: 0.88rem;"
+            id="btn-copiar-credenciais-whatsapp"
+          >
+            <Check v-if="textoCopiado" :size="16" />
+            <Copy v-else :size="16" />
+            <span>{{ textoCopiado ? '✓ Copiado com Sucesso!' : 'Copiar Credenciais (para WhatsApp)' }}</span>
+          </button>
+
+          <button
+            type="button"
+            @click="showCredenciaisModal = false"
+            class="btn-primary-pill"
+            style="width: 100%; justify-content: center; height: 42px;"
+          >
+            <span>Concluir</span>
           </button>
         </div>
       </div>

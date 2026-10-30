@@ -123,6 +123,8 @@ export interface Usuario {
   email: string;
   perfil: PerfilUsuario;
   ativo: boolean;
+  exigir_troca_senha?: boolean;
+  senha_provisoria_ativa?: boolean;
   excluido_em?: string | null;
   criado_em: string;
 }
