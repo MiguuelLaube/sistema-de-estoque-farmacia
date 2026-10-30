@@ -350,6 +350,87 @@ END;
 $$;
 GRANT EXECUTE ON FUNCTION public.redefinir_senha_provisoria_tenant(UUID, TEXT) TO authenticated;
 
--- 7. Atualiza o cache do PostgREST
+-- 7. ATUALIZAÇÃO DA POLÍTICA DE LEITURA (RLS) EM public.usuario
+-- Permite que o usuário autenticado leia seu próprio registro por e-mail mesmo antes do primeiro vínculo de auth_user_id
+DROP POLICY IF EXISTS usuario_select_isolado ON public.usuario;
+CREATE POLICY usuario_select_isolado ON public.usuario
+    FOR SELECT
+    USING (
+        public.is_super_admin()
+        OR auth_user_id = auth.uid()
+        OR LOWER(email) = LOWER(COALESCE(auth.jwt() ->> 'email', ''))
+        OR (
+            tenant_id IS NOT NULL
+            AND tenant_id = public.current_tenant_id()
+        )
+    );
+
+-- 8. RPC DE AUTO-VINCULAÇÃO E CARREGAMENTO DE PERFIL NO LOGIN
+CREATE OR REPLACE FUNCTION public.vincular_meu_usuario_auth()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth, extensions
+AS $$
+DECLARE
+    v_uid UUID := auth.uid();
+    v_email TEXT;
+    v_user RECORD;
+BEGIN
+    IF v_uid IS NULL THEN
+        RETURN jsonb_build_object('sucesso', false, 'mensagem', 'Não autenticado.');
+    END IF;
+
+    SELECT LOWER(email) INTO v_email
+    FROM auth.users
+    WHERE id = v_uid;
+
+    IF v_email IS NULL THEN
+        RETURN jsonb_build_object('sucesso', false, 'mensagem', 'E-mail não localizado na sessão de autenticação.');
+    END IF;
+
+    -- 1. Verifica se já existe um registro vinculado a este auth_user_id
+    SELECT * INTO v_user
+    FROM public.usuario
+    WHERE auth_user_id = v_uid
+      AND ativo = true
+      AND excluido_em IS NULL
+    LIMIT 1;
+
+    IF v_user.id IS NOT NULL THEN
+        RETURN jsonb_build_object('sucesso', true, 'usuario', row_to_json(v_user));
+    END IF;
+
+    -- 2. Tenta localizar por e-mail correspondente e auto-vincula
+    SELECT * INTO v_user
+    FROM public.usuario
+    WHERE LOWER(email) = v_email
+      AND ativo = true
+      AND excluido_em IS NULL
+    LIMIT 1;
+
+    IF v_user.id IS NOT NULL THEN
+        UPDATE public.usuario
+        SET auth_user_id = v_uid, atualizado_em = now()
+        WHERE id = v_user.id;
+        v_user.auth_user_id := v_uid;
+
+        RETURN jsonb_build_object('sucesso', true, 'usuario', row_to_json(v_user));
+    END IF;
+
+    -- 3. Caso especial para Super Admin pioneiro
+    IF v_email = 'miguuel.laube@gmail.com' THEN
+        INSERT INTO public.usuario (id, tenant_id, auth_user_id, nome, email, perfil, ativo)
+        VALUES (v_uid, NULL, v_uid, 'Miguel Laube (Super Admin)', v_email, 'super_admin', true)
+        RETURNING * INTO v_user;
+        RETURN jsonb_build_object('sucesso', true, 'usuario', row_to_json(v_user));
+    END IF;
+
+    RETURN jsonb_build_object('sucesso', false, 'mensagem', 'Usuário não cadastrado na base corporativa.');
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.vincular_meu_usuario_auth() TO authenticated;
+
+-- 9. Atualiza o cache do PostgREST
 NOTIFY pgrst, 'reload schema';
 
