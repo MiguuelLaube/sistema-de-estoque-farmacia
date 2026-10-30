@@ -59,7 +59,7 @@ async function encerrarSuporteBreakGlass() {
     <aside class="app-sidebar">
       <div class="sidebar-header" style="align-items: center; gap: 0.75rem;">
         <img
-          :src="authStore.currentConfig.logo_url || '/encomed-logo.png'"
+          :src="authStore.currentConfig.logo_url || '/encomed-logo.svg'"
           :alt="authStore.currentConfig.nome_sistema || 'EncoMed Logo'"
           :style="{
             height: '40px',
@@ -68,9 +68,8 @@ async function encerrarSuporteBreakGlass() {
             objectFit: authStore.currentConfig.visual_opcoes?.formato_logo === 'circular' ? 'cover' : 'contain',
             borderRadius: authStore.currentConfig.visual_opcoes?.formato_logo === 'circular' ? '50%' : '8px',
             flexShrink: 0,
-            background: '#ffffff',
+            background: 'transparent',
             padding: '2px',
-            border: '1px solid rgba(148, 163, 184, 0.25)',
           }"
         />
         <div class="tenant-meta" style="min-width: 0;">

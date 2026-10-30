@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="100%" height="100%" fill="none">
+  <defs>
+    <linearGradient id="iconLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1d4ed8" />
+      <stop offset="100%" stop-color="#1e40af" />
+    </linearGradient>
+    <linearGradient id="iconRight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+    <linearGradient id="iconTop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+    <linearGradient id="iconCross" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <filter id="iconShadow" x="-15%" y="-15%" width="130%" height="130%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#1d4ed8" flood-opacity="0.22" />
+    </filter>
+  </defs>
+
+  <g transform="translate(6, 4)" filter="url(#iconShadow)">
+    <ellipse cx="42" cy="78" rx="34" ry="7" fill="#0f172a" fill-opacity="0.08" />
+    <path d="M42 8 L76 26 L42 44 L8 26 Z" fill="url(#iconTop)" />
+    <path d="M8 26 L42 44 L42 76 L8 58 Z" fill="url(#iconLeft)" />
+    <path d="M42 44 L76 26 L76 58 L42 76 Z" fill="url(#iconRight)" />
+
+    <path d="M42 8 L42 44" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.35" stroke-linecap="round" />
+    <path d="M8 26 L42 44" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.25" stroke-linecap="round" />
+    <path d="M76 26 L42 44" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.35" stroke-linecap="round" />
+
+    <g transform="translate(42, 44)">
+      <circle cx="0" cy="0" r="16.5" fill="#ffffff" />
+      <circle cx="0" cy="0" r="14" fill="#f0fdf4" stroke="#a7f3d0" stroke-width="1" />
+      <rect x="-3" y="-9" width="6" height="18" rx="2" fill="url(#iconCross)" />
+      <rect x="-9" y="-3" width="18" height="6" rx="2" fill="url(#iconCross)" />
+      <circle cx="0" cy="0" r="1.8" fill="#ffffff" fill-opacity="0.9" />
+    </g>
+
+    <g transform="translate(62, 16) rotate(-25)">
+      <rect x="-8" y="-3.5" width="16" height="7" rx="3.5" fill="#ffffff" fill-opacity="0.95" />
+      <path d="M0 -3.5 L4.5 -3.5 C6.5 -3.5 8 -2 8 0 C8 2 6.5 3.5 4.5 3.5 L0 3.5 Z" fill="#10b981" />
+      <path d="M-8 0 L8 0" stroke="#0f172a" stroke-opacity="0.12" stroke-width="0.6" />
+    </g>
+  </g>
+</svg>

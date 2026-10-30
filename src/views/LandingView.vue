@@ -343,7 +343,7 @@ onBeforeUnmount(() => {
           @click.prevent="rolarParaSecao('topo')"
         >
           <img
-            src="/encomed-logo.png"
+            src="/encomed-icon.svg"
             alt="Logo EncoMed SaaS"
             class="brand-logo-img"
           />

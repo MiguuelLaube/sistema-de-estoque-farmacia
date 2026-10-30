@@ -173,9 +173,9 @@ function fecharModalContato() {
       <!-- Topo: Logo Oficial e Marca -->
       <div class="login-card-header" style="text-align: center;">
         <img
-          src="/encomed-logo.png"
+          src="/encomed-logo.svg"
           alt="EncoMed - Sistema de Encomendas e Gestão de Medicamentos"
-          style="max-height: 58px; max-width: 220px; object-fit: contain; margin: 0 auto 0.75rem auto; display: block;"
+          style="max-height: 52px; max-width: 220px; width: auto; object-fit: contain; margin: 0 auto 0.85rem auto; display: block; background: transparent;"
         />
         <h1 class="login-card-title">Acesso Seguro</h1>
         <p class="login-card-subtitle">Sistema de Encomendas e Gestão de Medicamentos</p>

@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 96" width="100%" height="100%" fill="none">
+  <defs>
+    <!-- Gradientes do Isotipo (Cubo de Encomenda + Cruz Médica) -->
+    <linearGradient id="cubeLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1d4ed8" />
+      <stop offset="100%" stop-color="#1e40af" />
+    </linearGradient>
+    <linearGradient id="cubeRight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+    <linearGradient id="cubeTop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+
+    <!-- Gradiente da Cruz Médica / Saúde -->
+    <linearGradient id="crossGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+
+    <!-- Gradiente do Texto "Med" -->
+    <linearGradient id="medGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+
+    <!-- Sombra suave do cubo -->
+    <filter id="boxShadow" x="-15%" y="-15%" width="130%" height="130%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#1d4ed8" flood-opacity="0.22" />
+    </filter>
+  </defs>
+
+  <!-- =================================================================== -->
+  <!-- ÍCONE / ISOTIPO (Caixa de Encomendas Isométrica + Cruz de Saúde)   -->
+  <!-- =================================================================== -->
+  <g transform="translate(6, 4)" filter="url(#boxShadow)">
+    <!-- Base de Fundo / Sombra projetada no piso -->
+    <ellipse cx="42" cy="78" rx="34" ry="7" fill="#0f172a" fill-opacity="0.08" />
+
+    <!-- FACE SUPERIOR DO PACOTE (Topo Aberto/Fechado Geométrico) -->
+    <path
+      d="M42 8 L76 26 L42 44 L8 26 Z"
+      fill="url(#cubeTop)"
+    />
+
+    <!-- FACE ESQUERDA DO PACOTE -->
+    <path
+      d="M8 26 L42 44 L42 76 L8 58 Z"
+      fill="url(#cubeLeft)"
+    />
+
+    <!-- FACE DIREITA DO PACOTE -->
+    <path
+      d="M42 44 L76 26 L76 58 L42 76 Z"
+      fill="url(#cubeRight)"
+    />
+
+    <!-- VINCOS E DETALHES DE DOBRADURA DA CAIXA (Logística Farmacêutica) -->
+    <path d="M42 8 L42 44" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.35" stroke-linecap="round" />
+    <path d="M8 26 L42 44" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.25" stroke-linecap="round" />
+    <path d="M76 26 L42 44" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.35" stroke-linecap="round" />
+
+    <!-- ESCUDO FRONTAL CENTRAL COM CRUZ MÉDICA -->
+    <g transform="translate(42, 44)">
+      <!-- Selo Circular de Saúde / Farmácia no centro do cubo -->
+      <circle cx="0" cy="0" r="16.5" fill="#ffffff" />
+      <circle cx="0" cy="0" r="14" fill="#f0fdf4" stroke="#a7f3d0" stroke-width="1" />
+
+      <!-- Cruz Médica Verde Esmeralda (Health & Pharma) -->
+      <!-- Barra Vertical -->
+      <rect x="-3" y="-9" width="6" height="18" rx="2" fill="url(#crossGrad)" />
+      <!-- Barra Horizontal -->
+      <rect x="-9" y="-3" width="18" height="6" rx="2" fill="url(#crossGrad)" />
+      <!-- Brilho central da cruz -->
+      <circle cx="0" cy="0" r="1.8" fill="#ffffff" fill-opacity="0.9" />
+    </g>
+
+    <!-- ACENTO DE CÁPSULA / MEDICAMENTO NA LATERAL SUPERIOR -->
+    <g transform="translate(62, 16) rotate(-25)">
+      <rect x="-8" y="-3.5" width="16" height="7" rx="3.5" fill="#ffffff" fill-opacity="0.95" />
+      <path d="M0 -3.5 L4.5 -3.5 C6.5 -3.5 8 -2 8 0 C8 2 6.5 3.5 4.5 3.5 L0 3.5 Z" fill="#10b981" />
+      <path d="M-8 0 L8 0" stroke="#0f172a" stroke-opacity="0.12" stroke-width="0.6" />
+    </g>
+  </g>
+
+  <!-- =================================================================== -->
+  <!-- TIPOGRAFIA / LOGOTIPO ("EncoMed")                                  -->
+  <!-- =================================================================== -->
+  <g transform="translate(104, 0)">
+    <!-- TEXTO PRINCIPAL: Enco (Ardósia Profundo) + Med (Azul Royal Tecnológico) -->
+    <text
+      x="0"
+      y="54"
+      font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+      font-size="44"
+      font-weight="800"
+      letter-spacing="-1.2px"
+    >
+      <tspan fill="#0f172a">Enco</tspan><tspan fill="url(#medGrad)">Med</tspan>
+    </text>
+
+    <!-- PONTO / BADGE DE STATUS "PLUS" OU SAÚDE -->
+    <circle cx="218" cy="30" r="4.5" fill="#10b981" />
+    <path d="M218 27.5 L218 32.5 M215.5 30 L220.5 30" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round" />
+
+    <!-- SUBTÍTULO / SLOGAN INSTITUCIONAL -->
+    <text
+      x="2"
+      y="74"
+      font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+      font-size="10"
+      font-weight="700"
+      fill="#64748b"
+      letter-spacing="2.6px"
+    >
+      GESTÃO DE ENCOMENDAS FARMACÊUTICAS
+    </text>
+
+    <!-- LINHA DE APOIO ELEGANTE -->
+    <rect x="2" y="81" width="48" height="2" rx="1" fill="#2563eb" />
+    <rect x="54" y="81" width="16" height="2" rx="1" fill="#10b981" />
+  </g>
+</svg>
