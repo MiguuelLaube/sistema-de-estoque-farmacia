@@ -241,13 +241,18 @@ async function salvarNovoItem() {
   const descUpper = novoItemNome.value.trim().toUpperCase();
   const qtd = typeof novoItemQuantidade.value === 'number' && novoItemQuantidade.value > 0 ? novoItemQuantidade.value : 1;
 
-  await comprasStore.encontrarOuCriarCompraItem(
-    descUpper,
-    novoItemClassificacaoId.value,
-    qtd,
-    false,
-    false
-  );
+  try {
+    await comprasStore.encontrarOuCriarCompraItem(
+      descUpper,
+      novoItemClassificacaoId.value,
+      qtd,
+      false,
+      false
+    );
+  } catch (err: any) {
+    alert(err?.message || 'Não foi possível salvar o item de compra.');
+    return;
+  }
 
   showNovoItemModal.value = false;
 }
@@ -260,12 +265,17 @@ async function criarNovaClassificacao() {
     alert('Classificação já cadastrada!');
     return;
   }
-  await comprasStore.adicionarClassificacao(nomeUpper);
+  const criada = await comprasStore.adicionarClassificacao(nomeUpper);
+  if (!criada) {
+    alert(comprasStore.erroOperacao || 'Não foi possível cadastrar a categoria.');
+    return;
+  }
   novaClassificacaoNome.value = '';
 }
 
 async function removerClassificacao(id: string) {
-  await comprasStore.removerClassificacao(id);
+  const ok = await comprasStore.removerClassificacao(id);
+  if (!ok) alert(comprasStore.erroOperacao || 'Não foi possível excluir a categoria.');
 }
 
 function abrirImportacaoXML() {

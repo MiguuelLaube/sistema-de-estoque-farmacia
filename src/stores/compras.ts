@@ -4,6 +4,7 @@ import type { CompraItem, StatusCompra, Classificacao, Fornecedor } from '../typ
 import { initialCompras, initialClassificacoes, initialFornecedores } from '../data/mockData';
 import { useAuthStore } from './auth';
 import { supabase, isLiveSupabaseConfigured } from '../services/supabase';
+import { traduzirErroPersistencia } from '../utils/erroPersistencia';
 
 function gerarUuidSeguro(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -166,6 +167,9 @@ export const useComprasStore = defineStore('compras', () => {
           existente.quantidade = qtdAnterior;
           existente.urgente = urgAnterior;
           existente.controlado = ctrlAnterior;
+          const mensagem = traduzirErroPersistencia(err, 'atualizar o item de compra');
+          erroOperacao.value = mensagem;
+          throw new Error(mensagem);
         }
       }
       return existente;
@@ -189,10 +193,13 @@ export const useComprasStore = defineStore('compras', () => {
       atualizado_em: agora,
     };
 
+    erroOperacao.value = null;
     allCompras.value.unshift(novoItem);
 
     if (isLive && authStore.isAuthenticated) {
       try {
+        await authStore.garantirVinculoBanco();
+        novoItem.tenant_id = authStore.activeTenantId;
         const { error } = await supabase.from('compra_item').insert({
           id: novoItem.id,
           tenant_id: novoItem.tenant_id,
@@ -212,6 +219,9 @@ export const useComprasStore = defineStore('compras', () => {
         console.error('[ComprasStore] Erro ao persistir novo item de compra:', err);
         // Rollback da inserção na UI
         allCompras.value = allCompras.value.filter((cp) => cp.id !== novoItem.id);
+        const mensagem = traduzirErroPersistencia(err, 'adicionar o item de compra');
+        erroOperacao.value = mensagem;
+        throw new Error(mensagem);
       }
     }
 
@@ -296,6 +306,7 @@ export const useComprasStore = defineStore('compras', () => {
     const cleanNome = nome.trim().toUpperCase();
     if (!cleanNome) return null;
 
+    erroOperacao.value = null;
     const nova: Classificacao = {
       id: gerarUuidSeguro(),
       tenant_id: authStore.activeTenantId,
@@ -308,6 +319,8 @@ export const useComprasStore = defineStore('compras', () => {
 
     if (isLive && authStore.isAuthenticated) {
       try {
+        await authStore.garantirVinculoBanco();
+        nova.tenant_id = authStore.activeTenantId;
         const { error } = await supabase.from('classificacao').insert({
           id: nova.id,
           tenant_id: nova.tenant_id,
@@ -318,6 +331,7 @@ export const useComprasStore = defineStore('compras', () => {
       } catch (err) {
         console.error('[ComprasStore] Falha ao adicionar classificação no banco:', err);
         allClassificacoes.value = allClassificacoes.value.filter((c) => c.id !== nova.id);
+        erroOperacao.value = traduzirErroPersistencia(err, 'cadastrar a categoria');
         return null;
       }
     }
@@ -341,6 +355,7 @@ export const useComprasStore = defineStore('compras', () => {
         if (error) throw error;
       } catch (err) {
         console.error('[ComprasStore] Falha ao excluir classificação no banco:', err);
+        erroOperacao.value = traduzirErroPersistencia(err, 'excluir a categoria');
         allClassificacoes.value.splice(idx, 0, removida);
         return false;
       }

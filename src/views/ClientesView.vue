@@ -143,21 +143,30 @@ async function salvarCliente() {
     return;
   }
 
-  if (clienteEmEdicao.value) {
-    await clientesStore.atualizarCliente(clienteEmEdicao.value.id, {
-      nome: formNome.value,
-      telefone: formTelefone.value,
-      cpf: formCpf.value.trim() || undefined,
-      endereco: formEndereco.value.trim() || undefined,
-    });
-  } else {
-    await clientesStore.adicionarCliente({
-      nome: formNome.value,
-      telefone: formTelefone.value,
-      cpf: formCpf.value.trim() || undefined,
-      endereco: formEndereco.value.trim() || undefined,
-      base_legal: 'execucao_contrato',
-    });
+  try {
+    if (clienteEmEdicao.value) {
+      const ok = await clientesStore.atualizarCliente(clienteEmEdicao.value.id, {
+        nome: formNome.value,
+        telefone: formTelefone.value,
+        cpf: formCpf.value.trim() || undefined,
+        endereco: formEndereco.value.trim() || undefined,
+      });
+      if (!ok) {
+        alert(clientesStore.erroOperacao || 'Não foi possível atualizar o cliente.');
+        return;
+      }
+    } else {
+      await clientesStore.adicionarCliente({
+        nome: formNome.value,
+        telefone: formTelefone.value,
+        cpf: formCpf.value.trim() || undefined,
+        endereco: formEndereco.value.trim() || undefined,
+        base_legal: 'execucao_contrato',
+      });
+    }
+  } catch (err: any) {
+    alert(err?.message || 'Não foi possível salvar o cliente.');
+    return;
   }
 
   showClienteModal.value = false;
@@ -165,7 +174,8 @@ async function salvarCliente() {
 
 async function removerCliente(c: Cliente) {
   if (confirm(`Deseja arquivar o cliente "${c.nome}"?\n\n(Para exercer o direito de esquecimento/anonimização conforme a LGPD, abra a edição do cliente e clique em "Anonimizar Titular")`)) {
-    await clientesStore.arquivarCliente(c.id);
+    const ok = await clientesStore.arquivarCliente(c.id);
+    if (!ok) alert(clientesStore.erroOperacao || 'Não foi possível arquivar o cliente.');
   }
 }
 
@@ -190,7 +200,11 @@ async function anonimizarTitular(c: Cliente) {
     `ATENÇÃO - AÇÃO IRREVERSÍVEL (LGPD Art. 18):\n\nConfirma a anonimização dos dados de "${c.nome}"?\n\nO nome, telefone, CPF e endereço serão apagados e substituídos por dados anônimos, preservando o histórico de encomendas.`
   );
   if (confirmacao) {
-    await clientesStore.anonimizarCliente(c.id);
+    const ok = await clientesStore.anonimizarCliente(c.id);
+    if (!ok) {
+      alert(clientesStore.erroOperacao || 'Não foi possível anonimizar o titular.');
+      return;
+    }
     showClienteModal.value = false;
   }
 }

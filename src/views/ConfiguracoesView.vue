@@ -667,7 +667,11 @@ async function adicionarFuncionario() {
     exibirFeedback('erro', 'O nome do funcionário é obrigatório.');
     return;
   }
-  await authStore.adicionarFuncionario(novoFuncionarioNome.value, novoFuncionarioCargo.value);
+  const criado = await authStore.adicionarFuncionario(novoFuncionarioNome.value, novoFuncionarioCargo.value);
+  if (!criado) {
+    exibirFeedback('erro', authStore.erroOperacao || 'Não foi possível cadastrar o funcionário.');
+    return;
+  }
   novoFuncionarioNome.value = '';
   novoFuncionarioCargo.value = '';
   exibirFeedback('sucesso', 'Funcionário cadastrado com sucesso.');
@@ -675,7 +679,12 @@ async function adicionarFuncionario() {
 
 async function removerFuncionario(id: string, nome: string) {
   if (confirm(`Deseja realmente remover o funcionário "${nome}"?`)) {
+    authStore.erroOperacao = null;
     await authStore.removerFuncionario(id);
+    if (authStore.erroOperacao) {
+      exibirFeedback('erro', authStore.erroOperacao);
+      return;
+    }
     exibirFeedback('sucesso', 'Funcionário removido.');
   }
 }
@@ -708,7 +717,7 @@ async function adicionarClassificacao() {
     novaClassificacaoNome.value = '';
     exibirFeedback('sucesso', 'Classificação adicionada com sucesso.');
   } else {
-    exibirFeedback('erro', 'Não foi possível cadastrar a classificação.');
+    exibirFeedback('erro', comprasStore.erroOperacao || 'Não foi possível cadastrar a classificação.');
   }
 }
 
@@ -717,7 +726,7 @@ async function removerClassificacao(id: string) {
   if (ok) {
     exibirFeedback('sucesso', 'Classificação removida.');
   } else {
-    exibirFeedback('erro', 'Falha ao remover classificação.');
+    exibirFeedback('erro', comprasStore.erroOperacao || 'Falha ao remover classificação.');
   }
 }
 </script>

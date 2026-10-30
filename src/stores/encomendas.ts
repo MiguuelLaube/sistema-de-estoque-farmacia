@@ -13,6 +13,7 @@ import {
   type TipoModeloWhatsApp,
 } from '../services/evolutionApi';
 import { supabase, isLiveSupabaseConfigured } from '../services/supabase';
+import { traduzirErroPersistencia } from '../utils/erroPersistencia';
 
 function gerarUuidSeguro(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -353,6 +354,13 @@ export const useEncomendasStore = defineStore('encomendas', () => {
       urgente: boolean;
     }>;
   }): Promise<Encomenda> {
+    if (isLive && authStore.isAuthenticated) {
+      try {
+        await authStore.garantirVinculoBanco();
+      } catch (err) {
+        throw new Error(traduzirErroPersistencia(err, 'registrar a encomenda'));
+      }
+    }
     const tenantId = authStore.activeTenantId;
     const orderId = gerarUuidSeguro();
     const trackingCode = `ENC-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
@@ -459,7 +467,7 @@ export const useEncomendasStore = defineStore('encomendas', () => {
         console.error('[EncomendasStore] Falha ao persistir encomenda no banco, executando rollback:', err);
         // Rollback: remove da memória para evitar estado fantasma
         allEncomendas.value = allEncomendas.value.filter((e) => e.id !== novaEncomenda.id);
-        throw new Error(err.message || 'Não foi possível gravar a encomenda no banco de dados.');
+        throw new Error(traduzirErroPersistencia(err, 'gravar a encomenda'));
       }
     }
 

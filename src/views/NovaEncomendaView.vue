@@ -208,12 +208,20 @@ async function confirmCreateOrder(employee: Funcionario) {
 
   let clientId = selectedClientId.value;
   if (!clientId && clientSearchText.value.trim()) {
-    const newClient = await clientesStore.adicionarCliente({
-      nome: clientSearchText.value.trim().toUpperCase(),
-      telefone: clientQuickPhone.value.trim(),
-      base_legal: 'execucao_contrato',
-    });
-    clientId = newClient.id;
+    try {
+      const newClient = await clientesStore.adicionarCliente({
+        nome: clientSearchText.value.trim().toUpperCase(),
+        telefone: clientQuickPhone.value.trim(),
+        base_legal: 'execucao_contrato',
+      });
+      clientId = newClient.id;
+    } catch (err: any) {
+      console.error('Erro ao cadastrar cliente na nova encomenda:', err);
+      showEmployeeModal.value = false;
+      formErrorMsg.value = err?.message || 'Não foi possível cadastrar o cliente.';
+      isCreating.value = false;
+      return;
+    }
   }
 
   const itemsData = itens.value.map((it) => ({
@@ -246,7 +254,11 @@ async function confirmCreateOrder(employee: Funcionario) {
     router.push('/encomendas');
   } catch (err) {
     console.error('Erro ao processar nova encomenda:', err);
-    alert('Erro ao registrar encomenda. Por favor, verifique a conexão e tente novamente.');
+    alert(
+      (err as any)?.message
+        ? `Erro ao registrar encomenda: ${(err as any).message}`
+        : 'Erro ao registrar encomenda. Por favor, verifique a conexão e tente novamente.'
+    );
   } finally {
     isCreating.value = false;
   }

@@ -127,3 +127,8 @@ Todas as páginas devem respeitar rigorosamente os padrões visuais estabelecido
 4. **Ao alterar autenticação:** Não reintroduza validações síncronas que dependam exclusivamente do banco antes do usuário estar logado.
 5. **Ao concluir tarefas:** Adicione uma nova linha na seção *7. Histórico Cronológico de Atualizações* e execute `npm run build` para garantir zero erros de TypeScript.
 
+
+## 2026-10-30 — Falha de criação/gravação (categorias, clientes, etc.)
+- **Causa raiz:** policies RLS de INSERT/UPDATE exigem tenant_id = current_tenant_id(), que depende de public.usuario.auth_user_id = auth.uid(). O admin da drogaria (tenant.email_admin) não tinha linha vinculada em public.usuario => current_tenant_id() = NULL => 42501 em toda gravação. O frontend deixava logar com perfil em memória (tenant mock) e engolia o erro.
+- **Correção:** migração 20261030000016 (vincular_meu_usuario_auth auto-provisiona admin por tenant.email_admin + reparo de dados + rate-limit fail-open se infra ausente); auth.ts ganhou vinculoBancoConfirmado/garantirVinculoBanco() chamado antes de toda criação; src/utils/erroPersistencia.ts traduz erros; stores/views exibem mensagem clara (nunca silencioso).
+- **Teste:** npm run test:persistencia (18/18).

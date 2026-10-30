@@ -4,6 +4,7 @@ import type { Cliente } from '../types';
 import { initialClientes } from '../data/mockData';
 import { useAuthStore } from './auth';
 import { supabase, isLiveSupabaseConfigured } from '../services/supabase';
+import { traduzirErroPersistencia } from '../utils/erroPersistencia';
 
 function gerarUuidSeguro(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -161,10 +162,12 @@ export const useClientesStore = defineStore('clientes', () => {
       criado_em: agora,
     };
 
-    allClientes.value.unshift(novoCliente);
+    erroOperacao.value = null;
 
     if (isLive && authStore.isAuthenticated) {
       try {
+        await authStore.garantirVinculoBanco();
+        novoCliente.tenant_id = authStore.activeTenantId;
         const { error } = await supabase.from('cliente').insert({
           id: novoCliente.id,
           tenant_id: novoCliente.tenant_id,
@@ -179,11 +182,13 @@ export const useClientesStore = defineStore('clientes', () => {
         if (error) throw error;
       } catch (err) {
         console.error('[ClientesStore] Erro ao persistir cliente no Supabase:', err);
-        allClientes.value = allClientes.value.filter((c) => c.id !== novoCliente.id);
-        throw err;
+        const mensagem = traduzirErroPersistencia(err, 'cadastrar o cliente');
+        erroOperacao.value = mensagem;
+        throw new Error(mensagem);
       }
     }
 
+    allClientes.value.unshift(novoCliente);
     return novoCliente;
   }
 
@@ -191,6 +196,7 @@ export const useClientesStore = defineStore('clientes', () => {
    * Atualiza dados de cliente e recalcula hash criptográfico se CPF foi modificado
    */
   async function atualizarCliente(id: string, dados: Partial<Cliente>): Promise<boolean> {
+    erroOperacao.value = null;
     const index = allClientes.value.findIndex((c) => c.id === id);
     if (index === -1) return false;
 
@@ -228,6 +234,7 @@ export const useClientesStore = defineStore('clientes', () => {
         if (error) throw error;
       } catch (err) {
         console.error('[ClientesStore] Erro ao sincronizar atualização de cliente:', err);
+        erroOperacao.value = traduzirErroPersistencia(err, 'atualizar o cliente');
         allClientes.value[index] = snapshot;
         return false;
       }
@@ -252,6 +259,7 @@ export const useClientesStore = defineStore('clientes', () => {
         if (error) throw error;
       } catch (err) {
         console.error('[ClientesStore] Erro ao arquivar cliente no banco:', err);
+        erroOperacao.value = traduzirErroPersistencia(err, 'arquivar o cliente');
         cliente.arquivado_em = anterior;
         return false;
       }
@@ -305,6 +313,7 @@ export const useClientesStore = defineStore('clientes', () => {
         );
       } catch (err) {
         console.error('[ClientesStore] Erro na operação de anonimização no Supabase:', err);
+        erroOperacao.value = traduzirErroPersistencia(err, 'anonimizar o titular');
         allClientes.value[index] = original;
         return false;
       }

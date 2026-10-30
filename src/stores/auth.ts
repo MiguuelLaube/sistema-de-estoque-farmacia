@@ -11,6 +11,7 @@ import type {
 } from '../types';
 import { initialTenants, initialConfigs, initialUsuarios, initialFuncionarios } from '../data/mockData';
 import { supabase, isLiveSupabaseConfigured, CARREGADO_COM_LINK_DE_RECUPERACAO } from '../services/supabase';
+import { traduzirErroPersistencia } from '../utils/erroPersistencia';
 
 const DEVICE_TOKEN_STORAGE_KEY = 'pharma_sa_device_token_v1';
 
@@ -75,6 +76,13 @@ export const useAuthStore = defineStore('auth', () => {
   const activeTenantId = ref<string>('a0000000-0000-0000-0000-000000000001');
   const activeUserId = ref<string>('');
   const currentUserProfile = ref<Usuario | null>(null);
+
+  // Indica se o perfil ativo veio de public.usuario (vinculado ao auth.uid() no banco).
+  // Sem esse vínculo o RLS (current_tenant_id() = NULL) rejeita TODA gravação.
+  const vinculoBancoConfirmado = ref<boolean>(false);
+
+  // Última mensagem clara de falha de gravação (funcionários, configurações etc.)
+  const erroOperacao = ref<string | null>(null);
 
   // BUG-01 FIX: Nunca iniciar autenticado por padrão nem confiar em localStorage
   const isAuthenticated = ref<boolean>(false);
@@ -492,6 +500,9 @@ export const useAuthStore = defineStore('auth', () => {
       profile = res.data as Usuario | null;
       profErr = res.error;
     }
+
+    // Perfil lido do banco e vinculado ao auth.uid() => RLS reconhece o tenant nas gravações
+    vinculoBancoConfirmado.value = Boolean(profile && profile.auth_user_id === session.user.id);
 
     // Auto-vinculação caso o usuário tenha sido provisionado pelo e-mail
     if (!profile && session.user.email) {
@@ -1008,7 +1019,7 @@ export const useAuthStore = defineStore('auth', () => {
             return { sucesso: true };
           }
         }
-        return { sucesso: false, mensagem: 'Não foi possível salvar as configurações no servidor.' };
+        return { sucesso: false, mensagem: traduzirErroPersistencia(error, 'salvar as configurações') };
       }
       await registrarAuditoria('ATUALIZACAO_CONFIG_TENANT', `Tenant ${tenantId}`, Object.keys(payloadLimpo).join(', '));
     }
@@ -1024,16 +1035,26 @@ export const useAuthStore = defineStore('auth', () => {
       cargo: cargo?.trim() || undefined,
       criado_em: new Date().toISOString(),
     };
-    funcionarios.value.push(novo);
+    erroOperacao.value = null;
 
     if (isLive && isAuthenticated.value) {
-      await supabase.from('funcionario').insert({
-        id: novo.id,
-        tenant_id: novo.tenant_id,
-        nome: novo.nome,
-        cargo: novo.cargo || null,
-      });
+      try {
+        await garantirVinculoBanco();
+        novo.tenant_id = activeTenantId.value;
+        const { error } = await supabase.from('funcionario').insert({
+          id: novo.id,
+          tenant_id: novo.tenant_id,
+          nome: novo.nome,
+          cargo: novo.cargo || null,
+        });
+        if (error) throw error;
+      } catch (err) {
+        console.error('[AuthStore] Falha ao cadastrar funcionário:', err);
+        erroOperacao.value = traduzirErroPersistencia(err, 'cadastrar o funcionário');
+        return null;
+      }
     }
+    funcionarios.value.push(novo);
     return novo;
   }
 
@@ -1043,7 +1064,8 @@ export const useAuthStore = defineStore('auth', () => {
       if (dados.nome !== undefined) f.nome = dados.nome.trim().toUpperCase();
       if (dados.cargo !== undefined) f.cargo = dados.cargo?.trim() || undefined;
       if (isLive && isAuthenticated.value) {
-        await supabase.from('funcionario').update({ nome: f.nome, cargo: f.cargo || null }).eq('id', id);
+        const { error } = await supabase.from('funcionario').update({ nome: f.nome, cargo: f.cargo || null }).eq('id', id);
+        if (error) erroOperacao.value = traduzirErroPersistencia(error, 'atualizar o funcionário');
       }
     }
   }
@@ -1053,7 +1075,8 @@ export const useAuthStore = defineStore('auth', () => {
     if (idx !== -1) {
       funcionarios.value.splice(idx, 1);
       if (isLive && isAuthenticated.value) {
-        await supabase.from('funcionario').delete().eq('id', id);
+        const { error } = await supabase.from('funcionario').delete().eq('id', id);
+        if (error) erroOperacao.value = traduzirErroPersistencia(error, 'remover o funcionário');
       }
     }
   }
@@ -1504,6 +1527,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated.value = false;
     currentUserProfile.value = null;
     activeUserId.value = '';
+    vinculoBancoConfirmado.value = false;
     mfaStage.value = 'none';
     mfaFactorId.value = '';
     mfaQrCode.value = '';
@@ -1512,7 +1536,44 @@ export const useAuthStore = defineStore('auth', () => {
     superAdminValidatedSessionToken = null;
   }
 
+  /**
+   * Garante que o usuário logado esteja vinculado a public.usuario (e portanto a um tenant real)
+   * antes de qualquer gravação. Sem isso o RLS devolve 42501 e a criação falha.
+   * Lança erro com mensagem clara quando o vínculo não pode ser feito.
+   */
+  async function garantirVinculoBanco(): Promise<void> {
+    if (!isLive || vinculoBancoConfirmado.value) return;
+
+    const { data, error } = await supabase.rpc('vincular_meu_usuario_auth');
+    if (error) {
+      if (error.code === 'PGRST202') {
+        throw new Error(
+          'O banco de dados não possui a função de vínculo de usuário. Aplique a migração 20261030000016 no Supabase (SQL Editor).'
+        );
+      }
+      throw error;
+    }
+    if (!data?.sucesso || !data?.usuario) {
+      throw new Error(
+        data?.mensagem ||
+          'Seu usuário não está cadastrado em nenhuma empresa. Peça ao Super Admin para provisionar sua conta.'
+      );
+    }
+
+    const u = data.usuario as Usuario;
+    currentUserProfile.value = {
+      ...u,
+      exigir_troca_senha: currentUserProfile.value?.exigir_troca_senha || u.exigir_troca_senha,
+    };
+    activeUserId.value = u.id;
+    if (u.tenant_id) activeTenantId.value = u.tenant_id;
+    vinculoBancoConfirmado.value = true;
+  }
+
   return {
+    vinculoBancoConfirmado,
+    erroOperacao,
+    garantirVinculoBanco,
     tenants,
     configs,
     usuarios,
