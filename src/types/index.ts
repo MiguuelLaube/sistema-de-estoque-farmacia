@@ -10,6 +10,7 @@ export interface Tenant {
   nome_empresa: string;
   slug: string;
   dominio?: string;
+  email_admin?: string;
   status: 'ativo' | 'suspenso' | 'cancelado';
   plano: 'basico' | 'profissional' | 'enterprise';
   limite_encomendas_mes: number;

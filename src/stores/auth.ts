@@ -848,36 +848,127 @@ export const useAuthStore = defineStore('auth', () => {
     slug: string;
     plano: 'basico' | 'profissional' | 'enterprise';
     limite: number;
+    emailAdmin?: string;
+    nomeAdmin?: string;
   }): Promise<{ sucesso: boolean; mensagem: string }> {
     if (!isSuperAdmin.value) return { sucesso: false, mensagem: 'Acesso negado.' };
     const id = gerarUuidSeguro();
     const slugLimpo = dados.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+    const emailLimpo = dados.emailAdmin?.trim().toLowerCase() || undefined;
 
-    const { error: tErr } = await supabase.from('tenant').insert({
-      id,
-      nome_empresa: dados.nomeEmpresa.trim(),
-      slug: slugLimpo,
-      dominio: `${slugLimpo}.plataforma.com.br`,
-      status: 'ativo',
-      plano: dados.plano,
-      limite_encomendas_mes: dados.limite,
+    // Tenta primeiro via RPC provisionar_empresa_com_admin
+    const { error: rpcErr } = await supabase.rpc('provisionar_empresa_com_admin', {
+      p_nome_empresa: dados.nomeEmpresa.trim(),
+      p_slug: slugLimpo,
+      p_plano: dados.plano,
+      p_limite: dados.limite,
+      p_email_admin: emailLimpo || null,
+      p_nome_admin: dados.nomeAdmin?.trim() || 'Administrador',
     });
 
-    if (tErr) {
-      return { sucesso: false, mensagem: 'Não foi possível criar o tenant (verifique se o slug já está em uso).' };
+    if (rpcErr) {
+      const { error: tErr } = await supabase.from('tenant').insert({
+        id,
+        nome_empresa: dados.nomeEmpresa.trim(),
+        slug: slugLimpo,
+        dominio: `${slugLimpo}.plataforma.com.br`,
+        email_admin: emailLimpo || null,
+        status: 'ativo',
+        plano: dados.plano,
+        limite_encomendas_mes: dados.limite,
+      });
+
+      if (tErr) {
+        return { sucesso: false, mensagem: 'Não foi possível criar a empresa (verifique se o identificador já está em uso).' };
+      }
+
+      await supabase.from('config_tenant').insert({
+        tenant_id: id,
+        nome_sistema: `${dados.nomeEmpresa.trim()} Encomendas`,
+        cor_primaria: '#2563eb',
+        cor_secundaria: '#1e293b',
+        header_title: dados.nomeEmpresa.trim().toUpperCase(),
+      });
     }
 
-    await supabase.from('config_tenant').insert({
-      tenant_id: id,
-      nome_sistema: `${dados.nomeEmpresa.trim()} Encomendas`,
-      cor_primaria: '#2563eb',
-      cor_secundaria: '#1e293b',
-      header_title: dados.nomeEmpresa.trim().toUpperCase(),
+    // Se informou e-mail de admin, envia o link seguro de definição de senha
+    let enviouLink = false;
+    if (emailLimpo) {
+      try {
+        const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined;
+        await supabase.auth.resetPasswordForEmail(emailLimpo, { redirectTo });
+        enviouLink = true;
+      } catch {
+        // Ignora se o SMTP estiver pendente
+      }
+    }
+
+    await registrarAuditoria(
+      'PROVISIONAMENTO_TENANT',
+      dados.nomeEmpresa.trim(),
+      `Plano ${dados.plano} • Gestor: ${emailLimpo || 'Nenhum'}`
+    );
+    await carregarDadosContexto();
+
+    const msg = enviouLink
+      ? `Empresa provisionada com sucesso! Um link para definição de senha foi enviado para ${emailLimpo}.`
+      : 'Nova empresa provisionada com sucesso!';
+    return { sucesso: true, mensagem: msg };
+  }
+
+  async function enviarLinkSenhaTenant(email: string, nomeEmpresa: string): Promise<{ sucesso: boolean; mensagem: string }> {
+    const limpo = (email || '').trim().toLowerCase();
+    if (!limpo || !limpo.includes('@')) {
+      return { sucesso: false, mensagem: 'Esta empresa não possui um e-mail de administrador válido cadastrado.' };
+    }
+
+    try {
+      const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined;
+      const { error } = await supabase.auth.resetPasswordForEmail(limpo, { redirectTo });
+      if (error) {
+        return { sucesso: false, mensagem: `Falha ao enviar e-mail: ${error.message}` };
+      }
+      await registrarAuditoria('ENVIO_LINK_SENHA_TENANT', nomeEmpresa, `Destinatário: ${limpo}`);
+      return { sucesso: true, mensagem: `Link de definição de senha enviado com sucesso para ${limpo}!` };
+    } catch {
+      return { sucesso: false, mensagem: 'Não foi possível conectar ao serviço de e-mail no momento.' };
+    }
+  }
+
+  async function atualizarDadosTenant(dados: {
+    id: string;
+    nomeEmpresa: string;
+    plano: 'basico' | 'profissional' | 'enterprise';
+    limite: number;
+    emailAdmin?: string;
+  }): Promise<{ sucesso: boolean; mensagem: string }> {
+    if (!isSuperAdmin.value) return { sucesso: false, mensagem: 'Acesso negado.' };
+    const emailLimpo = dados.emailAdmin?.trim().toLowerCase() || null;
+
+    const { error: rpcErr } = await supabase.rpc('atualizar_dados_empresa', {
+      p_tenant_id: dados.id,
+      p_nome_empresa: dados.nomeEmpresa.trim(),
+      p_plano: dados.plano,
+      p_limite: dados.limite,
+      p_email_admin: emailLimpo,
     });
 
-    await registrarAuditoria('PROVISIONAMENTO_TENANT', dados.nomeEmpresa.trim(), `Plano ${dados.plano}`);
+    if (rpcErr) {
+      await supabase
+        .from('tenant')
+        .update({
+          nome_empresa: dados.nomeEmpresa.trim(),
+          plano: dados.plano,
+          limite_encomendas_mes: dados.limite,
+          email_admin: emailLimpo,
+          atualizado_em: new Date().toISOString(),
+        })
+        .eq('id', dados.id);
+    }
+
+    await registrarAuditoria('ATUALIZACAO_CADASTRO_TENANT', dados.nomeEmpresa.trim(), `E-mail: ${emailLimpo || 'Nenhum'}`);
     await carregarDadosContexto();
-    return { sucesso: true, mensagem: 'Nova empresa provisionada com sucesso!' };
+    return { sucesso: true, mensagem: 'Dados da empresa atualizados com sucesso!' };
   }
 
   async function alternarStatusTenant(tenant: Tenant) {
@@ -979,6 +1070,8 @@ export const useAuthStore = defineStore('auth', () => {
     revogarDispositivo,
     salvarPoliticaZeroTrust,
     provisionarTenant,
+    enviarLinkSenhaTenant,
+    atualizarDadosTenant,
     alternarStatusTenant,
     ativarBreakGlass,
     encerrarBreakGlass,
