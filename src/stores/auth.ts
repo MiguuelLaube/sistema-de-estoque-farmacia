@@ -87,11 +87,68 @@ export const useAuthStore = defineStore('auth', () => {
     criado_em: new Date().toISOString(),
   };
 
+  const superAdminPlatformConfig: ConfigTenant = {
+    tenant_id: 'plataforma',
+    nome_sistema: 'EncoMed SaaS',
+    slogan_sistema: 'Painel de Governança & Segurança',
+    saudacao_painel: 'Olá, Administrador Supremo',
+    logo_url: '/encomed-logo.png',
+    cor_primaria: '#4f46e5',
+    cor_secundaria: '#0f172a',
+    visual_opcoes: {
+      estilo_sidebar: 'escuro',
+      formato_logo: 'retangular',
+      estilo_bordas: 'padrao',
+      densidade_interface: 'confortavel',
+      fonte_interface: 'jakarta',
+      cor_destaque: '#6366f1',
+      exibir_selo_encomed: true,
+      animacoes_ativas: true,
+    },
+    modelo_cupom: 'padrao',
+    fuso: 'America/Sao_Paulo',
+    mensagem_whatsapp: '',
+    mensagem_whatsapp_pedido: '',
+    mensagem_whatsapp_cobranca: '',
+    mensagem_whatsapp_entregue: '',
+    auto_whatsapp_pedido: false,
+    auto_whatsapp_entregue: false,
+    base_legal_padrao: 'execucao_contrato',
+    bloquear_entrega_com_saldo: false,
+    dias_retencao_arquivamento: 90,
+    evolution_api_ativo: false,
+    header_title: 'ENCOMED SAAS',
+    header_subtitle: 'Plataforma Global',
+    footer_text: 'Governança Zero-Trust',
+    show_phone: false,
+    show_payment: false,
+    show_status: false,
+    font_size: 14,
+  };
+
+  const superAdminPlatformTenant: Tenant = {
+    id: 'plataforma',
+    nome_empresa: 'EncoMed SaaS • Governança Global',
+    slug: 'plataforma',
+    dominio: 'plataforma.encomed.com.br',
+    status: 'ativo',
+    plano: 'enterprise',
+    limite_encomendas_mes: 999999,
+    criado_em: new Date().toISOString(),
+    atualizado_em: new Date().toISOString(),
+  };
+
   const currentTenant = computed<Tenant>(() => {
+    if (isSuperAdmin.value && !breakGlassTenantId.value) {
+      return superAdminPlatformTenant;
+    }
     return tenants.value.find((t) => t.id === activeTenantId.value) || tenants.value[0] || fallbackTenant;
   });
 
   const currentConfig = computed<ConfigTenant>(() => {
+    if (isSuperAdmin.value && !breakGlassTenantId.value) {
+      return superAdminPlatformConfig;
+    }
     return configs.value[activeTenantId.value] || fallbackConfig;
   });
 
@@ -101,7 +158,7 @@ export const useAuthStore = defineStore('auth', () => {
   });
 
   const isSuperAdmin = computed(() => isAuthenticated.value && currentUser.value.perfil === 'super_admin');
-  const isAdmin = computed(() => isAuthenticated.value && (currentUser.value.perfil === 'admin' || isSuperAdmin.value));
+  const isAdmin = computed(() => isAuthenticated.value && (currentUser.value.perfil === 'admin' || (isSuperAdmin.value && !!breakGlassTenantId.value)));
   const isComprador = computed(() => isAuthenticated.value && (currentUser.value.perfil === 'comprador' || isAdmin.value));
   const isOperador = computed(() => isAuthenticated.value && (currentUser.value.perfil === 'operador' || isAdmin.value));
 

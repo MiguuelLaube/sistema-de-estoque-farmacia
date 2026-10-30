@@ -69,7 +69,7 @@ const router = createRouter({
       component: RelatoriosView,
       meta: {
         title: 'Relatórios Gerenciais',
-        roles: ['admin', 'comprador', 'super_admin'] as PerfilUsuario[],
+        roles: ['admin', 'comprador'] as PerfilUsuario[],
         tenantOperational: true,
       },
     },
@@ -79,7 +79,8 @@ const router = createRouter({
       component: ConfiguracoesView,
       meta: {
         title: 'Configurações',
-        roles: ['admin', 'super_admin'] as PerfilUsuario[],
+        roles: ['admin'] as PerfilUsuario[],
+        tenantOperational: true,
       },
     },
     {
@@ -121,18 +122,24 @@ router.beforeEach(async (to, _from, next) => {
     return next(authStore.isSuperAdmin ? { name: 'plataforma' } : { name: 'dashboard' });
   }
 
+  // Isolamento Zero-Trust LGPD: Super Admin só acessa telas operacionais ou de configuração de tenants com sessão Break-Glass ativa
+  if (to.meta.tenantOperational && authStore.isSuperAdmin && !authStore.breakGlassTenantId) {
+    return next({ name: 'plataforma' });
+  }
+
   // Controle estrito de permissões por perfil (RBAC)
   const allowedRoles = to.meta.roles as PerfilUsuario[] | undefined;
   if (allowedRoles && authStore.isAuthenticated) {
     const userRole = authStore.currentUser.perfil;
-    if (!allowedRoles.includes(userRole)) {
-      return next({ name: 'dashboard' });
+    // Se for super_admin com Break-Glass ativo num tenant, permite agir como admin do tenant
+    const effectiveRoles: PerfilUsuario[] = [userRole];
+    if (authStore.isSuperAdmin && authStore.breakGlassTenantId) {
+      effectiveRoles.push('admin');
     }
-  }
-
-  // Isolamento Zero-Trust LGPD: Super Admin não acessa telas operacionais de clientes sem sessão Break-Glass ativa
-  if (to.meta.tenantOperational && authStore.isSuperAdmin && !authStore.breakGlassTenantId) {
-    return next({ name: 'plataforma' });
+    const hasRole = allowedRoles.some((r) => effectiveRoles.includes(r));
+    if (!hasRole) {
+      return next(authStore.isSuperAdmin ? { name: 'plataforma' } : { name: 'dashboard' });
+    }
   }
 
   next();
