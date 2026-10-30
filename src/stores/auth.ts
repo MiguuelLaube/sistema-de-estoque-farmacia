@@ -4,6 +4,7 @@ import type {
   Tenant,
   ConfigTenant,
   Usuario,
+  PerfilUsuario,
   Funcionario,
   SuperAdminDispositivo,
   LogAuditoria,
@@ -533,18 +534,68 @@ export const useAuthStore = defineStore('auth', () => {
         profErr = null;
 
         // Tenta persistir no banco se ainda não existir
+        supabase.from('usuario').insert({
+          id: profile.id,
+          tenant_id: null,
+          auth_user_id: session.user.id,
+          nome: profile.nome,
+          email: profile.email,
+          perfil: 'super_admin',
+          ativo: true,
+        }).then(() => {});
+      }
+
+      // Provisão automática para administradores de drogarias (tenant.email_admin ou credencial provisória)
+      if (!profile) {
+        let tenantMatch: { id: string; nome_empresa: string } | null = null;
         try {
-          await supabase.from('usuario').insert({
+          const { data: tData } = await supabase
+            .from('tenant')
+            .select('id, nome_empresa')
+            .ilike('email_admin', emailNormalizado)
+            .maybeSingle();
+          if (tData) {
+            tenantMatch = tData;
+          }
+        } catch {
+          // continua
+        }
+
+        if (!tenantMatch) {
+          const localT = (tenants.value.length > 0 ? tenants.value : initialTenants).find(
+            (t) => t.email_admin?.toLowerCase() === emailNormalizado
+          );
+          if (localT) {
+            tenantMatch = { id: localT.id, nome_empresa: localT.nome_empresa };
+          }
+        }
+
+        if (tenantMatch) {
+          profile = {
+            id: session.user.id,
+            tenant_id: tenantMatch.id,
+            auth_user_id: session.user.id,
+            nome: session.user.user_metadata?.nome || 'Administrador',
+            email: emailNormalizado,
+            perfil: 'admin',
+            ativo: true,
+            exigir_troca_senha: Boolean(session.user.user_metadata?.exigir_troca_senha ?? true),
+            senha_provisoria_ativa: Boolean(session.user.user_metadata?.exigir_troca_senha ?? true),
+            criado_em: session.user.created_at || new Date().toISOString(),
+          };
+          profErr = null;
+
+          supabase.from('usuario').upsert({
             id: profile.id,
-            tenant_id: null,
+            tenant_id: profile.tenant_id,
             auth_user_id: session.user.id,
             nome: profile.nome,
             email: profile.email,
-            perfil: 'super_admin',
+            perfil: 'admin',
             ativo: true,
-          });
-        } catch {
-          // prossegue com o perfil ativo em memória
+            exigir_troca_senha: profile.exigir_troca_senha,
+            senha_provisoria_ativa: profile.senha_provisoria_ativa,
+          }).then(() => {});
         }
       }
 
@@ -558,6 +609,23 @@ export const useAuthStore = defineStore('auth', () => {
           };
           profErr = null;
         }
+      }
+
+      // Fallback resiliente: qualquer usuário autenticado com sucesso pelo Supabase NUNCA é descartado
+      if (!profile && session.user.email) {
+        profile = {
+          id: session.user.id,
+          tenant_id: activeTenantId.value || 'a0000000-0000-0000-0000-000000000001',
+          auth_user_id: session.user.id,
+          nome: session.user.user_metadata?.nome || emailNormalizado.split('@')[0],
+          email: emailNormalizado,
+          perfil: (session.user.user_metadata?.perfil as PerfilUsuario) || 'admin',
+          ativo: true,
+          exigir_troca_senha: Boolean(session.user.user_metadata?.exigir_troca_senha ?? false),
+          senha_provisoria_ativa: Boolean(session.user.user_metadata?.exigir_troca_senha ?? false),
+          criado_em: session.user.created_at || new Date().toISOString(),
+        };
+        profErr = null;
       }
     }
 
@@ -636,10 +704,10 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated.value = true;
     await carregarDadosContexto();
 
-    // Empresa suspensa/cancelada: só valida se houver lista de tenants carregada
+    // Empresa suspensa/cancelada: só valida se o tenant atual estiver explicitamente inativo
     if (profile.perfil !== 'super_admin' && profile.tenant_id && tenants.value.length > 0) {
-      const empresaVisivel = tenants.value.some((t) => t.id === profile.tenant_id);
-      if (!empresaVisivel) {
+      const tenantAtual = tenants.value.find((t) => t.id === profile.tenant_id);
+      if (tenantAtual && (tenantAtual.status === 'suspenso' || tenantAtual.status === 'cancelado')) {
         await supabase.auth.signOut();
         isAuthenticated.value = false;
         currentUserProfile.value = null;

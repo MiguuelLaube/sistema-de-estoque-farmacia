@@ -176,3 +176,4 @@ if (todosPassaram) {
   console.error('⚠️ ALGUNS TESTES FALHARAM.');
   process.exit(1);
 }
+
