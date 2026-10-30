@@ -43,6 +43,9 @@ function sanitizarMensagemErroAuth(rawMsg?: string): string {
   if (lower.includes('expired') || lower.includes('invalid token') || lower.includes('otp')) {
     return 'O link de recuperação ou acesso expirou. Solicite um novo link.';
   }
+  if (lower.includes('failed to fetch') || lower.includes('network') || lower.includes('conexão')) {
+    return 'Falha de comunicação com o servidor de autenticação. Verifique sua conexão com a internet.';
+  }
   return 'Não foi possível concluir a autenticação no momento.';
 }
 
@@ -444,11 +447,29 @@ export const useAuthStore = defineStore('auth', () => {
       return { autenticado: false };
     }
 
-    let { data: profile, error: profErr } = await supabase
-      .from('usuario')
-      .select('*')
-      .eq('auth_user_id', session.user.id)
-      .maybeSingle();
+    let profile: Usuario | null = null;
+    let profErr: any = null;
+
+    // 1. Tenta vincular e carregar perfil via RPC segura (SECURITY DEFINER)
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('vincular_meu_usuario_auth');
+      if (!rpcErr && rpcRes?.sucesso && rpcRes?.usuario) {
+        profile = rpcRes.usuario as Usuario;
+      }
+    } catch {
+      // continua para a consulta direta sob RLS
+    }
+
+    // 2. Fallback de consulta direta
+    if (!profile) {
+      const res = await supabase
+        .from('usuario')
+        .select('*')
+        .eq('auth_user_id', session.user.id)
+        .maybeSingle();
+      profile = res.data as Usuario | null;
+      profErr = res.error;
+    }
 
     // Auto-vinculação caso o usuário tenha sido provisionado pelo e-mail
     if (!profile && session.user.email) {
@@ -489,13 +510,31 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     if (profile.perfil === 'super_admin') {
-      const mfaCheck = await prepararFluxoMfaSuperAdmin();
-      if (!mfaCheck.autorizado) {
-        return {
-          autenticado: false,
-          mfaPendente: mfaCheck.stage !== 'none' ? mfaCheck.stage : undefined,
-          erro: mfaCheck.message,
-        };
+      let exigirMfa = true;
+      try {
+        const { data: pol } = await supabase
+          .from('super_admin_politica')
+          .select('mfa_obrigatorio')
+          .eq('usuario_id', profile.id)
+          .maybeSingle();
+        if (pol && pol.mfa_obrigatorio === false) {
+          exigirMfa = false;
+        }
+      } catch {
+        // padrão seguro
+      }
+
+      if (exigirMfa) {
+        const mfaCheck = await prepararFluxoMfaSuperAdmin();
+        if (!mfaCheck.autorizado) {
+          return {
+            autenticado: false,
+            mfaPendente: mfaCheck.stage !== 'none' ? mfaCheck.stage : undefined,
+            erro: mfaCheck.message,
+          };
+        }
+      } else {
+        mfaStage.value = 'none';
       }
     } else {
       mfaStage.value = 'none';
