@@ -167,7 +167,7 @@ async function dispararAvisoBot(enc: any) {
     </div>
 
     <!-- Middle Section: Priority Alerts & Top Medications -->
-    <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
       <!-- Itens Chegando para Avisar (WhatsApp Direct Action - Spec 8) -->
       <div class="card" id="section-avisos-chegada">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
@@ -265,7 +265,7 @@ async function dispararAvisoBot(enc: any) {
     <!-- Status Breakdown Overview -->
     <div class="card" id="section-status-distribuicao">
       <h3 style="font-size: 1.05rem; margin-bottom: 1rem;">Distribuição por Status</h3>
-      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem;">
         <div
           v-for="(count, statusName) in metricas.porStatus"
           :key="statusName"

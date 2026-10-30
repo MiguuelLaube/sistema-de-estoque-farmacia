@@ -174,10 +174,10 @@ async function encerrarSuporteBreakGlass() {
       <!-- Selo institucional opcional Powered by EncoMed -->
       <div
         v-if="authStore.currentConfig.visual_opcoes?.exibir_selo_encomed !== false"
-        style="padding: 0.45rem 1.25rem; display: flex; align-items: center; justify-content: center; gap: 0.4rem; font-size: 0.7rem; opacity: 0.78; border-top: 1px solid var(--border-color);"
+        style="padding: 0.45rem 1.25rem; display: flex; align-items: center; justify-content: center; gap: 0.45rem; font-size: 0.72rem; opacity: 0.85; border-top: 1px solid var(--border-color);"
       >
-        <img src="/encomed-logo.png" alt="EncoMed" style="height: 15px; width: auto; object-fit: contain; border-radius: 3px; background: #fff; padding: 1px;" />
-        <span>Tecnologia <strong>EncoMed SaaS</strong></span>
+        <img src="/encomed-icon.svg" alt="EncoMed" style="height: 18px; width: 18px; object-fit: contain; background: transparent;" />
+        <span style="color: var(--text-muted);">Tecnologia <strong style="color: var(--primary-color, #2563eb);">EncoMed SaaS</strong></span>
       </div>
 
       <!-- Active User Profile & Role Indicator -->

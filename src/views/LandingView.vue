@@ -392,7 +392,7 @@ onBeforeUnmount(() => {
         <div class="landing-shell">
           <div class="hero-lead-block">
             <div class="hero-brand-pill animate-float-slow">
-              <img src="/encomed-logo.png" alt="" style="height: 22px; width: auto; border-radius: 4px;" />
+              <img src="/encomed-icon.svg" alt="" style="height: 20px; width: 20px; object-fit: contain;" />
               <span>PLATAFORMA SAAS OFICIAL • <strong>ENCOMED</strong></span>
             </div>
 
@@ -460,7 +460,7 @@ onBeforeUnmount(() => {
                 </div>
 
                 <div class="window-brand-center">
-                  <img src="/encomed-logo.png" alt="EncoMed" style="height: 22px; width: auto; border-radius: 4px;" />
+                  <img src="/encomed-icon.svg" alt="EncoMed" style="height: 20px; width: 20px; object-fit: contain;" />
                   <span><strong>EncoMed SaaS</strong> — Ambiente Interativo de Demonstração</span>
                 </div>
 
@@ -631,7 +631,7 @@ onBeforeUnmount(() => {
                     <!-- Balão Oficial do WhatsApp quando aplicável -->
                     <div v-if="ultimaReacao.mensagemWhatsapp" class="whatsapp-sim-phone">
                       <div class="wa-sim-top">
-                        <img src="/encomed-logo.png" alt="" style="width: 22px; height: 22px; border-radius: 50%; background: #fff; padding: 2px;" />
+                        <img src="/encomed-icon.svg" alt="" style="width: 20px; height: 20px; object-fit: contain;" />
                         <span>WhatsApp API Oficial • Modelo Dinâmico</span>
                       </div>
                       <div class="wa-sim-bubble">
@@ -763,7 +763,7 @@ onBeforeUnmount(() => {
                       style="padding: 0.85rem 1rem; border-radius: 12px; border: 1px solid #e2e8f0; background: #ffffff; display: flex; justify-content: space-between; align-items: center;"
                     >
                       <div style="display: flex; align-items: center; gap: 8px;">
-                        <img src="/encomed-logo.png" alt="EncoMed" style="height: 26px; width: auto;" />
+                        <img src="/encomed-icon.svg" alt="EncoMed" style="height: 24px; width: 24px; object-fit: contain;" />
                         <strong style="font-size: 0.88rem;">Sua Farmácia no EncoMed</strong>
                       </div>
                       <span
@@ -1034,7 +1034,7 @@ onBeforeUnmount(() => {
           <div class="access-banner-card">
             <div class="access-text-group">
               <div style="display: inline-flex; align-items: center; gap: 0.6rem; background: rgba(255,255,255,0.12); padding: 5px 12px; border-radius: 9999px; margin-bottom: 0.85rem;">
-                <img src="/encomed-logo.png" alt="EncoMed" style="height: 20px; width: auto; background: #fff; border-radius: 4px; padding: 1px 3px;" />
+                <img src="/encomed-icon.svg" alt="EncoMed" style="height: 20px; width: 20px; object-fit: contain;" />
                 <span style="font-size: 0.76rem; font-weight: 700; letter-spacing: 0.04em; color: #dbeafe;">ENCOMED SAAS • PRONTO PARA OPERAÇÃO</span>
               </div>
               <h2 class="access-h2">
@@ -1064,9 +1064,9 @@ onBeforeUnmount(() => {
       <div class="landing-shell footer-layout">
         <div class="footer-brand-col">
           <img
-            src="/encomed-logo.png"
+            src="/encomed-logo.svg"
             alt="Logo EncoMed"
-            style="height: 38px; width: auto; object-fit: contain; border-radius: 8px;"
+            style="height: 38px; width: auto; object-fit: contain; background: transparent;"
           />
           <div>
             <span class="footer-company-name">EncoMed</span>
