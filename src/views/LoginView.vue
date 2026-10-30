@@ -51,6 +51,15 @@ const loading = ref(false);
 const errorMessage = ref('');
 const successMessage = ref('');
 
+function abrirEsqueciSenha() {
+  if (email.value.trim()) {
+    recoveryEmail.value = email.value.trim();
+  }
+  showForgotPassword.value = true;
+  errorMessage.value = '';
+  successMessage.value = '';
+}
+
 // Modal de Contato / Compra do Sistema
 const showContatoModal = ref(false);
 const contatoNomeFarmacia = ref('');
@@ -200,7 +209,17 @@ function fecharModalContato() {
       <!-- Alerta de Erro Sanitizado -->
       <div v-if="errorMessage" class="login-error-alert" role="alert">
         <AlertCircle :size="16" aria-hidden="true" style="flex-shrink: 0;" />
-        <span>{{ errorMessage }}</span>
+        <div style="display: flex; flex-direction: column; gap: 0.35rem; width: 100%;">
+          <span>{{ errorMessage }}</span>
+          <button
+            v-if="!showForgotPassword && (errorMessage.includes('incorretos') || errorMessage.includes('credenciais') || errorMessage.includes('senha'))"
+            type="button"
+            @click="abrirEsqueciSenha"
+            style="background: none; border: none; color: #b91c1c; text-decoration: underline; font-size: 0.78rem; font-weight: 700; cursor: pointer; padding: 0; text-align: left; width: fit-content;"
+          >
+            Clique aqui para redefinir sua senha por e-mail &rarr;
+          </button>
+        </div>
       </div>
 
       <!-- Alerta Informativo / Sucesso -->
@@ -227,16 +246,18 @@ function fecharModalContato() {
               required
               autocomplete="new-password"
               class="form-field-input"
+              style="padding-right: 2.75rem;"
               placeholder="Digite sua nova senha"
             />
             <button
               type="button"
               @click="showNewPassword = !showNewPassword"
-              style="background: none; border: none; padding: 0 0.5rem; cursor: pointer; color: #64748b; display: flex; align-items: center;"
+              class="btn-toggle-eye"
               :title="showNewPassword ? 'Ocultar senha' : 'Ver senha'"
+              aria-label="Alternar visibilidade da nova senha"
             >
-              <EyeOff v-if="showNewPassword" :size="16" />
-              <Eye v-else :size="16" />
+              <EyeOff v-if="showNewPassword" :size="17" />
+              <Eye v-else :size="17" />
             </button>
           </div>
         </div>
@@ -253,16 +274,18 @@ function fecharModalContato() {
               required
               autocomplete="new-password"
               class="form-field-input"
+              style="padding-right: 2.75rem;"
               placeholder="Repita a nova senha"
             />
             <button
               type="button"
               @click="showNewPasswordConfirm = !showNewPasswordConfirm"
-              style="background: none; border: none; padding: 0 0.5rem; cursor: pointer; color: #64748b; display: flex; align-items: center;"
+              class="btn-toggle-eye"
               :title="showNewPasswordConfirm ? 'Ocultar senha' : 'Ver senha'"
+              aria-label="Alternar visibilidade da confirmação de senha"
             >
-              <EyeOff v-if="showNewPasswordConfirm" :size="16" />
-              <Eye v-else :size="16" />
+              <EyeOff v-if="showNewPasswordConfirm" :size="17" />
+              <Eye v-else :size="17" />
             </button>
           </div>
         </div>
@@ -377,7 +400,7 @@ function fecharModalContato() {
             <Mail :size="17" class="field-icon" aria-hidden="true" />
             <input
               id="input-login-email"
-              v-model="email"
+              v-model.trim="email"
               type="email"
               required
               autocomplete="username"
@@ -392,7 +415,7 @@ function fecharModalContato() {
             <label class="form-field-label" for="input-login-password">Senha de Acesso</label>
             <button
               type="button"
-              @click="showForgotPassword = true; errorMessage = ''; successMessage = '';"
+              @click="abrirEsqueciSenha"
               style="background: none; border: none; color: #2563eb; font-size: 0.76rem; font-weight: 600; cursor: pointer; padding: 0;"
               id="btn-esqueci-senha"
             >
@@ -408,16 +431,18 @@ function fecharModalContato() {
               required
               autocomplete="current-password"
               class="form-field-input"
+              style="padding-right: 2.75rem;"
               placeholder="••••••••••••"
             />
             <button
               type="button"
               @click="showPassword = !showPassword"
-              style="background: none; border: none; padding: 0 0.5rem; cursor: pointer; color: #64748b; display: flex; align-items: center;"
+              class="btn-toggle-eye"
               :title="showPassword ? 'Ocultar senha' : 'Ver senha'"
+              aria-label="Alternar visibilidade da senha"
             >
-              <EyeOff v-if="showPassword" :size="16" />
-              <Eye v-else :size="16" />
+              <EyeOff v-if="showPassword" :size="17" />
+              <Eye v-else :size="17" />
             </button>
           </div>
         </div>
@@ -752,6 +777,27 @@ function fecharModalContato() {
   left: 14px;
   color: #94a3b8;
   pointer-events: none;
+}
+
+.btn-toggle-eye {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  z-index: 2;
+}
+
+.btn-toggle-eye:hover {
+  color: #0f172a;
+  background-color: #f1f5f9;
 }
 
 .form-field-input {

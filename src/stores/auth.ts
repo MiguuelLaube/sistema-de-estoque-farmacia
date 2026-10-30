@@ -32,16 +32,16 @@ function sanitizarMensagemErroAuth(rawMsg?: string): string {
     lower.includes('invalid password') ||
     lower.includes('invalid email')
   ) {
-    return 'Identificador corporativo ou senha incorretos. Verifique suas credenciais.';
+    return 'Identificador corporativo ou senha incorretos. Verifique suas credenciais ou clique em "Esqueci minha senha" para redefinir.';
   }
   if (lower.includes('too many requests') || lower.includes('rate limit') || lower.includes('over_email_send_rate_limit')) {
     return 'Limite de requisições excedido. Por favor, aguarde alguns minutos antes de tentar novamente.';
   }
   if (lower.includes('email not confirmed')) {
-    return 'Conta aguardando confirmação cadastral no Supabase.';
+    return 'Conta aguardando confirmação cadastral no Supabase. Verifique sua caixa de entrada.';
   }
   if (lower.includes('user not found')) {
-    return 'Usuário não cadastrado ou não encontrado no sistema.';
+    return 'Usuário não cadastrado no sistema. Verifique o e-mail digitado ou solicite um convite.';
   }
   if (lower.includes('redirect') || lower.includes('url not allowed')) {
     return 'URL de redirecionamento não autorizada. Adicione https://encomed.vercel.app/** na lista de Redirect URLs do Supabase.';
@@ -52,7 +52,7 @@ function sanitizarMensagemErroAuth(rawMsg?: string): string {
   if (lower.includes('failed to fetch') || lower.includes('network') || lower.includes('conexão')) {
     return 'Falha de comunicação com o servidor de autenticação. Verifique sua conexão com a internet.';
   }
-  return rawMsg && rawMsg.length < 120 ? rawMsg : 'Não foi possível concluir a autenticação no momento.';
+  return rawMsg && rawMsg.length < 180 ? rawMsg : 'Identificador corporativo ou senha incorretos. Verifique suas credenciais.';
 }
 
 export const useAuthStore = defineStore('auth', () => {

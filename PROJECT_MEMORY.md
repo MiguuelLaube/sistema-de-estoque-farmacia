@@ -111,7 +111,8 @@ Todas as páginas devem respeitar rigorosamente os padrões visuais estabelecido
 | `8f15968` | 30/10/2026 | **Loop Autônomo (Ciclos 1 a 4):** Correção de métricas financeiras (expurgo de canceladas), persistência atômica com rollback em encomendas, compras e clientes, e adição do botão de ver senha (`Eye`/`EyeOff`) no login. |
 | `3a8ba92` | 30/10/2026 | Refinamento responsivo do dashboard (grades `auto-fit`), substituição de logos antigos por SVGs transparentes na Landing Page e App. |
 | `ea9a32e` | 30/10/2026 | **Blindagem Definitiva de Login:** Eliminação do deadlock de RLS para o proprietário (`miguuel.laube@gmail.com`), proteção com `try/catch` em todas as RPCs de autenticação e redirecionamento de senha. |
-| *Atual* | 30/10/2026 | Criação do documento central de memória do projeto (`PROJECT_MEMORY.md`). |
+| `d35f3fe` | 30/10/2026 | Criação do documento central de memória do projeto (`PROJECT_MEMORY.md`). |
+| `master` | 30/10/2026 | **Anti-Cache Definitivo & UX de Autenticação:** Headers anti-cache em `vercel.json` (`s-maxage=0`, `Vercel-CDN-Cache-Control: no-store`) eliminando cache persistente de borda, meta tags anti-cache em `index.html`, botão de visibilidade de senha com alinhamento absoluto dentro do campo, pré-preenchimento automático no fluxo "Esqueci minha senha" e suporte a links de recuperação via URL query/hash. |
 
 ---
 
@@ -122,3 +123,4 @@ Todas as páginas devem respeitar rigorosamente os padrões visuais estabelecido
 3. **Ao manipular dados de clientes:** Respeite as regras LGPD (`regras-lgpd-privacidade-dev`), mantendo CPF pseudonimizado via hash SHA-256.
 4. **Ao alterar autenticação:** Não reintroduza validações síncronas que dependam exclusivamente do banco antes do usuário estar logado.
 5. **Ao concluir tarefas:** Adicione uma nova linha na seção *7. Histórico Cronológico de Atualizações* e execute `npm run build` para garantir zero erros de TypeScript.
+

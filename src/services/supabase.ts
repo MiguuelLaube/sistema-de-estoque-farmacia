@@ -9,7 +9,11 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-a
  * Sem isso, o evento PASSWORD_RECOVERY pode ser perdido e o gestor entraria direto, sem definir a senha.
  */
 export const CARREGADO_COM_LINK_DE_RECUPERACAO =
-  typeof window !== 'undefined' && /(^|[#&])type=recovery(&|$)/.test(window.location.hash || '');
+  typeof window !== 'undefined' &&
+  (/(^|[#&?])type=recovery(&|$)/.test(window.location.hash || '') ||
+   /(^|[#&?])type=recovery(&|$)/.test(window.location.search || '') ||
+   /(^|[#&?])type=invite(&|$)/.test(window.location.hash || '') ||
+   /(^|[#&?])type=invite(&|$)/.test(window.location.search || ''));
 
 export const isLiveSupabaseConfigured = () => {
   return (
