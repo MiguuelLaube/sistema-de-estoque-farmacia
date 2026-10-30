@@ -15,7 +15,6 @@ import {
   UserCheck,
   LogOut,
   PlusCircle,
-  ExternalLink,
   AlertOctagon,
 } from 'lucide-vue-next';
 
@@ -156,18 +155,6 @@ async function encerrarSuporteBreakGlass() {
             <ShieldCheck :size="18" />
           </span>
           <span>Portal da Plataforma</span>
-        </router-link>
-
-        <router-link
-          to="/apresentacao"
-          class="nav-link"
-          id="nav-apresentacao"
-          title="Ver página de apresentação do sistema"
-        >
-          <span class="nav-icon-box">
-            <ExternalLink :size="18" />
-          </span>
-          <span>Apresentação SaaS</span>
         </router-link>
       </nav>
 

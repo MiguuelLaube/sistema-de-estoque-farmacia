@@ -14,7 +14,6 @@ import {
   X,
   CheckCircle2,
   ArrowRight,
-  ExternalLink,
   KeyRound,
   ArrowLeft,
 } from 'lucide-vue-next';
@@ -419,15 +418,6 @@ function fecharModalContato() {
           <Lock :size="12" aria-hidden="true" />
           <span>Acesso monitorado, protegido contra força bruta e auditado (LGPD)</span>
         </span>
-
-        <button
-          type="button"
-          @click="router.push('/apresentacao')"
-          class="link-landing-page"
-        >
-          <span>Conhecer a apresentação e funcionalidades do SaaS</span>
-          <ExternalLink :size="12" aria-hidden="true" />
-        </button>
       </div>
     </div>
 
