@@ -1,6 +1,7 @@
 -- ====================================================================
--- SISTEMA ENCOMED - MIGRAÇÃO 14
+-- SISTEMA ENCOMED - MIGRAÇÃO 14 (CORRIGIDA)
 -- Correção Definitiva de RLS Super Admin & RPC de Provisionamento
+-- (Sem dependência de ON CONFLICT para evitar erro 42P10)
 -- ====================================================================
 
 -- 1. Torna a função is_super_admin() 100% à prova de falhas:
@@ -13,12 +14,12 @@ SECURITY DEFINER
 SET search_path = public, auth
 AS $$
 BEGIN
-    -- Reconhecimento imediato do criador e proprietário da plataforma
+    -- Reconhecimento direto do criador e proprietário da plataforma
     IF LOWER(COALESCE(auth.jwt() ->> 'email', '')) = 'miguuel.laube@gmail.com' THEN
         RETURN true;
     END IF;
 
-    -- Verificação na tabela usuario para outros administradores ou contexto local
+    -- Verificação na tabela usuario para outros administradores
     IF EXISTS (
         SELECT 1 FROM public.usuario
         WHERE auth_user_id = auth.uid()
@@ -34,24 +35,33 @@ END;
 $$;
 GRANT EXECUTE ON FUNCTION public.is_super_admin() TO authenticated, anon;
 
--- 2. Vincula o seu usuário na tabela public.usuario com perfil super_admin
-INSERT INTO public.usuario (id, tenant_id, auth_user_id, nome, email, perfil, ativo)
-SELECT 
-    u.id, 
-    NULL, 
-    u.id, 
-    COALESCE(u.raw_user_meta_data->>'nome', 'Miguel Laube (Super Admin)'), 
-    u.email, 
-    'super_admin', 
-    true
-FROM auth.users u
-WHERE LOWER(u.email) = 'miguuel.laube@gmail.com'
-ON CONFLICT (email) DO UPDATE 
-SET auth_user_id = EXCLUDED.auth_user_id,
-    perfil = 'super_admin',
-    ativo = true;
+-- 2. Vincula o seu usuário na tabela public.usuario com perfil super_admin (sem ON CONFLICT)
+DO $$
+DECLARE
+    v_auth_id UUID;
+    v_user_nome TEXT;
+BEGIN
+    SELECT id, COALESCE(raw_user_meta_data->>'nome', 'Miguel Laube (Super Admin)')
+    INTO v_auth_id, v_user_nome
+    FROM auth.users
+    WHERE LOWER(email) = 'miguuel.laube@gmail.com'
+    LIMIT 1;
 
--- 3. Políticas de RLS para o Super Admin gerenciar tenant e usuario
+    IF v_auth_id IS NOT NULL THEN
+        IF EXISTS (SELECT 1 FROM public.usuario WHERE LOWER(email) = 'miguuel.laube@gmail.com') THEN
+            UPDATE public.usuario
+            SET auth_user_id = v_auth_id,
+                perfil = 'super_admin',
+                ativo = true
+            WHERE LOWER(email) = 'miguuel.laube@gmail.com';
+        ELSE
+            INSERT INTO public.usuario (id, tenant_id, auth_user_id, nome, email, perfil, ativo)
+            VALUES (v_auth_id, NULL, v_auth_id, v_user_nome, 'miguuel.laube@gmail.com', 'super_admin', true);
+        END IF;
+    END IF;
+END $$;
+
+-- 3. Políticas de RLS para o Super Admin gerenciar tenant e usuario irrestritamente
 ALTER TABLE public.tenant ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.usuario ENABLE ROW LEVEL SECURITY;
 
@@ -107,8 +117,7 @@ BEGIN
     VALUES (v_tenant_id, TRIM(p_nome_empresa), v_slug_limpo, v_slug_limpo || '.plataforma.com.br', v_email_limpo, 'ativo', COALESCE(p_plano, 'basico'), COALESCE(p_limite, 300));
 
     INSERT INTO public.config_tenant (tenant_id, nome_sistema, cor_primaria, cor_secundaria, header_title, whatsapp_instance_name)
-    VALUES (v_tenant_id, TRIM(p_nome_empresa) || ' Encomendas', '#2563eb', '#1e293b', UPPER(TRIM(p_nome_empresa)), 'encomed_' || v_slug_limpo)
-    ON CONFLICT (tenant_id) DO NOTHING;
+    VALUES (v_tenant_id, TRIM(p_nome_empresa) || ' Encomendas', '#2563eb', '#1e293b', UPPER(TRIM(p_nome_empresa)), 'encomed_' || v_slug_limpo);
 
     IF v_email_limpo IS NOT NULL THEN
         SELECT id INTO v_auth_user_id FROM auth.users WHERE LOWER(email) = v_email_limpo LIMIT 1;
@@ -125,10 +134,18 @@ BEGIN
             WHERE id = v_auth_user_id;
         END IF;
 
-        INSERT INTO public.usuario (id, tenant_id, auth_user_id, nome, email, perfil, ativo, exigir_troca_senha)
-        VALUES (gen_random_uuid(), v_tenant_id, v_auth_user_id, COALESCE(p_nome_admin, 'Administrador'), v_email_limpo, 'admin', true, true)
-        ON CONFLICT (email) DO UPDATE
-        SET tenant_id = v_tenant_id, auth_user_id = COALESCE(public.usuario.auth_user_id, v_auth_user_id), perfil = 'admin', ativo = true, exigir_troca_senha = true;
+        IF EXISTS (SELECT 1 FROM public.usuario WHERE tenant_id = v_tenant_id AND LOWER(email) = v_email_limpo) THEN
+            UPDATE public.usuario
+            SET auth_user_id = COALESCE(public.usuario.auth_user_id, v_auth_user_id),
+                perfil = 'admin',
+                ativo = true,
+                exigir_troca_senha = true,
+                nome = COALESCE(p_nome_admin, 'Administrador')
+            WHERE tenant_id = v_tenant_id AND LOWER(email) = v_email_limpo;
+        ELSE
+            INSERT INTO public.usuario (id, tenant_id, auth_user_id, nome, email, perfil, ativo, exigir_troca_senha)
+            VALUES (gen_random_uuid(), v_tenant_id, v_auth_user_id, COALESCE(p_nome_admin, 'Administrador'), v_email_limpo, 'admin', true, true);
+        END IF;
     END IF;
 
     RETURN jsonb_build_object('sucesso', true, 'tenant_id', v_tenant_id, 'senha_provisoria', v_senha_final, 'email_admin', v_email_limpo);
