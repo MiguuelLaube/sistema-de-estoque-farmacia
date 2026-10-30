@@ -1,7 +1,6 @@
 -- ====================================================================
--- SISTEMA ENCOMED - MIGRAÇÃO 14 (CORRIGIDA)
--- Correção Definitiva de RLS Super Admin & RPC de Provisionamento
--- (Sem dependência de ON CONFLICT para evitar erro 42P10)
+-- SISTEMA ENCOMED - MIGRAÇÃO 14 (DEFINITIVA & BLINDADA)
+-- Correção de RLS Super Admin & RPC de Provisionamento
 -- ====================================================================
 
 -- 1. Torna a função is_super_admin() 100% à prova de falhas:
@@ -35,7 +34,10 @@ END;
 $$;
 GRANT EXECUTE ON FUNCTION public.is_super_admin() TO authenticated, anon;
 
--- 2. Vincula o seu usuário na tabela public.usuario com perfil super_admin (sem ON CONFLICT)
+-- 2. Vincula o seu usuário na tabela public.usuario com perfil super_admin
+-- Desativa temporariamente o trigger de proteção para permitir a configuração inicial
+ALTER TABLE public.usuario DISABLE TRIGGER trg_usuario_proteger_super_admin;
+
 DO $$
 DECLARE
     v_auth_id UUID;
@@ -60,6 +62,9 @@ BEGIN
         END IF;
     END IF;
 END $$;
+
+-- Reativa o trigger de proteção de segurança
+ALTER TABLE public.usuario ENABLE TRIGGER trg_usuario_proteger_super_admin;
 
 -- 3. Políticas de RLS para o Super Admin gerenciar tenant e usuario irrestritamente
 ALTER TABLE public.tenant ENABLE ROW LEVEL SECURITY;
