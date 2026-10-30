@@ -70,14 +70,27 @@ export const useEncomendasStore = defineStore('encomendas', () => {
         pagsPorEnc.set(p.encomenda_id, arr);
       }
 
-      allEncomendas.value = (encRes.data as any[]).map((e) => ({
-        ...e,
-        valor_total: Number(e.valor_total) || 0,
-        valor_pago: Number(e.valor_pago) || 0,
-        historico: Array.isArray(e.historico) ? e.historico : [],
-        itens: itensPorEnc.get(e.id) || [],
-        pagamentos: pagsPorEnc.get(e.id) || [],
-      })) as Encomenda[];
+      allEncomendas.value = (encRes.data as any[]).map((e) => {
+        const vTotal = Number(e.valor_total) || 0;
+        let vPago = Number(e.valor_pago) || 0;
+        let sitPag = e.situacao_pagamento;
+
+        // Regra de Negócio: Encomenda entregue é considerada quitada e paga
+        if (e.status === 'Entregue') {
+          vPago = Math.max(vPago, vTotal);
+          sitPag = 'Pago';
+        }
+
+        return {
+          ...e,
+          valor_total: vTotal,
+          valor_pago: vPago,
+          situacao_pagamento: sitPag,
+          historico: Array.isArray(e.historico) ? e.historico : [],
+          itens: itensPorEnc.get(e.id) || [],
+          pagamentos: pagsPorEnc.get(e.id) || [],
+        };
+      }) as Encomenda[];
     }
   }
 
@@ -432,34 +445,33 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     const enc = allEncomendas.value.find((e) => e.id === encomendaId);
     if (!enc) return { sucesso: false, mensagem: 'Encomenda não encontrada.' };
 
-    // Regra 5.2: Entregue só se todos os itens estiverem em Chegou (salvo alçada Admin real)
+    // Regra: Quando a encomenda for marcada que foi entregue, então ela foi paga integralmente
     if (novoStatus === 'Entregue') {
-      const allChegou = enc.itens?.every((i) => i.status_item === 'Chegou');
-      if (!allChegou && !options?.autorizacaoAdmin) {
-        return {
-          sucesso: false,
-          mensagem: 'Não é possível marcar como Entregue: existem itens que ainda não chegaram! Apenas um Administrador pode autorizar exceção.',
-        };
-      }
-
-      const saldoDevedor = enc.valor_total > enc.valor_pago;
-      if (saldoDevedor) {
-        if (authStore.currentConfig.bloquear_entrega_com_saldo && !authStore.isAdmin) {
-          return {
-            sucesso: false,
-            mensagem: 'Política da farmácia: entrega com saldo devedor exige autorização de Administrador.',
-          };
-        }
-        enc.entregue_com_saldo_devedor = true;
-        authStore.registrarAuditoria(
-          'LIBERACAO_ENTREGA_COM_SALDO',
-          `Encomenda ${enc.codigo_rastreio || enc.id}`,
-          `Saldo pendente: R$ ${(enc.valor_total - enc.valor_pago).toFixed(2)}`
-        );
-      }
-
       enc.entregue_em = new Date().toISOString();
       enc.entregue_por = authStore.currentUser.tenant_id ? authStore.activeUserId : undefined;
+
+      // Alinha automaticamente os itens para 'Chegou', pois o pedido já está sendo entregue ao cliente
+      if (enc.itens) {
+        for (const it of enc.itens) {
+          it.status_item = 'Chegou';
+        }
+      }
+
+      // Quita automaticamente qualquer saldo devedor restante
+      const faltaPagar = Math.max(0, Number((enc.valor_total - enc.valor_pago).toFixed(2)));
+      if (faltaPagar > 0) {
+        registrarPagamento({
+          encomendaId: enc.id,
+          valor: faltaPagar,
+          forma: 'dinheiro',
+          tipo: 'pagamento',
+          funcionarioNome: options?.funcionarioNome,
+        });
+      }
+
+      enc.entregue_com_saldo_devedor = false;
+      enc.valor_pago = enc.valor_total;
+      enc.situacao_pagamento = 'Pago';
     }
 
     if (novoStatus === 'Cancelada') {
@@ -486,25 +498,28 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     if (!enc.historico) enc.historico = [];
     enc.historico.push({
       employee_name: options?.funcionarioNome || authStore.currentUser.nome,
-      action: `alterou status para: ${novoStatus}`,
+      action: novoStatus === 'Entregue'
+        ? 'entregou a encomenda ao cliente (saldo quitado)'
+        : `alterou status para: ${novoStatus}`,
       timestamp: enc.atualizado_em,
     });
 
     if (isLive && authStore.isAuthenticated) {
       (async () => {
-        if (novoStatus === 'Pedido Feito' || novoStatus === 'Chegou') {
+        if (novoStatus === 'Pedido Feito' || novoStatus === 'Chegou' || novoStatus === 'Entregue') {
           await supabase
             .from('encomenda_item')
-            .update({ status_item: novoStatus })
+            .update({ status_item: novoStatus === 'Pedido Feito' ? 'Pedido Feito' : 'Chegou' })
             .eq('encomenda_id', enc.id);
         }
         await supabase
           .from('encomenda')
           .update({
             status: enc.status,
+            valor_pago: enc.valor_pago,
             entregue_em: enc.entregue_em || null,
             entregue_por: enc.entregue_por || null,
-            entregue_com_saldo_devedor: enc.entregue_com_saldo_devedor,
+            entregue_com_saldo_devedor: false,
             historico: enc.historico,
             atualizado_em: enc.atualizado_em,
           })

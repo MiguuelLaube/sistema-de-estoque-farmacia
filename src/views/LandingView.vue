@@ -155,6 +155,10 @@ const itensFiltradosSimulador = computed(() => {
 
 function clicarStatusDemo(item: ItemSimulador, novoStatus: StatusDemo) {
   item.status = novoStatus;
+  if (novoStatus === 'Entregue') {
+    item.pago = true;
+    item.saldo = 'R$ 0,00';
+  }
   item.animando = true;
   setTimeout(() => {
     item.animando = false;

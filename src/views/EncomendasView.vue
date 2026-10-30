@@ -1131,9 +1131,29 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
         <h3 style="font-size: 1.1rem; font-weight: 700; color: #0f172a; margin-bottom: 0.5rem;">
           Quem está fazendo esta ação?
         </h3>
-        <p style="font-size: 0.82rem; color: #64748b; margin-bottom: 1rem;">
+        <p style="font-size: 0.82rem; color: #64748b; margin-bottom: 0.75rem;">
           Selecione o atendente responsável pela alteração.
         </p>
+
+        <div
+          v-if="pendingAction?.statusTarget === 'Entregue'"
+          style="
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.55rem 0.75rem;
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            border-radius: 8px;
+            font-size: 0.78rem;
+            color: #065f46;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+          "
+        >
+          <span>✅</span>
+          <span>Ao marcar como "Entregue", a encomenda é automaticamente quitada e registrada como paga.</span>
+        </div>
 
         <div style="display: flex; flex-direction: column; gap: 0.5rem;">
           <button
