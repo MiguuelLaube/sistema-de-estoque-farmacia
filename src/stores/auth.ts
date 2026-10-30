@@ -1130,7 +1130,14 @@ export const useAuthStore = defineStore('auth', () => {
       });
 
       if (tErr) {
-        return { sucesso: false, mensagem: 'Não foi possível criar a empresa (verifique se o identificador já está em uso).' };
+        console.error('[Provisionar Tenant DB Error]:', tErr);
+        if (tErr.code === '23505') {
+          return { sucesso: false, mensagem: `O identificador (slug) "${slugLimpo}" já está em uso por outra empresa.` };
+        }
+        if (tErr.code === '42501') {
+          return { sucesso: false, mensagem: 'Permissão negada no banco de dados (RLS). Execute o script SQL de vinculação do Super Admin no painel do Supabase.' };
+        }
+        return { sucesso: false, mensagem: tErr.message || 'Não foi possível cadastrar a empresa no banco de dados.' };
       }
 
       await supabase.from('config_tenant').insert({

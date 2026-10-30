@@ -256,3 +256,4 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.redefinir_senha_provisoria_tenant(UUID, TEXT) TO authenticated;
+
