@@ -25,14 +25,15 @@
   --accent-foreground: 217 72% 40%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 98%;
-  --border: 214 32% 91%;
-  --input: 214 32% 91%;
+  --border: 215 25% 82%;
+  --input: 215 25% 82%;
   --ring: 217 72% 56%;
 
   /* Direct Color Tokens */
   --bg-body: hsl(var(--background));
   --bg-surface: hsl(var(--card));
-  --border-color: hsl(var(--border));
+  --border-color: #cbd5e1; /* Borda bem definida (Slate-300) visível em qualquer monitor */
+  --border-card: #cbd5e1;
   --text-main: hsl(var(--foreground));
   --text-muted: hsl(var(--muted-foreground));
   --color-primary: hsl(var(--primary));
@@ -467,14 +468,15 @@ button, input, select, textarea {
 /* Glass Card & Dashboard Cards */
 .card {
   background: var(--bg-surface);
-  border: 1px solid var(--border-color);
+  border: 1.5px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: 1.5rem;
-  box-shadow: var(--shadow-sm);
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
 }
 
 .card:hover {
+  border-color: #94a3b8;
   box-shadow: var(--shadow-md);
 }
 
@@ -493,7 +495,7 @@ button, input, select, textarea {
   background: var(--bg-surface);
   border: 1.5px solid var(--border-color);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
   transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 

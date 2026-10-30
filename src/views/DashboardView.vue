@@ -269,7 +269,7 @@ async function dispararAvisoBot(enc: any) {
         <div
           v-for="(count, statusName) in metricas.porStatus"
           :key="statusName"
-          style="padding: 1rem; border-radius: var(--radius-md); background: var(--bg-body); border: 1px solid var(--border-color); text-align: center;"
+          style="padding: 1rem; border-radius: var(--radius-md); background: #ffffff; border: 1.5px solid var(--border-color); text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.03);"
         >
           <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">
             {{ statusName }}
