@@ -527,7 +527,7 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
               width: 100%;
               height: 42px;
               border-radius: 10px;
-              border: 1px solid #e2e8f0;
+              border: 1.5px solid var(--border-color);
               background: #ffffff;
               padding-left: 2.5rem;
               padding-right: 1rem;
@@ -1427,8 +1427,8 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
 .encomenda-card-block {
   background: #ffffff;
   border-radius: 1.25rem;
-  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.05);
-  border: 1.5px solid #e2e8f0;
+  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.06);
+  border: 1.5px solid var(--border-color);
   padding: 1.25rem;
   display: flex;
   flex-direction: column;
@@ -1447,13 +1447,13 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
 /* ANIMAÇÃO AO PASSAR O MOUSE: Apenas realce de cor e sombra suave, sem alterar tamanho */
 .encomenda-card-block:hover {
   border-color: #2563eb;
-  box-shadow: 0 6px 16px -2px rgba(37, 99, 235, 0.12);
+  box-shadow: 0 6px 16px -2px rgba(37, 99, 235, 0.14);
 }
 
 /* BLOCO DE ENCOMENDA NA ABA DE PESQUISA */
 .encomenda-search-card-block {
   background: #ffffff;
-  border: 1.5px solid #e2e8f0;
+  border: 1.5px solid var(--border-color);
   border-radius: 14px;
   padding: 0.9rem 1.15rem;
   display: flex;

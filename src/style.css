@@ -8,32 +8,32 @@
   --font-heading: 'Plus Jakarta Sans', 'Inter', sans-serif;
 
   /* Base44 Mavencomendas Design Tokens */
-  --background: 210 40% 99%;
+  --background: 214 32% 96%;
   --foreground: 222 30% 15%;
   --card: 0 0% 100%;
   --card-foreground: 222 30% 15%;
   --popover: 0 0% 100%;
   --popover-foreground: 222 30% 15%;
-  
+
   --primary: 217 72% 56%;
   --primary-foreground: 0 0% 100%;
   --secondary: 210 40% 96%;
   --secondary-foreground: 222 30% 20%;
-  --muted: 210 40% 96%;
-  --muted-foreground: 215 16% 47%;
+  --muted: 214 32% 93%;
+  --muted-foreground: 215 16% 45%;
   --accent: 210 60% 95%;
   --accent-foreground: 217 72% 40%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 98%;
-  --border: 215 25% 82%;
-  --input: 215 25% 82%;
+  --border: 215 20% 76%;
+  --input: 215 20% 76%;
   --ring: 217 72% 56%;
 
   /* Direct Color Tokens */
-  --bg-body: hsl(var(--background));
-  --bg-surface: hsl(var(--card));
-  --border-color: #cbd5e1; /* Borda bem definida (Slate-300) visível em qualquer monitor */
-  --border-card: #cbd5e1;
+  --bg-body: #f1f5f9;
+  --bg-surface: #ffffff;
+  --border-color: #94a3b8; /* Borda bem definida (Slate-400) visível em qualquer monitor */
+  --border-card: #94a3b8;
   --text-main: hsl(var(--foreground));
   --text-muted: hsl(var(--muted-foreground));
   --color-primary: hsl(var(--primary));
@@ -84,7 +84,9 @@
   --transition-smooth: 250ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -100,7 +102,12 @@ body {
   min-height: 100vh;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--font-heading);
   letter-spacing: -0.02em;
   font-weight: 700;
@@ -112,7 +119,10 @@ a {
   text-decoration: none;
 }
 
-button, input, select, textarea {
+button,
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -589,8 +599,15 @@ button, input, select, textarea {
 }
 
 @keyframes pulse-urgent {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
 }
 
 .badge-pago {
@@ -1031,16 +1048,17 @@ button, input, select, textarea {
   align-items: center;
   gap: 0.75rem;
   padding: 0.6rem 0.85rem;
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  border: 1.5px solid var(--border-color);
   border-radius: 14px;
   flex-wrap: wrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .filter-toolbar-select {
   padding: 0.45rem 1rem;
   background-color: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1.5px solid #cbd5e1;
   border-radius: 10px;
   font-size: 0.85rem;
   font-weight: 500;
@@ -1058,7 +1076,7 @@ button, input, select, textarea {
 .toolbar-divider {
   width: 1px;
   height: 22px;
-  background-color: #e2e8f0;
+  background-color: #cbd5e1;
   margin: 0 0.25rem;
 }
 
@@ -1068,7 +1086,7 @@ button, input, select, textarea {
   gap: 0.4rem;
   padding: 0.45rem 0.9rem;
   background-color: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1.5px solid #cbd5e1;
   border-radius: 10px;
   font-size: 0.84rem;
   font-weight: 600;
@@ -1117,15 +1135,15 @@ button, input, select, textarea {
   justify-content: space-between;
   padding: 1.1rem 1.4rem;
   background-color: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1.5px solid var(--border-color);
   border-radius: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   transition: all var(--transition-smooth);
 }
 
 .pedido-item-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: #2563eb;
 }
 
 .pedido-item-name {
@@ -1159,9 +1177,9 @@ button, input, select, textarea {
   border-radius: 8px;
   font-size: 0.78rem;
   font-weight: 500;
-  border: 1px solid #e2e8f0;
+  border: 1.5px solid #cbd5e1;
   background-color: #ffffff;
-  color: #64748b;
+  color: #475569;
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -1169,26 +1187,27 @@ button, input, select, textarea {
 .pedido-status-pill:hover {
   background-color: #f8fafc;
   color: #0f172a;
+  border-color: #94a3b8;
 }
 
 .pedido-status-pill.active-aguardo {
   background-color: #fffbeb;
-  border-color: #fde68a;
-  color: #d97706;
+  border-color: #f59e0b;
+  color: #b45309;
   font-weight: 600;
 }
 
 .pedido-status-pill.active-feito {
   background-color: #eff6ff;
-  border-color: #bfdbfe;
-  color: #2563eb;
+  border-color: #60a5fa;
+  color: #1d4ed8;
   font-weight: 600;
 }
 
 .pedido-status-pill.active-chegou {
   background-color: #ecfdf5;
-  border-color: #a7f3d0;
-  color: #059669;
+  border-color: #34d399;
+  color: #047857;
   font-weight: 600;
 }
 
@@ -1197,9 +1216,9 @@ button, input, select, textarea {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1.5px solid #cbd5e1;
   background-color: #ffffff;
-  color: #94a3b8;
+  color: #64748b;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1387,13 +1406,25 @@ button, input, select, textarea {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(16px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* Form Controls */
@@ -1409,10 +1440,12 @@ button, input, select, textarea {
   color: var(--text-main);
 }
 
-.form-input, .form-select, .form-textarea {
+.form-input,
+.form-select,
+.form-textarea {
   width: 100%;
   padding: 0.65rem 0.85rem;
-  border: 1px solid var(--border-color);
+  border: 1.5px solid var(--border-color);
   border-radius: var(--radius-md);
   font-size: 0.88rem;
   background-color: var(--bg-surface);
@@ -1420,7 +1453,9 @@ button, input, select, textarea {
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.form-input:focus, .form-select:focus, .form-textarea:focus {
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-primary-alpha);
@@ -1447,11 +1482,13 @@ button, input, select, textarea {
   cursor: pointer;
   text-decoration: none;
 }
+
 .btn-primary-pill:hover {
   background-color: var(--color-primary-hover, #1d4ed8);
   transform: translateY(-1px);
   box-shadow: 0 6px 16px var(--color-primary-alpha, rgba(37, 99, 235, 0.35));
 }
+
 .btn-primary-pill:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -1464,7 +1501,7 @@ button, input, select, textarea {
   justify-content: center;
   gap: 8px;
   background-color: #ffffff;
-  border: 1px solid #10b981;
+  border: 1.5px solid #10b981;
   color: #059669 !important;
   padding: 8px 16px;
   border-radius: 9999px;
@@ -1474,6 +1511,7 @@ button, input, select, textarea {
   cursor: pointer;
   text-decoration: none;
 }
+
 .btn-outline-emerald:hover {
   background-color: #ecfdf5;
   color: #047857 !important;
@@ -1485,8 +1523,8 @@ button, input, select, textarea {
   justify-content: center;
   gap: 8px;
   background-color: #ffffff;
-  border: 1px solid #e2e8f0;
-  color: #475569 !important;
+  border: 1.5px solid #cbd5e1;
+  color: #334155 !important;
   padding: 8px 16px;
   border-radius: 9999px;
   font-weight: 600;
@@ -1495,52 +1533,58 @@ button, input, select, textarea {
   cursor: pointer;
   text-decoration: none;
 }
+
 .btn-outline-neutral:hover {
   background-color: #f8fafc;
-  color: #1e293b !important;
-  border-color: #cbd5e1;
+  color: #0f172a !important;
+  border-color: #94a3b8;
 }
 
 .sub-tabs-container {
   display: flex;
-  background-color: #f1f5f9;
+  background-color: #e2e8f0;
+  border: 1px solid #cbd5e1;
   padding: 4px;
   border-radius: 9999px;
   width: fit-content;
   gap: 4px;
   flex-wrap: wrap;
 }
+
 .sub-tab-btn {
   padding: 8px 20px;
   border-radius: 9999px;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #64748b;
+  color: #475569;
   transition: all 0.2s ease;
   border: none;
   background: transparent;
   cursor: pointer;
 }
+
 .sub-tab-btn.active {
   background-color: #ffffff;
   color: #0f172a;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
+
 .sub-tab-btn:hover:not(.active) {
-  color: #334155;
+  color: #0f172a;
 }
 
 .pedido-item-card {
   background-color: #ffffff;
-  border: 1.5px solid #f1f5f9;
+  border: 1.5px solid var(--border-color);
   border-radius: 16px;
   padding: 1rem 1.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
+
 .pedido-item-card:hover {
   border-color: #2563eb;
   box-shadow: 0 8px 24px -4px rgba(37, 99, 235, 0.14), 0 0 0 2.5px rgba(37, 99, 235, 0.2);

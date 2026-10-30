@@ -1200,7 +1200,7 @@ function removerClassificacao(id: string) {
           </p>
 
           <!-- Chips de Variáveis Clicáveis -->
-          <div style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.25rem; padding: 0.75rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
+          <div style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.25rem; padding: 0.75rem; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 12px;">
             <span style="font-size: 0.75rem; font-weight: 700; color: #475569; width: 100%; margin-bottom: 2px;">
               Inserir variável no modelo em edição ({{ modeloAtivoFoco.toUpperCase() }}):
             </span>
@@ -1888,7 +1888,7 @@ function removerClassificacao(id: string) {
   flex-direction: column;
   padding: 0.7rem 0.85rem;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1.5px solid #cbd5e1;
   background: #ffffff;
   cursor: pointer;
   transition: all 0.15s ease;

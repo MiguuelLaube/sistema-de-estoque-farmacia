@@ -480,7 +480,7 @@ function exportarPlanilhaExcel() {
         v-model="buscaTexto"
         type="text"
         placeholder="Buscar medicamento por nome..."
-        style="width: 100%; height: 44px; border-radius: 12px; border: 1px solid #e2e8f0; background: #ffffff; padding-left: 2.6rem; padding-right: 1rem; font-size: 0.92rem; color: #0f172a; outline: none; transition: border-color 0.15s ease;"
+        style="width: 100%; height: 44px; border-radius: 12px; border: 1.5px solid var(--border-color); background: #ffffff; padding-left: 2.6rem; padding-right: 1rem; font-size: 0.92rem; color: #0f172a; outline: none; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: border-color 0.15s ease;"
         id="input-busca-pedidos"
       />
     </div>

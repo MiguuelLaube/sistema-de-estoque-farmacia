@@ -736,3 +736,4 @@ export function exportarRelatorioPdf(opcoes: OpcoesRelatorioExportacao): string 
   dispararDownloadBlob(blob, nomeArquivo);
   return nomeArquivo;
 }
+

@@ -364,6 +364,30 @@ async function refinarComGeminiOpcional(
   }
 }
 
+const MAX_XML_BODY_BYTES = 256 * 1024; // 256 KB máximo por requisição de conciliação XML
+const xmlRateLimitBuckets = new Map<string, number[]>();
+
+function verificarRateLimitXmlMemoria(
+  chave: string,
+  limite: number,
+  janelaMs: number
+): { permitido: boolean; segundosRestantes: number } {
+  const agora = Date.now();
+  const corte = agora - janelaMs;
+  const hist = (xmlRateLimitBuckets.get(chave) || []).filter((t) => t > corte);
+
+  if (hist.length >= limite) {
+    const maisAntigo = hist[0] || agora;
+    const segundosRestantes = Math.max(1, Math.ceil((maisAntigo + janelaMs - agora) / 1000));
+    xmlRateLimitBuckets.set(chave, hist);
+    return { permitido: false, segundosRestantes };
+  }
+
+  hist.push(agora);
+  xmlRateLimitBuckets.set(chave, hist);
+  return { permitido: true, segundosRestantes: 0 };
+}
+
 export async function processXmlAiMatchRequest(
   method: string | undefined,
   authHeader: string | undefined,
@@ -382,6 +406,17 @@ export async function processXmlAiMatchRequest(
   const supabaseUrl = env.SUPABASE_URL || env.VITE_SUPABASE_URL || '';
   const supabaseAnonKey = env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || '';
 
+  const memCheck = verificarRateLimitXmlMemoria(`xml:${token.slice(-24)}`, 10, 60_000);
+  if (!memCheck.permitido) {
+    return {
+      status: 429,
+      payload: {
+        sucesso: false,
+        mensagem: `Limite de uso da IA de conciliação atingido. Aguarde ${memCheck.segundosRestantes}s antes de processar outro lote.`,
+      },
+    };
+  }
+
   if (supabaseUrl && supabaseAnonKey) {
     const supa = createClient(supabaseUrl, supabaseAnonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -390,6 +425,22 @@ export async function processXmlAiMatchRequest(
     const { data: userRes, error: authErr } = await supa.auth.getUser(token);
     if (authErr || !userRes?.user) {
       return { status: 401, payload: { sucesso: false, mensagem: 'Sessão inválida ou expirada.' } };
+    }
+
+    const { data: rlDb } = await supa.rpc('verificar_rate_limit_requisicao', {
+      p_escopo: 'api_xml_ai_match',
+      p_limite: 10,
+      p_janela_segundos: 60,
+    });
+    if (rlDb && typeof rlDb === 'object' && (rlDb as any).permitido === false) {
+      const seg = Number((rlDb as any).segundos_restantes) || 15;
+      return {
+        status: 429,
+        payload: {
+          sucesso: false,
+          mensagem: `Proteção anti-abuso SQL/API: limite de conciliações por minuto atingido. Aguarde ${seg}s.`,
+        },
+      };
     }
   }
 
@@ -486,23 +537,6 @@ export async function processXmlAiMatchRequest(
 }
 
 export default async function handler(req: IncomingMessage & { body?: any }, res: ServerResponse) {
-  let body: XmlAiMatchRequestBody = {};
-  if (req.body && typeof req.body === 'object') {
-    body = req.body;
-  } else {
-    const chunks: Buffer[] = [];
-    for await (const chunk of req) {
-      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
-    }
-    if (chunks.length > 0) {
-      try {
-        body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-      } catch {
-        body = {};
-      }
-    }
-  }
-
   const allowedOrigin = process.env.ALLOWED_PROXY_ORIGIN || '';
   if (allowedOrigin) {
     res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
@@ -517,9 +551,64 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
     return;
   }
 
+  const clientIp =
+    (typeof req.headers['x-forwarded-for'] === 'string'
+      ? req.headers['x-forwarded-for'].split(',')[0]?.trim()
+      : '') ||
+    req.socket?.remoteAddress ||
+    'unknown-ip';
+
+  const ipCheck = verificarRateLimitXmlMemoria(`xml_ip:${clientIp}`, 20, 60_000);
+  if (!ipCheck.permitido) {
+    res.statusCode = 429;
+    res.setHeader('Retry-After', String(ipCheck.segundosRestantes));
+    res.end(
+      JSON.stringify({
+        sucesso: false,
+        mensagem: `Limite de requisições da API excedido para este IP. Aguarde ${ipCheck.segundosRestantes}s.`,
+      })
+    );
+    return;
+  }
+
+  let body: XmlAiMatchRequestBody = {};
+  if (req.body && typeof req.body === 'object') {
+    const rawStr = JSON.stringify(req.body);
+    if (rawStr.length > MAX_XML_BODY_BYTES) {
+      res.statusCode = 413;
+      res.end(JSON.stringify({ sucesso: false, mensagem: 'Payload XML excede o tamanho máximo permitido (256 KB).' }));
+      return;
+    }
+    body = req.body;
+  } else {
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    for await (const chunk of req) {
+      const buf = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
+      totalBytes += buf.length;
+      if (totalBytes > MAX_XML_BODY_BYTES) {
+        res.statusCode = 413;
+        res.end(JSON.stringify({ sucesso: false, mensagem: 'Payload XML excede o tamanho máximo permitido (256 KB).' }));
+        return;
+      }
+      chunks.push(buf);
+    }
+    if (chunks.length > 0) {
+      try {
+        body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      } catch {
+        body = {};
+      }
+    }
+  }
+
   const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined;
   const result = await processXmlAiMatchRequest(req.method, authHeader, body, process.env as XmlAiMatchEnv);
 
   res.statusCode = result.status;
+  if (result.status === 429) {
+    res.setHeader('Retry-After', '15');
+  }
   res.end(JSON.stringify(result.payload));
 }
+

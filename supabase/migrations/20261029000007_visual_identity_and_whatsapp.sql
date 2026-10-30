@@ -13,3 +13,4 @@ ALTER TABLE public.config_tenant
 
 -- Recarrega cache do PostgREST para reconhecer imediatamente as novas colunas na API REST
 NOTIFY pgrst, 'reload schema';
+

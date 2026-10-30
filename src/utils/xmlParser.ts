@@ -436,11 +436,11 @@ export async function analisarXmlComIA(
 
       const sugestoesApi = Array.isArray(resIa.alternativas)
         ? resIa.alternativas
-            .map((alt: any) => {
-              const found = mapaEstoque.get(alt.compraItemId);
-              return found ? { item: found, score: Number(alt.confianca) || 0.5 } : null;
-            })
-            .filter(Boolean)
+          .map((alt: any) => {
+            const found = mapaEstoque.get(alt.compraItemId);
+            return found ? { item: found, score: Number(alt.confianca) || 0.5 } : null;
+          })
+          .filter(Boolean)
         : itemBase.sugestoesAproximadas;
 
       const confianca = Number(resIa.confianca) || itemBase.confiancaIa;

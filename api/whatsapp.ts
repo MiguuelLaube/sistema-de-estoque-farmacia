@@ -37,6 +37,34 @@ export interface ProxyEnv {
   ALLOWED_PROXY_ORIGIN?: string;
 }
 
+// ============================================================================
+// PROTEÇÃO DE RATE LIMITING SERVER-SIDE E TAMANHO DE PAYLOAD (ANTI-ATAQUE/SPAM)
+// ============================================================================
+const MAX_WHATSAPP_BODY_BYTES = 32 * 1024; // 32 KB máx por requisição
+const rateLimitMap = new Map<string, number[]>();
+
+function verificarRateLimitMemoria(
+  chave: string,
+  limite: number,
+  janelaMs: number
+): { permitido: boolean; restantes: number; retryAfterSec: number } {
+  const agora = Date.now();
+  // Limpeza preventiva caso o mapa cresça demais
+  if (rateLimitMap.size > 2000) {
+    rateLimitMap.clear();
+  }
+  const lista = (rateLimitMap.get(chave) || []).filter((t) => agora - t < janelaMs);
+  if (lista.length >= limite) {
+    const maisAntigo = lista[0] || agora;
+    const retryAfterSec = Math.max(1, Math.ceil((janelaMs - (agora - maisAntigo)) / 1000));
+    rateLimitMap.set(chave, lista);
+    return { permitido: false, restantes: 0, retryAfterSec };
+  }
+  lista.push(agora);
+  rateLimitMap.set(chave, lista);
+  return { permitido: true, restantes: Math.max(0, limite - lista.length), retryAfterSec: 0 };
+}
+
 const DEFAULT_TEMPLATES: Record<Exclude<TipoModeloWhatsApp, 'personalizado'>, string> = {
   chegada:
     'Olá {cliente}! Seu pedido de {medicamento} já está disponível para retirada na {loja}. Aguardamos sua visita!',
@@ -193,6 +221,41 @@ export async function processWhatsAppProxyRequest(
     return { status: 403, payload: { sucesso: false, mensagem: 'Usuário sem permissão ativa para utilizar integrações.' } };
   }
 
+  const action = body?.action;
+  const isSendAction = action === 'send';
+  const limiteAcao = isSendAction ? 15 : 30; // 15 disparos/min ou 30 consultas/min por usuário
+  const escopoRateLimit = isSendAction ? 'api_whatsapp_send' : 'api_whatsapp_meta';
+
+  // Camada 1: Rate Limit em memória por Usuário + Ação
+  const rlMem = verificarRateLimitMemoria(`${usuarioRow.id}:${escopoRateLimit}`, limiteAcao, 60_000);
+  if (!rlMem.permitido) {
+    return {
+      status: 429,
+      payload: {
+        sucesso: false,
+        retryAfterSec: rlMem.retryAfterSec,
+        mensagem: `Limite de uso da API atingido (${limiteAcao} req/min). Aguarde ${rlMem.retryAfterSec}s antes de tentar novamente.`,
+      },
+    };
+  }
+
+  // Camada 2: Rate Limit persistente no PostgreSQL (compartilhado entre instâncias Serverless)
+  const { data: rlDb, error: rlDbErr } = await supa.rpc('verificar_rate_limit_requisicao', {
+    p_escopo: escopoRateLimit,
+    p_limite: limiteAcao,
+    p_janela_segundos: 60,
+  });
+  if (!rlDbErr && rlDb && rlDb.permitido === false) {
+    return {
+      status: 429,
+      payload: {
+        sucesso: false,
+        retryAfterSec: rlDb.segundos_restantes || 30,
+        mensagem: `Limite de segurança da API excedido. Aguarde ${rlDb.segundos_restantes || 30}s para nova tentativa.`,
+      },
+    };
+  }
+
   // Carrega os modelos de mensagem e política LGPD diretamente do banco para adequar a API aos templates do Tenant
   let configBanco: Record<string, any> | null = null;
   if (usuarioRow.tenant_id) {
@@ -205,8 +268,6 @@ export async function processWhatsAppProxyRequest(
       .maybeSingle();
     configBanco = cfgRow || null;
   }
-
-  const action = body?.action;
 
   // Ação de pré-visualização server-side do modelo renderizado (não exige Evolution API online)
   if (action === 'preview') {
@@ -404,10 +465,45 @@ export default async function handler(
   req: IncomingMessage & { body?: any },
   res: ServerResponse & { status?: (c: number) => any; json?: (b: any) => any }
 ) {
+  const clientIp =
+    (typeof req.headers['x-forwarded-for'] === 'string'
+      ? req.headers['x-forwarded-for'].split(',')[0]?.trim()
+      : '') ||
+    req.socket?.remoteAddress ||
+    'unknown-ip';
+
+  const ipCheck = verificarRateLimitMemoria(`wa_ip:${clientIp}`, 35, 60_000);
+  if (!ipCheck.permitido) {
+    res.statusCode = 429;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Retry-After', String(ipCheck.retryAfterSec));
+    res.end(
+      JSON.stringify({
+        sucesso: false,
+        conectado: false,
+        mensagem: `Limite de segurança da API excedido para este IP. Aguarde ${ipCheck.retryAfterSec}s.`,
+      })
+    );
+    return;
+  }
+
   let parsedBody: ProxyRequestBody = {};
   if (req.body && typeof req.body === 'object') {
+    const rawStr = JSON.stringify(req.body);
+    if (rawStr.length > MAX_WHATSAPP_BODY_BYTES) {
+      res.statusCode = 413;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ sucesso: false, mensagem: 'Payload excede o tamanho máximo permitido (32 KB).' }));
+      return;
+    }
     parsedBody = req.body;
   } else if (typeof req.body === 'string') {
+    if (req.body.length > MAX_WHATSAPP_BODY_BYTES) {
+      res.statusCode = 413;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ sucesso: false, mensagem: 'Payload excede o tamanho máximo permitido (32 KB).' }));
+      return;
+    }
     try {
       parsedBody = JSON.parse(req.body);
     } catch {
@@ -415,8 +511,17 @@ export default async function handler(
     }
   } else {
     const chunks: Buffer[] = [];
+    let totalBytes = 0;
     for await (const chunk of req) {
-      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+      const buf = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
+      totalBytes += buf.length;
+      if (totalBytes > MAX_WHATSAPP_BODY_BYTES) {
+        res.statusCode = 413;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ sucesso: false, mensagem: 'Payload excede o tamanho máximo permitido (32 KB).' }));
+        return;
+      }
+      chunks.push(buf);
     }
     if (chunks.length > 0) {
       try {
@@ -433,5 +538,8 @@ export default async function handler(
   res.statusCode = result.status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
+  if (result.status === 429) {
+    res.setHeader('Retry-After', '15');
+  }
   res.end(JSON.stringify(result.payload));
 }
