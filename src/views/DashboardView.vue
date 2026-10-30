@@ -16,7 +16,6 @@ import {
   Loader2,
   Check,
 } from 'lucide-vue-next';
-import { enviarMensagemWhatsAppProxy, formatarMensagemNotificacao } from '../services/evolutionApi';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -61,9 +60,9 @@ async function dispararAvisoBot(enc: any) {
     return;
   }
 
-  // Se robô não estiver ativo, usa rota manual WhatsApp Web
+  // Se robô não estiver ativo, usa rota manual WhatsApp Web com o modelo configurado
   if (!cfg.evolution_api_ativo) {
-    const url = encomendasStore.gerarLinkWhatsApp(enc);
+    const url = encomendasStore.gerarLinkWhatsApp(enc, 'chegada');
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
       encomendasStore.alternarClienteAvisado(enc.id, true, authStore.currentUser.nome);
@@ -73,24 +72,13 @@ async function dispararAvisoBot(enc: any) {
 
   enviandoAvisoId.value = enc.id;
   try {
-    const itensDesc = enc.itens?.map((i: any) => i.descricao).join(', ') || '';
-    const saldo = Math.max(0, enc.valor_total - enc.valor_pago);
-    const msg = formatarMensagemNotificacao(
-      cfg.mensagem_whatsapp,
-      cliente.nome,
-      itensDesc,
-      saldo,
-      cfg.ocultar_medicamentos_notificacao
-    );
-
-    const res = await enviarMensagemWhatsAppProxy(true, cliente.telefone, msg);
+    const res = await encomendasStore.dispararNotificacaoModeloEvolution(enc, 'chegada', true);
 
     if (res.sucesso) {
-      encomendasStore.alternarClienteAvisado(enc.id, true, 'Robô WhatsApp');
-      alert(`✅ Mensagem de chegada enviada com sucesso para ${cliente.nome}!`);
+      alert(`✅ Mensagem de chegada enviada com sucesso pela API para ${cliente.nome}!`);
     } else {
-      alert(`❌ Falha no disparo automático: ${res.mensagem}\nVocê pode abrir pelo WhatsApp Web.`);
-      const url = encomendasStore.gerarLinkWhatsApp(enc);
+      alert(`❌ Falha no disparo automático: ${res.mensagem}\nAbrindo modelo configurado no WhatsApp Web.`);
+      const url = encomendasStore.gerarLinkWhatsApp(enc, 'chegada');
       if (url) window.open(url, '_blank', 'noopener,noreferrer');
     }
   } catch {
@@ -107,10 +95,10 @@ async function dispararAvisoBot(enc: any) {
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
       <div>
         <h1 style="font-size: 1.85rem; font-weight: 700; color: var(--text-main); font-family: var(--font-heading);">
-          Bem-vindo
+          {{ authStore.currentConfig.saudacao_painel || 'Bem-vindo' }}
         </h1>
         <p style="color: var(--text-muted); font-size: 0.95rem; margin-top: 2px;">
-          Painel de controle da {{ authStore.currentConfig.header_title || 'Drogaria Aeroporto' }}
+          Painel operacional • {{ authStore.currentConfig.header_title || authStore.currentConfig.nome_sistema || 'EncoMed' }}
         </p>
       </div>
 

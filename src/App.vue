@@ -58,16 +58,26 @@ async function encerrarSuporteBreakGlass() {
     <aside class="app-sidebar">
       <div class="sidebar-header" style="align-items: center; gap: 0.75rem;">
         <img
-          src="/encomed-logo.png"
-          alt="EncoMed Logo"
-          style="height: 38px; width: auto; object-fit: contain; border-radius: 8px; flex-shrink: 0; background: #ffffff; padding: 2px;"
+          :src="authStore.currentConfig.logo_url || '/encomed-logo.png'"
+          :alt="authStore.currentConfig.nome_sistema || 'EncoMed Logo'"
+          :style="{
+            height: '40px',
+            width: authStore.currentConfig.visual_opcoes?.formato_logo === 'quadrado' || authStore.currentConfig.visual_opcoes?.formato_logo === 'circular' ? '40px' : 'auto',
+            maxWidth: '92px',
+            objectFit: authStore.currentConfig.visual_opcoes?.formato_logo === 'circular' ? 'cover' : 'contain',
+            borderRadius: authStore.currentConfig.visual_opcoes?.formato_logo === 'circular' ? '50%' : '8px',
+            flexShrink: 0,
+            background: '#ffffff',
+            padding: '2px',
+            border: '1px solid rgba(148, 163, 184, 0.25)',
+          }"
         />
         <div class="tenant-meta" style="min-width: 0;">
-          <span class="brand-title" :title="authStore.isSuperAdmin && !authStore.breakGlassTenantId ? 'Governança SaaS' : authStore.currentConfig.nome_sistema">
+          <span class="brand-title" :title="authStore.isSuperAdmin && !authStore.breakGlassTenantId ? 'EncoMed SaaS' : authStore.currentConfig.nome_sistema">
             {{ authStore.isSuperAdmin && !authStore.breakGlassTenantId ? 'EncoMed SaaS' : authStore.currentConfig.nome_sistema }}
           </span>
-          <span class="brand-plan" style="color: #64748b; font-size: 0.76rem; font-weight: 500;">
-            {{ authStore.isSuperAdmin ? 'Painel de Governança' : 'Gestão de Encomendas' }}
+          <span class="brand-plan" style="color: #64748b; font-size: 0.75rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            {{ authStore.isSuperAdmin && !authStore.breakGlassTenantId ? 'Painel de Governança' : (authStore.currentConfig.slogan_sistema || 'Gestão de Encomendas') }}
           </span>
         </div>
       </div>
@@ -171,6 +181,15 @@ async function encerrarSuporteBreakGlass() {
           <PlusCircle :size="16" />
           <span>Nova Encomenda</span>
         </router-link>
+      </div>
+
+      <!-- Selo institucional opcional Powered by EncoMed -->
+      <div
+        v-if="authStore.currentConfig.visual_opcoes?.exibir_selo_encomed !== false"
+        style="padding: 0.45rem 1.25rem; display: flex; align-items: center; justify-content: center; gap: 0.4rem; font-size: 0.7rem; opacity: 0.78; border-top: 1px solid var(--border-color);"
+      >
+        <img src="/encomed-logo.png" alt="EncoMed" style="height: 15px; width: auto; object-fit: contain; border-radius: 3px; background: #fff; padding: 1px;" />
+        <span>Tecnologia <strong>EncoMed SaaS</strong></span>
       </div>
 
       <!-- Active User Profile & Role Indicator -->

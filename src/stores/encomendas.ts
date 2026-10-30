@@ -6,7 +6,13 @@ import { useAuthStore } from './auth';
 import { useComprasStore } from './compras';
 import { useClientesStore } from './clientes';
 import { useMedicamentosMemoriaStore } from './medicamentosMemoria';
-import { enviarMensagemWhatsAppProxy, formatarMensagemNotificacao } from '../services/evolutionApi';
+import {
+  enviarModeloWhatsAppProxy,
+  renderizarModeloWhatsApp,
+  gerarLinkWaMeComModelo,
+  type TipoModeloWhatsApp,
+  type VariaveisModeloWhatsApp,
+} from '../services/evolutionApi';
 import { supabase, isLiveSupabaseConfigured } from '../services/supabase';
 
 function gerarUuidSeguro(): string {
@@ -178,38 +184,82 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     }
   }
 
-  // Disparo automático via Proxy Backend (/api/whatsapp) sem credenciais no cliente
-  async function dispararNotificacaoChegadaEvolution(encomenda: Encomenda) {
+  function montarDadosWhatsAppEncomenda(encomenda: Encomenda): {
+    telefone: string;
+    nomeCliente: string;
+    variaveis: VariaveisModeloWhatsApp;
+  } | null {
+    const cliente = clientesStore.allClientes.find((c) => c.id === encomenda.cliente_id) || encomenda.cliente;
+    if (!cliente) return null;
+
     const cfg = authStore.currentConfig;
-    if (!cfg || !cfg.evolution_api_ativo) return;
-
-    const cliente = clientesStore.allClientes.find((c) => c.id === encomenda.cliente_id);
-    if (!cliente || !cliente.telefone) return;
-
-    const itensDesc = encomenda.itens?.map((i) => i.descricao).join(', ') || '';
+    const itensDesc =
+      encomenda.itens
+        ?.map((i) => `${i.quantidade > 1 ? `${i.quantidade}x ` : ''}${i.descricao}`)
+        .join(', ') || 'seu medicamento';
     const saldo = Math.max(0, encomenda.valor_total - encomenda.valor_pago);
-    const mensagem = formatarMensagemNotificacao(
-      cfg.mensagem_whatsapp,
-      cliente.nome,
-      itensDesc,
-      saldo,
-      cfg.ocultar_medicamentos_notificacao
-    );
+    const loja = cfg?.header_title || cfg?.nome_sistema || 'nossa farmácia';
 
-    const resultado = await enviarMensagemWhatsAppProxy(true, cliente.telefone, mensagem);
+    return {
+      telefone: cliente.telefone || '',
+      nomeCliente: cliente.nome || 'Cliente',
+      variaveis: {
+        cliente: cliente.nome || 'Cliente',
+        nomeCompleto: cliente.nome || 'Cliente',
+        medicamento: itensDesc,
+        itens: itensDesc,
+        saldo,
+        valorTotal: encomenda.valor_total,
+        valorPago: encomenda.valor_pago,
+        codigoRastreio: encomenda.codigo_rastreio || 'PEDIDO',
+        loja,
+      },
+    };
+  }
 
-    if (resultado.sucesso) {
+  // Disparo via Proxy Backend (/api/whatsapp) adaptado aos modelos de mensagem do Tenant
+  async function dispararNotificacaoModeloEvolution(
+    encomenda: Encomenda,
+    modelo: TipoModeloWhatsApp = 'chegada',
+    forcarEnvioManual: boolean = false
+  ): Promise<{ sucesso: boolean; mensagem: string; textoEnviado?: string }> {
+    const cfg = authStore.currentConfig;
+    if (!cfg || (!cfg.evolution_api_ativo && !forcarEnvioManual)) {
+      return { sucesso: false, mensagem: 'Disparo automático do WhatsApp está desativado nas configurações.' };
+    }
+
+    const dados = montarDadosWhatsAppEncomenda(encomenda);
+    if (!dados || !dados.telefone) {
+      return { sucesso: false, mensagem: 'Cliente não possui telefone cadastrado.' };
+    }
+
+    const resultado = await enviarModeloWhatsAppProxy({
+      ativo: true,
+      numeroDestino: dados.telefone,
+      modelo,
+      variaveis: dados.variaveis,
+    });
+
+    if (modelo === 'chegada' && resultado.sucesso) {
       encomenda.cliente_avisado = true;
       encomenda.cliente_avisado_em = new Date().toISOString();
       encomenda.cliente_avisado_por = 'Robô WhatsApp';
     }
 
+    const rotulosModelo: Record<TipoModeloWhatsApp, string> = {
+      chegada: 'chegada',
+      pedido: 'confirmação de pedido',
+      cobranca: 'lembrete de saldo',
+      entregue: 'comprovante de entrega',
+      personalizado: 'mensagem personalizada',
+    };
+
     if (!encomenda.historico) encomenda.historico = [];
     encomenda.historico.push({
       employee_name: 'Robô WhatsApp',
       action: resultado.sucesso
-        ? `disparou WhatsApp automático de chegada para ${cliente.nome}`
-        : `falha no envio automático do WhatsApp: ${resultado.mensagem}`,
+        ? `disparou WhatsApp (${rotulosModelo[modelo]}) para ${dados.nomeCliente}`
+        : `falha no envio do WhatsApp (${rotulosModelo[modelo]}): ${resultado.mensagem}`,
       timestamp: new Date().toISOString(),
     });
 
@@ -224,6 +274,12 @@ export const useEncomendasStore = defineStore('encomendas', () => {
         })
         .eq('id', encomenda.id);
     }
+
+    return resultado;
+  }
+
+  async function dispararNotificacaoChegadaEvolution(encomenda: Encomenda) {
+    return dispararNotificacaoModeloEvolution(encomenda, 'chegada', false);
   }
 
   function sincronizarStatusPorCompra(compraId: string, novoStatus: StatusCompra) {
@@ -359,6 +415,12 @@ export const useEncomendasStore = defineStore('encomendas', () => {
       })();
     }
 
+    // Disparo automático do modelo "Confirmação de Pedido" caso ativado no tenant e a encomenda ainda não tenha chegado
+    const cfgAtual = authStore.currentConfig;
+    if (cfgAtual?.evolution_api_ativo && cfgAtual?.auto_whatsapp_pedido && novaEncomenda.status !== 'Chegou') {
+      dispararNotificacaoModeloEvolution(novaEncomenda, 'pedido', false);
+    }
+
     return novaEncomenda;
   }
 
@@ -452,6 +514,13 @@ export const useEncomendasStore = defineStore('encomendas', () => {
 
     if (novoStatus === 'Chegou' && eraOutroStatus) {
       dispararNotificacaoChegadaEvolution(enc);
+    } else if (
+      novoStatus === 'Entregue' &&
+      eraOutroStatus &&
+      authStore.currentConfig?.evolution_api_ativo &&
+      authStore.currentConfig?.auto_whatsapp_entregue
+    ) {
+      dispararNotificacaoModeloEvolution(enc, 'entregue', false);
     }
 
     return { sucesso: true };
@@ -545,16 +614,14 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     return count;
   }
 
+  function obterTextoPorModelo(encomenda: Encomenda, modelo: TipoModeloWhatsApp = 'chegada'): string {
+    const dados = montarDadosWhatsAppEncomenda(encomenda);
+    if (!dados) return '';
+    return renderizarModeloWhatsApp(modelo, authStore.currentConfig, dados.variaveis);
+  }
+
   function obterTextoAvisoChegada(encomenda: Encomenda): string {
-    const cliente = clientesStore.allClientes.find((c) => c.id === encomenda.cliente_id);
-    const primeiroNome = cliente ? cliente.nome.split(' ')[0] : 'Cliente';
-    const ocultarMedicamentos = authStore.currentConfig?.ocultar_medicamentos_notificacao;
-    const medicamentos = ocultarMedicamentos
-      ? 'sua encomenda'
-      : (encomenda.itens?.map((i) => i.descricao).join(', ') || 'seu medicamento');
-    const saldo = Math.max(0, encomenda.valor_total - encomenda.valor_pago);
-    const textoSaldo = saldo > 0 ? ` Saldo restante a pagar: R$ ${saldo.toFixed(2)}.` : ' Pedido 100% pago.';
-    return `Olá, ${primeiroNome}! Seu pedido de ${medicamentos} já chegou na drogaria e está pronto para retirada.${textoSaldo} Obrigado pela preferência!`;
+    return obterTextoPorModelo(encomenda, 'chegada');
   }
 
   function obterResumoEncomenda(encomenda: Encomenda): string {
@@ -564,23 +631,10 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     return `📋 RESUMO DA ENCOMENDA [${encomenda.codigo_rastreio}]\nCliente: ${cliente?.nome || 'N/A'}\nTelefone: ${cliente?.telefone || 'N/A'}\n\nItens:\n${itensStr}\n\nTotal: R$ ${encomenda.valor_total.toFixed(2)}\nValor Pago: R$ ${encomenda.valor_pago.toFixed(2)}\nSaldo a Cobrar: R$ ${saldo.toFixed(2)}\nStatus: ${encomenda.status}`;
   }
 
-  function gerarLinkWhatsApp(encomenda: Encomenda): string {
-    const cliente = clientesStore.allClientes.find((c) => c.id === encomenda.cliente_id);
-    if (!cliente || !cliente.telefone) return '';
-
-    const template = authStore.currentConfig.mensagem_whatsapp;
-    const ocultarMedicamentos = authStore.currentConfig?.ocultar_medicamentos_notificacao;
-    const medicamentos = ocultarMedicamentos
-      ? 'sua encomenda'
-      : (encomenda.itens?.map((i) => i.descricao).join(', ') || 'seu medicamento');
-
-    const mensagem = template
-      .replace('{cliente}', cliente.nome.split(' ')[0])
-      .replace('{medicamento}', medicamentos);
-
-    const telLimpo = cliente.telefone.replace(/\D/g, '');
-    const numComDdd = telLimpo.startsWith('55') ? telLimpo : `55${telLimpo}`;
-    return `https://wa.me/${numComDdd}?text=${encodeURIComponent(mensagem)}`;
+  function gerarLinkWhatsApp(encomenda: Encomenda, modelo: TipoModeloWhatsApp = 'chegada'): string {
+    const dados = montarDadosWhatsAppEncomenda(encomenda);
+    if (!dados || !dados.telefone) return '';
+    return gerarLinkWaMeComModelo(dados.telefone, modelo, authStore.currentConfig, dados.variaveis);
   }
 
   function removerEncomenda(encomendaId: string) {
@@ -780,8 +834,10 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     alternarPago,
     alternarClienteAvisado,
     gerarLinkWhatsApp,
+    obterTextoPorModelo,
     obterTextoAvisoChegada,
     obterResumoEncomenda,
+    dispararNotificacaoModeloEvolution,
     dispararNotificacaoChegadaEvolution,
   };
 });

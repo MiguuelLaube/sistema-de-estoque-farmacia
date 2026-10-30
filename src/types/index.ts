@@ -17,17 +17,34 @@ export interface Tenant {
   atualizado_em: string;
 }
 
+export interface VisualOpcoesTenant {
+  estilo_sidebar?: 'claro' | 'escuro' | 'marca';
+  formato_logo?: 'retangular' | 'quadrado' | 'circular';
+  estilo_bordas?: 'padrao' | 'arredondado' | 'compacto';
+  densidade_interface?: 'confortavel' | 'compacto' | 'amplo';
+  fonte_interface?: 'jakarta' | 'inter' | 'system';
+  cor_destaque?: string;
+  exibir_selo_encomed?: boolean;
+  animacoes_ativas?: boolean;
+}
+
 export interface ConfigTenant {
   tenant_id: string;
   nome_sistema: string;
+  slogan_sistema?: string;
+  saudacao_painel?: string;
   logo_url?: string;
   cor_primaria: string;
   cor_secundaria: string;
+  visual_opcoes?: VisualOpcoesTenant;
   modelo_cupom: string;
   fuso: string;
   mensagem_whatsapp: string;
   mensagem_whatsapp_pedido?: string;
   mensagem_whatsapp_cobranca?: string;
+  mensagem_whatsapp_entregue?: string;
+  auto_whatsapp_pedido?: boolean;
+  auto_whatsapp_entregue?: boolean;
   base_legal_padrao: string;
   bloquear_entrega_com_saldo: boolean;
   dias_retencao_arquivamento: number;

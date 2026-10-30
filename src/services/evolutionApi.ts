@@ -1,4 +1,19 @@
 import { supabase } from './supabase';
+import type { ConfigTenant } from '../types';
+
+export type TipoModeloWhatsApp = 'chegada' | 'pedido' | 'cobranca' | 'entregue' | 'personalizado';
+
+export interface VariaveisModeloWhatsApp {
+  cliente?: string;
+  nomeCompleto?: string;
+  medicamento?: string;
+  itens?: string;
+  saldo?: number;
+  valorTotal?: number;
+  valorPago?: number;
+  codigoRastreio?: string;
+  loja?: string;
+}
 
 export interface DisparoWhatsAppResultado {
   sucesso: boolean;
@@ -6,7 +21,20 @@ export interface DisparoWhatsAppResultado {
   conectado?: boolean;
   estado?: string;
   base64?: string;
+  textoEnviado?: string;
+  modeloUtilizado?: TipoModeloWhatsApp;
 }
+
+export const MODELOS_PADRAO_WHATSAPP: Record<Exclude<TipoModeloWhatsApp, 'personalizado'>, string> = {
+  chegada:
+    'Olá {cliente}! Seu pedido de {medicamento} já está disponível para retirada na {loja}. Aguardamos sua visita!',
+  pedido:
+    'Olá {cliente}! Confirmamos seu pedido de {medicamento} ({codigo}) na {loja}. Em breve avisaremos assim que chegar.',
+  cobranca:
+    'Olá {cliente}! Lembrando que sua encomenda de {medicamento} está disponível na {loja}. Saldo a acertar: {saldo}.',
+  entregue:
+    'Olá {cliente}! Registramos a retirada do seu pedido de {medicamento} na {loja}. Obrigado pela preferência e ótima saúde!',
+};
 
 /**
  * Normaliza número para formato internacional aceito pelo WhatsApp (DDI 55 + DDD + Telefone)
@@ -20,28 +48,110 @@ export function normalizarNumeroWhatsApp(telefone: string): string {
   return limpo;
 }
 
+function formatarMoedaBr(val?: number): string {
+  const seguro = Math.max(0, Number(val) || 0);
+  return `R$ ${seguro.toFixed(2).replace('.', ',')}`;
+}
+
 /**
- * Monta o texto de notificação de chegada de encomenda respeitando minimização LGPD (Art. 11)
+ * Renderiza qualquer modelo de mensagem do WhatsApp substituindo todas as variáveis e respeitando LGPD (Art. 11)
+ */
+export function renderizarModeloWhatsApp(
+  modelo: TipoModeloWhatsApp,
+  config: Partial<ConfigTenant> | undefined,
+  variaveis: VariaveisModeloWhatsApp,
+  templateOverride?: string
+): string {
+  const ocultar = Boolean(config?.ocultar_medicamentos_notificacao);
+  const nomeCompleto = (variaveis.nomeCompleto || variaveis.cliente || 'Cliente').trim();
+  const primeiroNome = nomeCompleto.split(/\s+/)[0] || 'Cliente';
+  const descBruta = (variaveis.medicamento || variaveis.itens || 'seu medicamento').trim();
+  const medicamento = ocultar ? 'sua encomenda' : descBruta;
+  const loja = (variaveis.loja || config?.header_title || config?.nome_sistema || 'nossa farmácia').trim();
+  const codigo = (variaveis.codigoRastreio || 'PEDIDO').trim();
+  const saldoNum = Math.max(0, Number(variaveis.saldo) || 0);
+  const saldoStr = formatarMoedaBr(saldoNum);
+  const totalStr = formatarMoedaBr(variaveis.valorTotal);
+  const pagoStr = formatarMoedaBr(variaveis.valorPago);
+  const dataHoje = new Date().toLocaleDateString('pt-BR');
+
+  let base = '';
+  if (templateOverride && templateOverride.trim()) {
+    base = templateOverride.trim();
+  } else if (modelo === 'chegada') {
+    base = config?.mensagem_whatsapp || MODELOS_PADRAO_WHATSAPP.chegada;
+  } else if (modelo === 'pedido') {
+    base = config?.mensagem_whatsapp_pedido || MODELOS_PADRAO_WHATSAPP.pedido;
+  } else if (modelo === 'cobranca') {
+    base = config?.mensagem_whatsapp_cobranca || MODELOS_PADRAO_WHATSAPP.cobranca;
+  } else if (modelo === 'entregue') {
+    base = config?.mensagem_whatsapp_entregue || MODELOS_PADRAO_WHATSAPP.entregue;
+  } else {
+    base = config?.mensagem_whatsapp || MODELOS_PADRAO_WHATSAPP.chegada;
+  }
+
+  const continhaTagSaldo = /\{saldo\}/i.test(base);
+
+  let msg = base
+    .replace(/\{cliente\}/gi, primeiroNome)
+    .replace(/\{nome_completo\}/gi, nomeCompleto)
+    .replace(/\{medicamento\}/gi, medicamento)
+    .replace(/\{itens\}/gi, medicamento)
+    .replace(/\{saldo\}/gi, saldoStr)
+    .replace(/\{total\}/gi, totalStr)
+    .replace(/\{pago\}/gi, pagoStr)
+    .replace(/\{codigo\}/gi, codigo)
+    .replace(/\{loja\}/gi, loja)
+    .replace(/\{farmacia\}/gi, loja)
+    .replace(/\{data\}/gi, dataHoje);
+
+  if ((modelo === 'chegada' || modelo === 'cobranca') && !continhaTagSaldo && saldoNum > 0) {
+    msg += `\n*Saldo a acertar na retirada:* ${saldoStr}`;
+  }
+
+  return msg.trim();
+}
+
+/**
+ * Compatibilidade direta com chamadas legadas de formatarMensagemNotificacao
  */
 export function formatarMensagemNotificacao(
   template: string,
   clienteNome: string,
   itensDescricao: string,
   saldoPendente: number = 0,
-  ocultarMedicamentos: boolean = false
+  ocultarMedicamentos: boolean = false,
+  lojaNome?: string,
+  codigoRastreio?: string
 ): string {
-  const primeiroNome = (clienteNome || 'Cliente').trim().split(' ')[0];
-  const medicamentos = ocultarMedicamentos ? 'sua encomenda' : (itensDescricao || 'seu medicamento');
+  return renderizarModeloWhatsApp(
+    'chegada',
+    { ocultar_medicamentos_notificacao: ocultarMedicamentos, header_title: lojaNome },
+    {
+      cliente: clienteNome,
+      nomeCompleto: clienteNome,
+      medicamento: itensDescricao,
+      saldo: saldoPendente,
+      loja: lojaNome,
+      codigoRastreio,
+    },
+    template
+  );
+}
 
-  let msg = (template || 'Olá {cliente}! Seu pedido de {medicamento} já está disponível para retirada.')
-    .replace('{cliente}', primeiroNome)
-    .replace('{medicamento}', medicamentos);
-
-  if (saldoPendente > 0) {
-    msg += `\n*Saldo pendente:* R$ ${saldoPendente.toFixed(2)}`;
-  }
-
-  return msg;
+/**
+ * Gera link oficial wa.me já preenchido com o modelo de mensagem configurado no sistema
+ */
+export function gerarLinkWaMeComModelo(
+  telefone: string,
+  modelo: TipoModeloWhatsApp,
+  config: Partial<ConfigTenant> | undefined,
+  variaveis: VariaveisModeloWhatsApp
+): string {
+  const num = normalizarNumeroWhatsApp(telefone);
+  if (!num) return '';
+  const texto = renderizarModeloWhatsApp(modelo, config, variaveis);
+  return `https://wa.me/${num}?text=${encodeURIComponent(texto)}`;
 }
 
 async function obterHeadersAutenticados(): Promise<Record<string, string> | null> {
@@ -116,21 +226,24 @@ export async function obterQrCodeWhatsAppProxy(): Promise<DisparoWhatsAppResulta
 }
 
 /**
- * Envia mensagem de texto via Proxy Backend (/api/whatsapp).
- * Credenciais externas ficam exclusivamente em variáveis de ambiente do servidor.
+ * Dispara mensagem pelo Proxy Backend (/api/whatsapp) adequando-se diretamente ao modelo configurado do Tenant!
  */
-export async function enviarMensagemWhatsAppProxy(
-  ativo: boolean,
-  numeroDestino: string,
-  texto: string
-): Promise<DisparoWhatsAppResultado> {
-  if (!ativo) {
+export async function enviarModeloWhatsAppProxy(opcoes: {
+  ativo: boolean;
+  numeroDestino: string;
+  modelo: TipoModeloWhatsApp;
+  variaveis?: VariaveisModeloWhatsApp;
+  templateCustomizado?: string;
+  texto?: string;
+  ocultarMedicamentosOverride?: boolean;
+}): Promise<DisparoWhatsAppResultado> {
+  if (!opcoes.ativo) {
     return { sucesso: false, mensagem: 'Disparo automático de WhatsApp está desativado nas configurações.' };
   }
 
-  const numeroNormalizado = normalizarNumeroWhatsApp(numeroDestino);
+  const numeroNormalizado = normalizarNumeroWhatsApp(opcoes.numeroDestino);
   if (!numeroNormalizado || numeroNormalizado.length < 12) {
-    return { sucesso: false, mensagem: 'Número de telefone inválido para envio.' };
+    return { sucesso: false, mensagem: 'Número de telefone inválido para envio (informe DDD + Telefone).' };
   }
 
   const headers = await obterHeadersAutenticados();
@@ -145,7 +258,11 @@ export async function enviarMensagemWhatsAppProxy(
       body: JSON.stringify({
         action: 'send',
         numeroDestino: numeroNormalizado,
-        texto,
+        modelo: opcoes.modelo,
+        variaveis: opcoes.variaveis,
+        templateCustomizado: opcoes.templateCustomizado,
+        texto: opcoes.texto,
+        ocultarMedicamentosOverride: opcoes.ocultarMedicamentosOverride,
       }),
     });
 
@@ -154,12 +271,15 @@ export async function enviarMensagemWhatsAppProxy(
       return {
         sucesso: true,
         mensagem: data.mensagem || 'Mensagem enviada com sucesso!',
+        textoEnviado: data.textoEnviado,
+        modeloUtilizado: data.modeloUtilizado,
       };
     }
 
     return {
       sucesso: false,
       mensagem: data?.mensagem || 'Não foi possível enviar a mensagem automática.',
+      textoEnviado: data?.textoEnviado,
     };
   } catch {
     return {
@@ -167,4 +287,23 @@ export async function enviarMensagemWhatsAppProxy(
       mensagem: 'Serviço de mensageria indisponível no momento.',
     };
   }
+}
+
+/**
+ * Envia mensagem de texto direta ou por modelo via Proxy Backend (/api/whatsapp).
+ */
+export async function enviarMensagemWhatsAppProxy(
+  ativo: boolean,
+  numeroDestino: string,
+  texto: string,
+  modelo: TipoModeloWhatsApp = 'personalizado',
+  variaveis?: VariaveisModeloWhatsApp
+): Promise<DisparoWhatsAppResultado> {
+  return enviarModeloWhatsAppProxy({
+    ativo,
+    numeroDestino,
+    modelo,
+    variaveis,
+    texto,
+  });
 }

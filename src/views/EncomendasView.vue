@@ -28,8 +28,9 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
+  MessageSquare,
 } from 'lucide-vue-next';
-import { enviarMensagemWhatsAppProxy, formatarMensagemNotificacao } from '../services/evolutionApi';
+import type { TipoModeloWhatsApp } from '../services/evolutionApi';
 import HistoricoClienteModal from '../components/HistoricoClienteModal.vue';
 import type { Cliente } from '../types';
 
@@ -296,7 +297,7 @@ function copyOrderSummary(order: Encomenda) {
   navigator.clipboard.writeText(text);
   alert('Resumo copiado para a área de transferência!');
 }
-// Disparo e marcação de aviso de chegada
+// Disparo de qualquer modelo de WhatsApp configurado via API (com fallback wa.me)
 const enviandoAvisoId = ref<string | null>(null);
 
 function alternarAvisado(order: Encomenda) {
@@ -304,49 +305,58 @@ function alternarAvisado(order: Encomenda) {
   encomendasStore.alternarClienteAvisado(order.id, novoEstado, authStore.currentUser.nome);
 }
 
-async function enviarAvisoWhatsappRobo(order: Encomenda) {
+async function enviarModeloWhatsappCard(order: Encomenda, modelo: TipoModeloWhatsApp = 'chegada') {
   const cfg = authStore.currentConfig;
-  const cliente = clientesStore.allClientes.find((c) => c.id === order.cliente_id);
+  const cliente = clientesStore.allClientes.find((c) => c.id === order.cliente_id) || order.cliente;
   if (!cliente || !cliente.telefone) {
     alert('Cliente não possui telefone cadastrado para disparo.');
     return;
   }
 
+  const chaveLoading = `${order.id}-${modelo}`;
+
   if (!cfg.evolution_api_ativo) {
-    // Se o robô não estiver ativo, abre o link tradicional do WhatsApp Web
-    const link = encomendasStore.gerarLinkWhatsApp(order);
+    const link = encomendasStore.gerarLinkWhatsApp(order, modelo);
     if (link) {
       window.open(link, '_blank', 'noopener,noreferrer');
-      encomendasStore.alternarClienteAvisado(order.id, true, authStore.currentUser.nome);
+      if (modelo === 'chegada') {
+        encomendasStore.alternarClienteAvisado(order.id, true, authStore.currentUser.nome);
+      }
     }
     return;
   }
 
-  enviandoAvisoId.value = order.id;
+  enviandoAvisoId.value = chaveLoading;
   try {
-    const itensDesc = order.itens?.map((i) => i.descricao).join(', ') || '';
-    const saldo = Math.max(0, order.valor_total - order.valor_pago);
-    const mensagem = formatarMensagemNotificacao(
-      cfg.mensagem_whatsapp,
-      cliente.nome,
-      itensDesc,
-      saldo,
-      cfg.ocultar_medicamentos_notificacao
-    );
-
-    const res = await enviarMensagemWhatsAppProxy(true, cliente.telefone, mensagem);
+    const res = await encomendasStore.dispararNotificacaoModeloEvolution(order, modelo, true);
 
     if (res.sucesso) {
-      encomendasStore.alternarClienteAvisado(order.id, true, 'Robô WhatsApp');
-      alert(`✅ Mensagem de chegada enviada com sucesso para ${cliente.nome}!`);
+      const titulos: Record<TipoModeloWhatsApp, string> = {
+        chegada: 'Aviso de chegada',
+        pedido: 'Confirmação de pedido',
+        cobranca: 'Lembrete de saldo',
+        entregue: 'Comprovante de entrega',
+        personalizado: 'Mensagem',
+      };
+      alert(`✅ ${titulos[modelo]} enviado com sucesso pela API para ${cliente.nome}!`);
     } else {
-      alert(`❌ Falha no disparo automático: ${res.mensagem}\nVocê pode copiar a mensagem ou abrir o WhatsApp manualmente.`);
+      const abrirManual = confirm(
+        `❌ Falha no disparo pela API: ${res.mensagem}\n\nDeseja abrir esta mensagem pré-formatada no WhatsApp Web?`
+      );
+      if (abrirManual) {
+        const link = encomendasStore.gerarLinkWhatsApp(order, modelo);
+        if (link) window.open(link, '_blank', 'noopener,noreferrer');
+      }
     }
   } catch {
     alert('Não foi possível conectar ao serviço de mensageria no momento.');
   } finally {
     enviandoAvisoId.value = null;
   }
+}
+
+async function enviarAvisoWhatsappRobo(order: Encomenda) {
+  return enviarModeloWhatsappCard(order, 'chegada');
 }
 </script>
 
@@ -976,7 +986,7 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
               <button
                 type="button"
                 @click="enviarAvisoWhatsappRobo(order)"
-                :disabled="enviandoAvisoId === order.id"
+                :disabled="enviandoAvisoId === order.id + '-chegada'"
                 class="btn-primary-pill"
                 style="
                   justify-content: center;
@@ -985,11 +995,11 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
                   background: #10b981;
                   box-shadow: none;
                 "
-                :title="authStore.currentConfig.evolution_api_ativo ? 'Disparar via Evolution API' : 'Abrir conversa no WhatsApp Web'"
+                :title="authStore.currentConfig.evolution_api_ativo ? 'Disparar modelo de chegada via API' : 'Abrir conversa no WhatsApp Web'"
               >
-                <Loader2 v-if="enviandoAvisoId === order.id" class="animate-spin" :size="13" />
+                <Loader2 v-if="enviandoAvisoId === order.id + '-chegada'" class="animate-spin" :size="13" />
                 <Send v-else :size="13" />
-                <span>{{ enviandoAvisoId === order.id ? 'Disparando...' : 'Avisar no Zap' }}</span>
+                <span>{{ enviandoAvisoId === order.id + '-chegada' ? 'Disparando...' : 'Avisar no Zap' }}</span>
               </button>
 
               <button
@@ -1010,30 +1020,49 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
             </div>
           </div>
 
-          <!-- Bottom Action Buttons: Imprimir Cupom & Trash Delete -->
+          <!-- Bottom Action Buttons: Modelos WhatsApp, Imprimir Cupom & Trash Delete -->
           <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.35rem; padding-top: 0.65rem; border-top: 1px solid #f1f5f9;">
-            <button
-              v-if="order.status === 'Aguardando'"
-              type="button"
-              @click="copyOrderSummary(order)"
-              style="
-                width: 100%;
-                height: 34px;
-                border-radius: 8px;
-                border: 1px solid #93c5fd;
-                background: #eff6ff;
-                color: #2563eb;
-                font-size: 0.78rem;
-                font-weight: 600;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 0.35rem;
-                cursor: pointer;
-              "
+            <div
+              v-if="order.status === 'Aguardando' || order.status === 'Pedido Feito'"
+              style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem;"
             >
-              <Copy :size="13" />
-              <span>Copiar msg de pedido</span>
+              <button
+                type="button"
+                @click="enviarModeloWhatsappCard(order, 'pedido')"
+                :disabled="enviandoAvisoId === order.id + '-pedido'"
+                class="btn-outline-emerald"
+                style="height: 34px; padding: 0 0.5rem; font-size: 0.74rem; justify-content: center;"
+                title="Enviar modelo de Confirmação de Pedido via WhatsApp"
+              >
+                <Loader2 v-if="enviandoAvisoId === order.id + '-pedido'" class="animate-spin" :size="12" />
+                <MessageSquare v-else :size="12" />
+                <span>{{ enviandoAvisoId === order.id + '-pedido' ? 'Enviando...' : 'Confirmar Zap' }}</span>
+              </button>
+
+              <button
+                type="button"
+                @click="copyOrderSummary(order)"
+                class="btn-outline-neutral"
+                style="height: 34px; padding: 0 0.5rem; font-size: 0.74rem; justify-content: center; color: #2563eb; border-color: #bfdbfe; background: #eff6ff;"
+                title="Copiar resumo da encomenda"
+              >
+                <Copy :size="12" />
+                <span>Copiar Resumo</span>
+              </button>
+            </div>
+
+            <button
+              v-if="order.valor_total > order.valor_pago && (order.status === 'Chegou' || order.status === 'Entregue')"
+              type="button"
+              @click="enviarModeloWhatsappCard(order, 'cobranca')"
+              :disabled="enviandoAvisoId === order.id + '-cobranca'"
+              class="btn-outline-neutral"
+              style="width: 100%; height: 33px; padding: 0 0.65rem; font-size: 0.74rem; justify-content: center; border-color: #fde68a; background: #fffbeb; color: #b45309;"
+              title="Enviar modelo de Lembrete e Saldo a Acertar no WhatsApp"
+            >
+              <Loader2 v-if="enviandoAvisoId === order.id + '-cobranca'" class="animate-spin" :size="12" />
+              <DollarSign v-else :size="12" />
+              <span>{{ enviandoAvisoId === order.id + '-cobranca' ? 'Enviando lembrete...' : 'Enviar Lembrete de Saldo no Zap' }}</span>
             </button>
 
             <div style="display: flex; gap: 0.5rem; width: 100%;">

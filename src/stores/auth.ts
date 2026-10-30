@@ -116,15 +116,91 @@ export const useAuthStore = defineStore('auth', () => {
     return funcionarios.value.filter((f) => f.tenant_id === activeTenantId.value);
   });
 
-  function applyTheme() {
-    if (typeof document !== 'undefined') {
-      const cfg = currentConfig.value;
-      if (cfg && cfg.cor_primaria) {
-        document.documentElement.style.setProperty('--color-primary', cfg.cor_primaria);
-        document.documentElement.style.setProperty('--color-primary-hover', adjustColorBrightness(cfg.cor_primaria, -15));
-        document.documentElement.style.setProperty('--color-primary-alpha', `${cfg.cor_primaria}1f`);
+  function hexToHslTriplet(hex: string): string {
+    const clean = (hex || '').replace('#', '');
+    if (!/^[0-9a-fA-F]{6}$/.test(clean)) return '217 72% 56%';
+    const r = parseInt(clean.slice(0, 2), 16) / 255;
+    const g = parseInt(clean.slice(2, 4), 16) / 255;
+    const b = parseInt(clean.slice(4, 6), 16) / 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h = 0;
+    let s = 0;
+    const l = (max + min) / 2;
+
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r:
+          h = (g - b) / d + (g < b ? 6 : 0);
+          break;
+        case g:
+          h = (b - r) / d + 2;
+          break;
+        case b:
+          h = (r - g) / d + 4;
+          break;
       }
+      h /= 6;
     }
+    return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+  }
+
+  function applyTheme(overrideConfig?: Partial<ConfigTenant>) {
+    if (typeof document === 'undefined') return;
+    const cfg = overrideConfig ? { ...currentConfig.value, ...overrideConfig } : currentConfig.value;
+    if (!cfg) return;
+
+    const root = document.documentElement;
+    const primaria = cfg.cor_primaria || '#2563eb';
+    const secundaria = cfg.cor_secundaria || '#0f172a';
+    const visual = cfg.visual_opcoes || {};
+    const destaque = visual.cor_destaque || '#059669';
+
+    root.style.setProperty('--primary', hexToHslTriplet(primaria));
+    root.style.setProperty('--color-primary', primaria);
+    root.style.setProperty('--color-primary-hover', adjustColorBrightness(primaria, -12));
+    root.style.setProperty('--color-primary-alpha', `${primaria}22`);
+    root.style.setProperty('--color-secondary', secundaria);
+    root.style.setProperty('--color-accent-brand', destaque);
+
+    // Estilo de Bordas dos Cards
+    const bordas = visual.estilo_bordas || 'padrao';
+    if (bordas === 'arredondado') {
+      root.style.setProperty('--radius-sm', '10px');
+      root.style.setProperty('--radius-md', '14px');
+      root.style.setProperty('--radius-lg', '20px');
+      root.style.setProperty('--radius-xl', '26px');
+    } else if (bordas === 'compacto') {
+      root.style.setProperty('--radius-sm', '4px');
+      root.style.setProperty('--radius-md', '7px');
+      root.style.setProperty('--radius-lg', '10px');
+      root.style.setProperty('--radius-xl', '12px');
+    } else {
+      root.style.setProperty('--radius-sm', '6px');
+      root.style.setProperty('--radius-md', '10px');
+      root.style.setProperty('--radius-lg', '14px');
+      root.style.setProperty('--radius-xl', '18px');
+    }
+
+    // Tipografia
+    const fonte = visual.fonte_interface || 'jakarta';
+    if (fonte === 'inter') {
+      root.style.setProperty('--font-sans', "'Inter', -apple-system, BlinkMacSystemFont, sans-serif");
+      root.style.setProperty('--font-heading', "'Inter', -apple-system, BlinkMacSystemFont, sans-serif");
+    } else if (fonte === 'system') {
+      root.style.setProperty('--font-sans', "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif");
+      root.style.setProperty('--font-heading', "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif");
+    } else {
+      root.style.setProperty('--font-sans', "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif");
+      root.style.setProperty('--font-heading', "'Plus Jakarta Sans', 'Inter', sans-serif");
+    }
+
+    // Atributos globais de barra lateral, densidade e animações
+    root.setAttribute('data-sidebar-theme', visual.estilo_sidebar || 'claro');
+    root.setAttribute('data-density', visual.densidade_interface || 'confortavel');
+    root.setAttribute('data-animations', visual.animacoes_ativas === false ? 'off' : 'on');
   }
 
   function adjustColorBrightness(hex: string, percent: number) {
@@ -514,7 +590,14 @@ export const useAuthStore = defineStore('auth', () => {
   async function salvarConfigTenant(parcial: Partial<ConfigTenant>): Promise<{ sucesso: boolean; mensagem?: string }> {
     const tenantId = activeTenantId.value;
     const atual = configs.value[tenantId] || { ...fallbackConfig, tenant_id: tenantId };
-    const atualizado = { ...atual, ...parcial, tenant_id: tenantId };
+    const visualMesclado = parcial.visual_opcoes
+      ? { ...(atual.visual_opcoes || {}), ...parcial.visual_opcoes }
+      : atual.visual_opcoes;
+    const payloadLimpo: Partial<ConfigTenant> = {
+      ...parcial,
+      ...(parcial.visual_opcoes ? { visual_opcoes: visualMesclado } : {}),
+    };
+    const atualizado = { ...atual, ...payloadLimpo, tenant_id: tenantId };
     configs.value[tenantId] = atualizado;
     applyTheme();
 
@@ -522,7 +605,7 @@ export const useAuthStore = defineStore('auth', () => {
       const { error } = await supabase
         .from('config_tenant')
         .update({
-          ...parcial,
+          ...payloadLimpo,
           atualizado_em: new Date().toISOString(),
         })
         .eq('tenant_id', tenantId);
@@ -530,7 +613,7 @@ export const useAuthStore = defineStore('auth', () => {
       if (error) {
         return { sucesso: false, mensagem: 'Não foi possível salvar as configurações no servidor.' };
       }
-      await registrarAuditoria('ATUALIZACAO_CONFIG_TENANT', `Tenant ${tenantId}`, Object.keys(parcial).join(', '));
+      await registrarAuditoria('ATUALIZACAO_CONFIG_TENANT', `Tenant ${tenantId}`, Object.keys(payloadLimpo).join(', '));
     }
     return { sucesso: true };
   }
