@@ -183,3 +183,131 @@ CREATE TRIGGER trg_rate_limit_sql_config_tenant
     FOR EACH STATEMENT EXECUTE FUNCTION public.trg_limitar_mutacoes_sql();
 
 NOTIFY pgrst, 'reload schema';
+
+
+
+-- 5. Evita gravação repetitiva de ACESSO_VERIFICADO_2FA na auditoria dentro da mesma sessão (janela de 30 min)
+CREATE OR REPLACE FUNCTION public.validar_contexto_super_admin(p_device_token TEXT DEFAULT NULL)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+    v_uid UUID;
+    v_usuario RECORD;
+    v_politica RECORD;
+    v_aal TEXT;
+    v_ip VARCHAR(64);
+    v_ua TEXT;
+    v_token_hash VARCHAR(64);
+    v_dispositivo_id UUID;
+BEGIN
+    v_uid := auth.uid();
+    v_ip := public.request_client_ip();
+    v_ua := public.request_user_agent();
+
+    IF v_uid IS NULL THEN
+        RETURN jsonb_build_object('autorizado', false, 'codigo', 'NAO_AUTENTICADO', 'ip_atual', v_ip);
+    END IF;
+
+    SELECT id, nome, email, perfil, ativo
+    INTO v_usuario
+    FROM public.usuario
+    WHERE auth_user_id = v_uid
+      AND perfil = 'super_admin'
+      AND ativo = true
+      AND excluido_em IS NULL
+    LIMIT 1;
+
+    IF v_usuario.id IS NULL THEN
+        RETURN jsonb_build_object('autorizado', false, 'codigo', 'PERFIL_INVALIDO', 'ip_atual', v_ip);
+    END IF;
+
+    v_aal := COALESCE(auth.jwt() ->> 'aal', 'aal1');
+    IF v_aal <> 'aal2' THEN
+        RETURN jsonb_build_object(
+            'autorizado', false,
+            'codigo', 'MFA_OBRIGATORIO',
+            'aal_atual', v_aal,
+            'ip_atual', v_ip
+        );
+    END IF;
+
+    SELECT * INTO v_politica
+    FROM public.super_admin_politica
+    WHERE usuario_id = v_usuario.id;
+
+    IF COALESCE(v_politica.restringir_ip, false) = true THEN
+        IF NOT (v_ip = ANY(COALESCE(v_politica.ips_permitidos, '{}'))) THEN
+            INSERT INTO public.log_auditoria (
+                tenant_id, usuario_id, acao, recurso, justificativa, ip, user_agent, nivel, visivel_tenant
+            ) VALUES (
+                NULL, v_usuario.id, 'BLOQUEIO_IP_SUPER_ADMIN', 'Portal da Plataforma',
+                'Acesso negado para IP fora da allowlist: ' || v_ip, v_ip, v_ua, 'CRITICAL', false
+            );
+            RETURN jsonb_build_object(
+                'autorizado', false,
+                'codigo', 'IP_NAO_AUTORIZADO',
+                'ip_atual', v_ip
+            );
+        END IF;
+    END IF;
+
+    IF p_device_token IS NOT NULL AND LENGTH(TRIM(p_device_token)) > 0 THEN
+        v_token_hash := encode(digest(TRIM(p_device_token), 'sha256'), 'hex');
+        SELECT id INTO v_dispositivo_id
+        FROM public.super_admin_dispositivo
+        WHERE usuario_id = v_usuario.id
+          AND token_hash = v_token_hash
+          AND revogado_em IS NULL
+        LIMIT 1;
+
+        IF v_dispositivo_id IS NOT NULL THEN
+            UPDATE public.super_admin_dispositivo
+            SET ultimo_acesso_em = now(), ip_registro = v_ip
+            WHERE id = v_dispositivo_id;
+        END IF;
+    END IF;
+
+    IF COALESCE(v_politica.exigir_dispositivo_confiavel, false) = true AND v_dispositivo_id IS NULL THEN
+        INSERT INTO public.log_auditoria (
+            tenant_id, usuario_id, acao, recurso, justificativa, ip, user_agent, nivel, visivel_tenant
+        ) VALUES (
+            NULL, v_usuario.id, 'BLOQUEIO_DISPOSITIVO_SUPER_ADMIN', 'Portal da Plataforma',
+            'Tentativa em dispositivo não confiável / sem token válido', v_ip, v_ua, 'CRITICAL', false
+        );
+        RETURN jsonb_build_object(
+            'autorizado', false,
+            'codigo', 'DISPOSITIVO_NAO_CONFIAVEL',
+            'ip_atual', v_ip
+        );
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM public.log_auditoria
+        WHERE usuario_id = v_usuario.id
+          AND acao = 'ACESSO_VERIFICADO_2FA'
+          AND COALESCE(ip, '') = COALESCE(v_ip, '')
+          AND criado_em > (now() - interval '30 minutes')
+    ) THEN
+        INSERT INTO public.log_auditoria (
+            tenant_id, usuario_id, acao, recurso, justificativa, ip, user_agent, nivel, visivel_tenant
+        ) VALUES (
+            NULL, v_usuario.id, 'ACESSO_VERIFICADO_2FA', 'Sessão Super Admin (AAL2)',
+            'Autenticação multifator e políticas Zero-Trust validadas com sucesso', v_ip, v_ua, 'INFO', false
+        );
+    END IF;
+
+    RETURN jsonb_build_object(
+        'autorizado', true,
+        'codigo', 'OK',
+        'ip_atual', v_ip,
+        'dispositivo_reconhecido', (v_dispositivo_id IS NOT NULL),
+        'restringir_ip', COALESCE(v_politica.restringir_ip, false),
+        'ips_permitidos', COALESCE(v_politica.ips_permitidos, '{}'),
+        'exigir_dispositivo_confiavel', COALESCE(v_politica.exigir_dispositivo_confiavel, false)
+    );
+END;
+$$;

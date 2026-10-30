@@ -1689,13 +1689,22 @@ BEGIN
         );
     END IF;
 
-    -- Registra acesso verificado com 2FA AAL2 na trilha de auditoria
-    INSERT INTO public.log_auditoria (
-        tenant_id, usuario_id, acao, recurso, justificativa, ip, user_agent, nivel, visivel_tenant
-    ) VALUES (
-        NULL, v_usuario.id, 'ACESSO_VERIFICADO_2FA', 'Sessão Super Admin (AAL2)',
-        'Autenticação multifator e políticas Zero-Trust validadas com sucesso', v_ip, v_ua, 'INFO', false
-    );
+    -- Registra acesso verificado com 2FA AAL2 na trilha de auditoria apenas 1 vez por janela de sessão (30 min)
+    IF NOT EXISTS (
+        SELECT 1
+        FROM public.log_auditoria
+        WHERE usuario_id = v_usuario.id
+          AND acao = 'ACESSO_VERIFICADO_2FA'
+          AND COALESCE(ip, '') = COALESCE(v_ip, '')
+          AND criado_em > (now() - interval '30 minutes')
+    ) THEN
+        INSERT INTO public.log_auditoria (
+            tenant_id, usuario_id, acao, recurso, justificativa, ip, user_agent, nivel, visivel_tenant
+        ) VALUES (
+            NULL, v_usuario.id, 'ACESSO_VERIFICADO_2FA', 'Sessão Super Admin (AAL2)',
+            'Autenticação multifator e políticas Zero-Trust validadas com sucesso', v_ip, v_ua, 'INFO', false
+        );
+    END IF;
 
     RETURN jsonb_build_object(
         'autorizado', true,

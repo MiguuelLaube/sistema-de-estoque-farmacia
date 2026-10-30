@@ -400,6 +400,7 @@ export const useAuthStore = defineStore('auth', () => {
       };
     }
 
+    superAdminValidatedSessionToken = 'validated';
     superAdminContext.value = {
       ip_atual: ctxData.ip_atual || '127.0.0.1',
       dispositivo_reconhecido: Boolean(ctxData.dispositivo_reconhecido),
@@ -718,17 +719,52 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // Controla se o contexto Zero-Trust já foi validado nesta sessão para evitar chamadas repetidas ao RPC
+  let superAdminValidatedSessionToken: string | null = null;
+
+  function desduplicarLogsAuditoria(lista: LogAuditoria[]): LogAuditoria[] {
+    const resultado: LogAuditoria[] = [];
+    let ultimoVerificado2faMs: number | null = null;
+    let ultimoVerificadoUsuario = '';
+
+    for (const item of lista) {
+      if (item.acao === 'ACESSO_VERIFICADO_2FA') {
+        const ts = new Date(item.criado_em).getTime();
+        const uid = item.usuario_id || '';
+        // Agrupa verificações 2FA repetidas da mesma sessão (janela de 30 minutos) em um único registro
+        if (
+          ultimoVerificado2faMs !== null &&
+          ultimoVerificadoUsuario === uid &&
+          Math.abs(ultimoVerificado2faMs - ts) < 30 * 60 * 1000
+        ) {
+          continue;
+        }
+        ultimoVerificado2faMs = ts;
+        ultimoVerificadoUsuario = uid;
+      }
+      resultado.push(item);
+    }
+    return resultado;
+  }
+
   // Governança de Plataforma e Zero-Trust exclusivos do Super Admin
-  async function carregarSegurancaSuperAdmin() {
+  async function carregarSegurancaSuperAdmin(forcarRevalidacao = false) {
     if (!isLive || !isSuperAdmin.value) return;
     const deviceToken = typeof localStorage !== 'undefined' ? localStorage.getItem(DEVICE_TOKEN_STORAGE_KEY) : null;
+
+    const precisaValidarRpc =
+      forcarRevalidacao || !superAdminValidatedSessionToken || superAdminContext.value.ip_atual === '127.0.0.1';
+
     const [ctxRes, dispRes, logsRes] = await Promise.all([
-      supabase.rpc('validar_contexto_super_admin', { p_device_token: deviceToken }),
+      precisaValidarRpc
+        ? supabase.rpc('validar_contexto_super_admin', { p_device_token: deviceToken })
+        : Promise.resolve({ data: null }),
       supabase.from('super_admin_dispositivo').select('*').is('revogado_em', null).order('criado_em', { ascending: false }),
-      supabase.from('log_auditoria').select('*').order('criado_em', { ascending: false }).limit(80),
+      supabase.from('log_auditoria').select('*').order('criado_em', { ascending: false }).limit(120),
     ]);
 
-    if (ctxRes.data?.autorizado) {
+    if (ctxRes?.data?.autorizado) {
+      superAdminValidatedSessionToken = 'validated';
       superAdminContext.value = {
         ip_atual: ctxRes.data.ip_atual || '127.0.0.1',
         dispositivo_reconhecido: Boolean(ctxRes.data.dispositivo_reconhecido),
@@ -741,7 +777,7 @@ export const useAuthStore = defineStore('auth', () => {
       superAdminDispositivos.value = dispRes.data as SuperAdminDispositivo[];
     }
     if (logsRes.data) {
-      logsAuditoria.value = logsRes.data as LogAuditoria[];
+      logsAuditoria.value = desduplicarLogsAuditoria(logsRes.data as LogAuditoria[]);
     }
   }
 
@@ -753,7 +789,7 @@ export const useAuthStore = defineStore('auth', () => {
       .order('criado_em', { ascending: false })
       .limit(100);
     if (data) {
-      logsAuditoria.value = data as LogAuditoria[];
+      logsAuditoria.value = desduplicarLogsAuditoria(data as LogAuditoria[]);
     }
   }
 
@@ -775,7 +811,7 @@ export const useAuthStore = defineStore('auth', () => {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(DEVICE_TOKEN_STORAGE_KEY, tokenPlain);
     }
-    await carregarSegurancaSuperAdmin();
+    await carregarSegurancaSuperAdmin(true);
     return { sucesso: true, mensagem: 'Este navegador foi certificado como Dispositivo Confiável!' };
   }
 
@@ -785,7 +821,7 @@ export const useAuthStore = defineStore('auth', () => {
       .from('super_admin_dispositivo')
       .update({ revogado_em: new Date().toISOString() })
       .eq('id', id);
-    await carregarSegurancaSuperAdmin();
+    await carregarSegurancaSuperAdmin(true);
   }
 
   async function salvarPoliticaZeroTrust(
@@ -803,7 +839,7 @@ export const useAuthStore = defineStore('auth', () => {
     if (error) {
       return { sucesso: false, mensagem: error.message || 'Falha ao atualizar política Zero-Trust.' };
     }
-    await carregarSegurancaSuperAdmin();
+    await carregarSegurancaSuperAdmin(true);
     return { sucesso: true, mensagem: 'Política de restrição de IP e Dispositivos Confiáveis atualizada com sucesso!' };
   }
 
@@ -897,6 +933,7 @@ export const useAuthStore = defineStore('auth', () => {
     mfaQrCode.value = '';
     mfaSecret.value = '';
     breakGlassTenantId.value = null;
+    superAdminValidatedSessionToken = null;
   }
 
   return {
