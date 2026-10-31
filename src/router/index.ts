@@ -20,7 +20,7 @@ const router = createRouter({
       alias: ['/home', '/sobre'],
       name: 'landing',
       component: LandingView,
-      meta: { title: 'Drogaria Aeroporto - Visão Geral do Sistema', public: true },
+      meta: { title: 'EncoMed - Gestão Farmacêutica e Encomendas', public: true },
     },
     {
       path: '/login',

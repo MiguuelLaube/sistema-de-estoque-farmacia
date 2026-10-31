@@ -161,7 +161,7 @@ async function handleRedefinirSenha() {
 
 function abrirWhatsAppComercial() {
   const mensagem = encodeURIComponent(
-    'Olá! Tenho interesse em contratar o Sistema de Estoque e Encomendas da Drogaria Aeroporto para a minha farmácia. Poderiam me apresentar os planos e proposta comercial?'
+    'Olá! Tenho interesse em contratar o Sistema EncoMed para a minha farmácia. Poderiam me apresentar os planos e proposta comercial?'
   );
   window.open(`https://wa.me/5511999999999?text=${mensagem}`, '_blank', 'noopener,noreferrer');
 }

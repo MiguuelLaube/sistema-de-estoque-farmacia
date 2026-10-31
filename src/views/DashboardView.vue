@@ -112,7 +112,7 @@ async function dispararAvisoBot(enc: any) {
       </button>
     </div>
 
-    <!-- Stat Grid (Drogaria Aeroporto 4 Key Metrics: Clientes Cadastrados, Total, Pendentes, Entregues) -->
+    <!-- Stat Grid (4 Key Metrics: Clientes Cadastrados, Total, Pendentes, Entregues) -->
     <div class="stat-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem;">
       <div class="stat-card" id="card-stat-clientes" style="cursor: pointer;" @click="router.push('/clientes')">
         <div class="stat-info">

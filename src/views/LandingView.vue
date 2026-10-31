@@ -32,6 +32,7 @@ import {
   Settings,
   ChevronDown,
   ChevronUp,
+  CheckCheck,
 } from 'lucide-vue-next';
 
 const router = useRouter();
@@ -90,7 +91,7 @@ const filtroModuloBox = ref<'Todos' | StatusDemo>('Todos');
 const itensDemo = ref<ItemSimulador[]>([
   {
     id: 'sim-1',
-    paciente: 'Maria Aparecida Silva',
+    paciente: 'Cliente',
     telefone: '(11) 98765-4321',
     medicamento: 'OZEMPIC 1MG CANETA INJETÁVEL',
     categoria: 'TERMOLÁBIL / ÉTICO',
@@ -102,7 +103,7 @@ const itensDemo = ref<ItemSimulador[]>([
   },
   {
     id: 'sim-2',
-    paciente: 'Carlos Eduardo Mendes',
+    paciente: 'Cliente',
     telefone: '(11) 99123-8844',
     medicamento: 'LOSARTANA POTÁSSICA 50MG 30 COMP',
     categoria: 'GENÉRICO / CONTÍNUO',
@@ -110,18 +111,6 @@ const itensDemo = ref<ItemSimulador[]>([
     saldo: 'R$ 0,00',
     status: 'Pedido Feito',
     pago: true,
-    animando: false,
-  },
-  {
-    id: 'sim-3',
-    paciente: 'Fernanda Costa Oliveira',
-    telefone: '(11) 97411-2090',
-    medicamento: 'VENVANSE 30MG C/ 28 CÁPSULAS',
-    categoria: 'CONTROLADO PORT. 344',
-    valor: 'R$ 468,00',
-    saldo: 'R$ 168,00',
-    status: 'Chegou',
-    pago: false,
     animando: false,
   },
 ]);
@@ -140,7 +129,7 @@ const ultimaReacao = ref<EventoReacao>({
   subtitulo: 'Experimente mudar de "Aguardando" para "Pedido Feito", "Chegou" ou "Entregue"',
   corTema: 'emerald',
   mensagemWhatsapp:
-    'Olá Fernanda! Seu pedido de VENVANSE 30MG já está disponível para retirada na Farmácia via EncoMed. Saldo a acertar: R$ 168,00.',
+    'Olá Cliente! Seu pedido de OZEMPIC 1MG já está disponível para retirada na Drogaria via EncoMed. Saldo a acertar: R$ 85,00.',
   detalheExtra: 'A API do WhatsApp adapta a mensagem automaticamente ao modelo configurado da loja.',
   horario: 'Agora mesmo',
 });
@@ -270,26 +259,6 @@ const itensPedidosDemo = ref<ItemPedidoDemo[]>([
     status: 'Pedido Feito',
     animando: false,
   },
-  {
-    id: 'p-3',
-    medicamento: 'VENVANSE 30MG C/ 28 CÁPSULAS',
-    categoria: 'CONTROLADO PORTARIA 344',
-    quantidade: 1,
-    fornecedor: 'Profarma',
-    urgente: false,
-    status: 'Chegou',
-    animando: false,
-  },
-  {
-    id: 'p-4',
-    medicamento: 'DORFLEX 36 COMPRIMIDOS',
-    categoria: 'MIP / ANALGÉSICO',
-    quantidade: 12,
-    fornecedor: 'Emifarma',
-    urgente: false,
-    status: 'Aguardando',
-    animando: false,
-  },
 ]);
 
 const feedbackCopiaPedidos = ref<string | null>(null);
@@ -299,12 +268,12 @@ function copiarListaPedidosWhatsApp() {
     .map(
       (it) =>
         `• ${it.quantidade}x ${it.medicamento} (${it.categoria})${
-          it.urgente ? ' [⚡ CORTE URGENTE]' : ''
+          it.urgente ? ' [CORTE URGENTE]' : ''
         } - ${it.fornecedor}`
     )
     .join('\n');
   if (typeof navigator !== 'undefined' && navigator.clipboard) {
-    navigator.clipboard.writeText(`*LISTA DE PEDIDOS / COTAÇÃO - DROGARIA AEROPORTO*\n\n${texto}`);
+    navigator.clipboard.writeText(`*LISTA DE PEDIDOS / COTAÇÃO - DROGARIA*\n\n${texto}`);
   }
   feedbackCopiaPedidos.value = 'Lista de cotação formatada copiada para o WhatsApp do representante!';
   setTimeout(() => {
@@ -338,7 +307,7 @@ const ultimaReacaoPedidos = ref<EventoReacao>({
   titulo: 'Central de Pedidos e Cotação Integrada',
   subtitulo: 'A demanda dos clientes vira automaticamente lista de compras agrupada',
   corTema: 'blue',
-  detalheExtra: 'Clique no botão ⚡ URGENTE para subir o medicamento para o corte prioritário da distribuidora.',
+  detalheExtra: 'Clique no botão URGENTE para subir o medicamento para o corte prioritário da distribuidora.',
   horario: 'Agora mesmo',
 });
 const chaveAnimacaoReacaoPedidos = ref(1);
@@ -352,7 +321,7 @@ function alternarUrgenciaPedido(item: ItemPedidoDemo) {
   chaveAnimacaoReacaoPedidos.value++;
   const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   ultimaReacaoPedidos.value = {
-    titulo: item.urgente ? '🚨 URGÊNCIA ATIVADA NO PEDIDO DE COMPRA!' : 'Prioridade de compra normalizada',
+    titulo: item.urgente ? 'URGÊNCIA ATIVADA NO PEDIDO DE COMPRA!' : 'Prioridade de compra normalizada',
     subtitulo: `${item.medicamento} • ${item.quantidade}x caixas para cotar`,
     corTema: item.urgente ? 'red' : 'slate',
     detalheExtra: item.urgente
@@ -388,7 +357,7 @@ function clicarStatusPedido(item: ItemPedidoDemo, novoStatus: 'Aguardando' | 'Pe
     };
   } else {
     ultimaReacaoPedidos.value = {
-      titulo: 'Medicamento Chegou na Farmácia! 📦',
+      titulo: 'Medicamento Chegou na Farmácia!',
       subtitulo: `${item.quantidade}x caixas de ${item.medicamento} conferidas`,
       corTema: 'emerald',
       detalheExtra: 'Estoque atualizado e encomendas de balcão vinculadas avisadas imediatamente no WhatsApp!',
@@ -455,6 +424,7 @@ function confirmarChegadaXmlDemo() {
 const corDemoMarca = ref('#2563eb');
 const feedbackDownloadDemo = ref<string | null>(null);
 const tipoDocumentoExemplo = ref<'pdf_a4' | 'bobina_80mm'>('pdf_a4');
+const mostrarGavetaRelatorio = ref(false);
 
 function simularCliqueExportacao(formato: 'PDF' | 'Excel (.xlsx)') {
   feedbackDownloadDemo.value = `Relatório ${formato} gerado com cabeçalho da farmácia e trilha LGPD!`;
@@ -686,7 +656,7 @@ onBeforeUnmount(() => {
                   :class="{ active: abaSimulador === 'pedidos' }"
                 >
                   <ClipboardList :size="15" />
-                  <span>2. Pedidos &amp; Cotação ⚡</span>
+                  <span>2. Pedidos &amp; Cotação</span>
                 </button>
 
                 <button
@@ -763,7 +733,7 @@ onBeforeUnmount(() => {
                             :class="item.pago ? 'is-paid' : 'is-unpaid'"
                             title="Clique para alternar Pago / Pendente no Balcão"
                           >
-                            {{ item.pago ? '✓ 100% Pago' : `Falta ${item.saldo}` }}
+                            {{ item.pago ? '100% Pago' : `Falta ${item.saldo}` }}
                           </button>
                         </div>
                       </div>
@@ -833,7 +803,10 @@ onBeforeUnmount(() => {
                       </div>
                       <div class="wa-sim-bubble">
                         {{ ultimaReacao.mensagemWhatsapp }}
-                        <span class="wa-sim-ticks">✓✓ Enviado com sucesso</span>
+                        <span class="wa-sim-ticks" style="display: inline-flex; align-items: center; gap: 4px;">
+                          <CheckCheck :size="13" />
+                          <span>Enviado com sucesso</span>
+                        </span>
                       </div>
                     </div>
 
@@ -865,7 +838,10 @@ onBeforeUnmount(() => {
                           mod === 'Chegou' ? 'tab-emerald' : '',
                         ]"
                       >
-                        <span v-if="mod === 'Urgentes'">⚡ Urgentes</span>
+                        <span v-if="mod === 'Urgentes'" style="display: inline-flex; align-items: center; gap: 4px;">
+                          <Zap :size="12" />
+                          <span>Urgentes</span>
+                        </span>
                         <span v-else>{{ mod }}</span>
                         <span class="sim-count-bubble">{{ contagemPedidosDemo[mod] }}</span>
                       </button>
@@ -883,8 +859,9 @@ onBeforeUnmount(() => {
                     </button>
                   </div>
 
-                  <div v-if="feedbackCopiaPedidos" style="margin-bottom: 0.65rem; padding: 0.5rem 0.85rem; border-radius: 10px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; font-size: 0.78rem; font-weight: 600;">
-                    ✅ {{ feedbackCopiaPedidos }}
+                  <div v-if="feedbackCopiaPedidos" style="display: flex; align-items: center; gap: 6px; margin-bottom: 0.65rem; padding: 0.5rem 0.85rem; border-radius: 10px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; font-size: 0.78rem; font-weight: 600;">
+                    <CheckCircle2 :size="14" />
+                    <span>{{ feedbackCopiaPedidos }}</span>
                   </div>
 
                   <TransitionGroup name="sim-list" tag="div" class="sim-cards-stack">
@@ -903,13 +880,16 @@ onBeforeUnmount(() => {
                           <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
                             <span class="sim-cat-tag">{{ item.categoria }}</span>
                             <span style="font-size: 0.74rem; color: #64748b; font-weight: 600;">Distribuidora: <strong>{{ item.fornecedor }}</strong></span>
-                            <span v-if="item.urgente" class="badge-urgent-pulse">⚡ CORTE URGENTE</span>
+                            <span v-if="item.urgente" class="badge-urgent-pulse">
+                              <Zap :size="11" />
+                              <span>CORTE URGENTE</span>
+                            </span>
                           </div>
                           <div style="display: flex; align-items: baseline; gap: 0.5rem; margin-top: 4px;">
                             <h4 class="sim-med-title" :class="{ 'urgent-red': item.urgente }">
                               {{ item.medicamento }}
                             </h4>
-                            <span class="badge badge-qty">📦 {{ item.quantidade }} un.</span>
+                            <span class="badge badge-qty">{{ item.quantidade }} un.</span>
                           </div>
                         </div>
                       </div>
@@ -1032,7 +1012,10 @@ onBeforeUnmount(() => {
 
                 <div v-if="xmlSimEtapa === 'escaneando'" class="xml-scanning-box">
                   <div class="scanning-bar"></div>
-                  <strong style="color: #0f172a; font-size: 0.95rem;">🤖 IA decodificando XML SEFAZ #0048921 da Distribuidora Panpharma...</strong>
+                  <strong style="color: #0f172a; font-size: 0.95rem; display: inline-flex; align-items: center; gap: 6px;">
+                    <Sparkles :size="16" style="color: #2563eb;" />
+                    <span>IA decodificando XML SEFAZ #0048921 da Distribuidora Panpharma...</span>
+                  </strong>
                   <span style="color: #64748b; font-size: 0.82rem;">Normalizando dosagens (mg/mcg), EAN de barras e localizando encomendas de balcão correspondentes.</span>
                 </div>
 
@@ -1189,218 +1172,221 @@ onBeforeUnmount(() => {
                     </div>
                     <div
                       v-if="feedbackDownloadDemo"
-                      style="margin-top: 0.85rem; padding: 0.6rem 0.85rem; border-radius: 10px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; font-size: 0.8rem; font-weight: 600;"
+                      style="display: flex; align-items: center; gap: 6px; margin-top: 0.85rem; padding: 0.6rem 0.85rem; border-radius: 10px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; font-size: 0.8rem; font-weight: 600;"
                     >
-                      ✅ {{ feedbackDownloadDemo }}
+                      <CheckCircle2 :size="14" />
+                      <span>{{ feedbackDownloadDemo }}</span>
                     </div>
                   </div>
                 </div>
 
-                <!-- PRÉ-VISUALIZAÇÃO REALISTA DO DOCUMENTO FORMATADO GERADO PELO SISTEMA -->
-                <div class="sim-report-preview-container">
-                  <div class="preview-mode-header">
-                    <div>
-                      <span class="preview-kicker">DOCUMENTO FORMATADO GERADO AUTOMATICAMENTE</span>
-                      <h4 style="margin: 2px 0 0; font-size: 1.05rem; font-weight: 800; color: #0f172a;">
-                        Veja como seus relatórios e cupons chegam prontos para impressão
-                      </h4>
+                <!-- BOTÃO DISCRETO DE GAVETA PARA VER/OCULTAR O RELATÓRIO FORMATADO -->
+                <div class="sim-report-drawer-trigger-bar">
+                  <button
+                    type="button"
+                    @click="mostrarGavetaRelatorio = !mostrarGavetaRelatorio"
+                    class="btn-report-drawer-toggle"
+                    :class="{ 'is-open': mostrarGavetaRelatorio }"
+                  >
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <FileText :size="16" />
+                      <span>{{ mostrarGavetaRelatorio ? 'Recolher Exemplo do Relatório' : 'Visualizar Exemplo do Relatório Formatado' }}</span>
+                    </div>
+                    <div class="drawer-toggle-badge">
+                      <span style="font-size: 0.75rem; font-weight: 600;">{{ mostrarGavetaRelatorio ? 'Ocultar Gaveta' : 'A4 & Bobina 80mm' }}</span>
+                      <ChevronUp v-if="mostrarGavetaRelatorio" :size="15" />
+                      <ChevronDown v-else :size="15" />
+                    </div>
+                  </button>
+                </div>
+
+                <!-- PRÉ-VISUALIZAÇÃO REALISTA DO DOCUMENTO FORMATADO GERADO PELO SISTEMA (RETRÁTIL NA GAVETA) -->
+                <Transition name="drawer-slide">
+                  <div v-show="mostrarGavetaRelatorio" class="sim-report-preview-container">
+                    <div class="preview-mode-header">
+                      <div>
+                        <span class="preview-kicker">DOCUMENTO FORMATADO GERADO AUTOMATICAMENTE</span>
+                        <h4 style="margin: 2px 0 0; font-size: 1.05rem; font-weight: 800; color: #0f172a;">
+                          Veja como seus relatórios e cupons chegam prontos para impressão
+                        </h4>
+                      </div>
+
+                      <div class="preview-format-tabs" role="tablist">
+                        <button
+                          type="button"
+                          @click="tipoDocumentoExemplo = 'pdf_a4'"
+                          class="preview-tab-btn"
+                          :class="{ active: tipoDocumentoExemplo === 'pdf_a4' }"
+                        >
+                          <FileText :size="14" />
+                          <span>Folha A4 (PDF Executivo)</span>
+                        </button>
+                        <button
+                          type="button"
+                          @click="tipoDocumentoExemplo = 'bobina_80mm'"
+                          class="preview-tab-btn"
+                          :class="{ active: tipoDocumentoExemplo === 'bobina_80mm' }"
+                        >
+                          <Printer :size="14" />
+                          <span>Cupom Térmico (Bobina 80mm)</span>
+                        </button>
+                      </div>
                     </div>
 
-                    <div class="preview-format-tabs" role="tablist">
-                      <button
-                        type="button"
-                        @click="tipoDocumentoExemplo = 'pdf_a4'"
-                        class="preview-tab-btn"
-                        :class="{ active: tipoDocumentoExemplo === 'pdf_a4' }"
-                      >
-                        <FileText :size="14" />
-                        <span>📄 Folha A4 (PDF Executivo)</span>
-                      </button>
-                      <button
-                        type="button"
-                        @click="tipoDocumentoExemplo = 'bobina_80mm'"
-                        class="preview-tab-btn"
-                        :class="{ active: tipoDocumentoExemplo === 'bobina_80mm' }"
-                      >
-                        <Printer :size="14" />
-                        <span>🧾 Cupom Térmico (Bobina 80mm)</span>
-                      </button>
-                    </div>
-                  </div>
+                    <!-- DOCUMENTO 1: FOLHA A4 (PDF EXECUTIVO) -->
+                    <div v-if="tipoDocumentoExemplo === 'pdf_a4'" class="a4-document-sheet">
+                      <div class="a4-brand-topbar" :style="{ background: corDemoMarca }"></div>
 
-                  <!-- DOCUMENTO 1: FOLHA A4 (PDF EXECUTIVO) -->
-                  <div v-if="tipoDocumentoExemplo === 'pdf_a4'" class="a4-document-sheet">
-                    <div class="a4-brand-topbar" :style="{ background: corDemoMarca }"></div>
+                      <div class="a4-sheet-content">
+                        <!-- Cabeçalho Oficial -->
+                        <div class="a4-header-row">
+                          <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <img src="/encomed-icon.svg" alt="" style="width: 36px; height: 36px; object-fit: contain;" />
+                            <div>
+                              <h2 class="a4-pharmacy-title" :style="{ color: corDemoMarca }">DROGARIA</h2>
+                              <p class="a4-pharmacy-meta">CNPJ: 12.345.678/0001-90 • Farmacêutico Resp.: Responsável Técnico (CRF 00.000)</p>
+                            </div>
+                          </div>
 
-                    <div class="a4-sheet-content">
-                      <!-- Cabeçalho Oficial -->
-                      <div class="a4-header-row">
-                        <div style="display: flex; align-items: center; gap: 0.75rem;">
-                          <img src="/encomed-icon.svg" alt="" style="width: 36px; height: 36px; object-fit: contain;" />
-                          <div>
-                            <h2 class="a4-pharmacy-title" :style="{ color: corDemoMarca }">DROGARIA AEROPORTO LTDA</h2>
-                            <p class="a4-pharmacy-meta">CNPJ: 12.345.678/0001-90 • Farmacêutico Resp.: Dr. Miguel Laube (CRF-SP 48.912)</p>
+                          <div style="text-align: right;">
+                            <span class="a4-report-badge">RELATÓRIO GERENCIAL</span>
+                            <div class="a4-report-title">ENCOMENDAS &amp; RECEBÍVEIS</div>
+                            <div class="a4-report-date">Emissão: 30/10/2026 • 23:25 • Pág. 1/1</div>
                           </div>
                         </div>
 
-                        <div style="text-align: right;">
-                          <span class="a4-report-badge">RELATÓRIO GERENCIAL</span>
-                          <div class="a4-report-title">ENCOMENDAS &amp; RECEBÍVEIS</div>
-                          <div class="a4-report-date">Emissão: 30/10/2026 • 23:25 • Pág. 1/1</div>
+                        <!-- 4 Cards de Resumo Gerencial (KPIs) -->
+                        <div class="a4-kpis-grid">
+                          <div class="a4-kpi-card">
+                            <span class="a4-kpi-sub">Total de Encomendas</span>
+                            <strong class="a4-kpi-num">2 pedidos</strong>
+                          </div>
+                          <div class="a4-kpi-card">
+                            <span class="a4-kpi-sub">Faturamento Previsto</span>
+                            <strong class="a4-kpi-num" style="color: #059669;">R$ 1.009,90</strong>
+                          </div>
+                          <div class="a4-kpi-card">
+                            <span class="a4-kpi-sub">Sinais Pagos (Recebidos)</span>
+                            <strong class="a4-kpi-num" style="color: #2563eb;">R$ 924,90</strong>
+                          </div>
+                          <div class="a4-kpi-card a4-kpi-highlight">
+                            <span class="a4-kpi-sub">Saldo a Receber na Retirada</span>
+                            <strong class="a4-kpi-num" style="color: #d97706;">R$ 85,00</strong>
+                          </div>
                         </div>
-                      </div>
 
-                      <!-- 4 Cards de Resumo Gerencial (KPIs) -->
-                      <div class="a4-kpis-grid">
-                        <div class="a4-kpi-card">
-                          <span class="a4-kpi-sub">Total de Encomendas</span>
-                          <strong class="a4-kpi-num">38 pedidos</strong>
-                        </div>
-                        <div class="a4-kpi-card">
-                          <span class="a4-kpi-sub">Faturamento Previsto</span>
-                          <strong class="a4-kpi-num" style="color: #059669;">R$ 11.450,00</strong>
-                        </div>
-                        <div class="a4-kpi-card">
-                          <span class="a4-kpi-sub">Sinais Pagos (Recebidos)</span>
-                          <strong class="a4-kpi-num" style="color: #2563eb;">R$ 9.607,50</strong>
-                        </div>
-                        <div class="a4-kpi-card a4-kpi-highlight">
-                          <span class="a4-kpi-sub">Saldo a Receber na Retirada</span>
-                          <strong class="a4-kpi-num" style="color: #d97706;">R$ 1.842,50</strong>
-                        </div>
-                      </div>
+                        <!-- Tabela de Itens Formatada (2 ITENS APENAS) -->
+                        <table class="a4-data-table">
+                          <thead>
+                            <tr>
+                              <th>Data</th>
+                              <th>Rastreio</th>
+                              <th>Paciente / WhatsApp</th>
+                              <th>Medicamento Encomendado</th>
+                              <th style="text-align: right;">Total</th>
+                              <th style="text-align: right;">Sinal</th>
+                              <th style="text-align: right;">A Receber</th>
+                              <th style="text-align: center;">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td>30/10 14:20</td>
+                              <td><code class="a4-code">ENC-2026-412</code></td>
+                              <td><strong>Cliente</strong><br /><small style="color: #64748b;">(11) 98765-4321</small></td>
+                              <td>OZEMPIC 1MG CANETA INJ<br /><small class="sim-cat-tag">TERMOLÁBIL</small></td>
+                              <td style="text-align: right; font-weight: 700;">R$ 985,00</td>
+                              <td style="text-align: right; color: #059669;">R$ 900,00</td>
+                              <td style="text-align: right; font-weight: 800; color: #d97706;">R$ 85,00</td>
+                              <td style="text-align: center;"><span class="a4-status-pill status-chegou">Chegou</span></td>
+                            </tr>
+                            <tr>
+                              <td>30/10 11:05</td>
+                              <td><code class="a4-code">ENC-2026-408</code></td>
+                              <td><strong>Cliente</strong><br /><small style="color: #64748b;">(11) 99123-8844</small></td>
+                              <td>LOSARTANA POTÁSSICA 50MG<br /><small class="sim-cat-tag">CONTÍNUO</small></td>
+                              <td style="text-align: right; font-weight: 700;">R$ 24,90</td>
+                              <td style="text-align: right; color: #059669;">R$ 24,90</td>
+                              <td style="text-align: right; color: #64748b;">R$ 0,00</td>
+                              <td style="text-align: center;"><span class="a4-status-pill status-feito">Pedido Feito</span></td>
+                            </tr>
+                          </tbody>
+                        </table>
 
-                      <!-- Tabela de Itens Formatada -->
-                      <table class="a4-data-table">
-                        <thead>
-                          <tr>
-                            <th>Data</th>
-                            <th>Rastreio</th>
-                            <th>Paciente / WhatsApp</th>
-                            <th>Medicamento Encomendado</th>
-                            <th style="text-align: right;">Total</th>
-                            <th style="text-align: right;">Sinal</th>
-                            <th style="text-align: right;">A Receber</th>
-                            <th style="text-align: center;">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr>
-                            <td>30/10 14:20</td>
-                            <td><code class="a4-code">ENC-2026-412</code></td>
-                            <td><strong>Maria Aparecida Silva</strong><br /><small style="color: #64748b;">(11) 98765-4321</small></td>
-                            <td>OZEMPIC 1MG CANETA INJ<br /><small class="sim-cat-tag">TERMOLÁBIL</small></td>
-                            <td style="text-align: right; font-weight: 700;">R$ 985,00</td>
-                            <td style="text-align: right; color: #059669;">R$ 900,00</td>
-                            <td style="text-align: right; font-weight: 800; color: #d97706;">R$ 85,00</td>
-                            <td style="text-align: center;"><span class="a4-status-pill status-chegou">Chegou</span></td>
-                          </tr>
-                          <tr>
-                            <td>30/10 11:05</td>
-                            <td><code class="a4-code">ENC-2026-408</code></td>
-                            <td><strong>Carlos Eduardo Mendes</strong><br /><small style="color: #64748b;">(11) 99123-8844</small></td>
-                            <td>LOSARTANA POTÁSSICA 50MG<br /><small class="sim-cat-tag">CONTÍNUO</small></td>
-                            <td style="text-align: right; font-weight: 700;">R$ 24,90</td>
-                            <td style="text-align: right; color: #059669;">R$ 24,90</td>
-                            <td style="text-align: right; color: #64748b;">R$ 0,00</td>
-                            <td style="text-align: center;"><span class="a4-status-pill status-feito">Pedido Feito</span></td>
-                          </tr>
-                          <tr>
-                            <td>29/10 17:40</td>
-                            <td><code class="a4-code">ENC-2026-395</code></td>
-                            <td><strong>Fernanda Costa Oliveira</strong><br /><small style="color: #64748b;">(11) 97411-2090</small></td>
-                            <td>VENVANSE 30MG C/ 28 CÁPS<br /><small class="sim-cat-tag">PORT. 344</small></td>
-                            <td style="text-align: right; font-weight: 700;">R$ 468,00</td>
-                            <td style="text-align: right; color: #059669;">R$ 300,00</td>
-                            <td style="text-align: right; font-weight: 800; color: #d97706;">R$ 168,00</td>
-                            <td style="text-align: center;"><span class="a4-status-pill status-chegou">Chegou</span></td>
-                          </tr>
-                          <tr>
-                            <td>29/10 10:15</td>
-                            <td><code class="a4-code">ENC-2026-390</code></td>
-                            <td><strong>João Pedro Ramos</strong><br /><small style="color: #64748b;">(11) 98112-4433</small></td>
-                            <td>XIGDUO XR 5/1000MG 60 COMP<br /><small class="sim-cat-tag">DIABETES</small></td>
-                            <td style="text-align: right; font-weight: 700;">R$ 189,00</td>
-                            <td style="text-align: right; color: #059669;">R$ 189,00</td>
-                            <td style="text-align: right; color: #64748b;">R$ 0,00</td>
-                            <td style="text-align: center;"><span class="a4-status-pill status-entregue">Entregue</span></td>
-                          </tr>
-                        </tbody>
-                      </table>
-
-                      <!-- Rodapé da Folha com Selo LGPD e Assinatura Digital -->
-                      <div class="a4-footer-row">
-                        <div style="display: flex; align-items: center; gap: 0.5rem; color: #475569; font-size: 0.72rem;">
-                          <ShieldCheck :size="16" style="color: #059669;" />
-                          <span>Documento emitido com conformidade LGPD (Art. 18) e trilha de auditoria digital rastreável.</span>
-                        </div>
-                        <div style="font-family: monospace; font-size: 0.68rem; color: #94a3b8;">
-                          AUTENTICAÇÃO: SHA256-7F8A2B...9C41E0
+                        <!-- Rodapé da Folha com Selo LGPD e Assinatura Digital -->
+                        <div class="a4-footer-row">
+                          <div style="display: flex; align-items: center; gap: 0.5rem; color: #475569; font-size: 0.72rem;">
+                            <ShieldCheck :size="16" style="color: #059669;" />
+                            <span>Documento emitido com conformidade LGPD (Art. 18) e trilha de auditoria digital rastreável.</span>
+                          </div>
+                          <div style="font-family: monospace; font-size: 0.68rem; color: #94a3b8;">
+                            AUTENTICAÇÃO: SHA256-7F8A2B...9C41E0
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  <!-- DOCUMENTO 2: BOBINA TÉRMICA 80MM (CUPOM DE BALCÃO) -->
-                  <div v-else class="receipt-thermal-wrapper">
-                    <div class="receipt-thermal-paper">
-                      <div class="receipt-header">
-                        <h3 class="receipt-title">DROGARIA AEROPORTO</h3>
-                        <p class="receipt-meta">Av. Santos Dumont, 1420 - Matriz</p>
-                        <p class="receipt-meta">CNPJ: 12.345.678/0001-90</p>
-                        <div class="receipt-divider">================================</div>
-                        <strong class="receipt-highlight">COMPROVANTE DE ENCOMENDA</strong>
-                        <div class="receipt-meta">Rastreio: <strong>ENC-2026-412</strong></div>
-                        <div class="receipt-meta">Data: 30/10/2026 14:20:15</div>
-                      </div>
-
-                      <div class="receipt-divider">--------------------------------</div>
-                      <div class="receipt-customer">
-                        <div>CLIENTE: MARIA APARECIDA SILVA</div>
-                        <div>TEL/WHATSAPP: (11) 98765-4321</div>
-                        <div>ATENDENTE: CARLOS (BALCÃO 02)</div>
-                      </div>
-
-                      <div class="receipt-divider">--------------------------------</div>
-                      <div class="receipt-items">
-                        <div style="display: flex; justify-content: space-between;">
-                          <span>1x OZEMPIC 1MG CANETA INJ</span>
-                          <strong>R$ 985,00</strong>
+                    <!-- DOCUMENTO 2: BOBINA TÉRMICA 80MM (CUPOM DE BALCÃO) -->
+                    <div v-else class="receipt-thermal-wrapper">
+                      <div class="receipt-thermal-paper">
+                        <div class="receipt-header">
+                          <h3 class="receipt-title">DROGARIA</h3>
+                          <p class="receipt-meta">Av. Principal, 1000 - Centro</p>
+                          <p class="receipt-meta">CNPJ: 12.345.678/0001-90</p>
+                          <div class="receipt-divider">================================</div>
+                          <strong class="receipt-highlight">COMPROVANTE DE ENCOMENDA</strong>
+                          <div class="receipt-meta">Rastreio: <strong>ENC-2026-412</strong></div>
+                          <div class="receipt-meta">Data: 30/10/2026 14:20:15</div>
                         </div>
-                        <small style="color: #475569;">* Medicamento Termolábil (Geladeira)</small>
-                      </div>
 
-                      <div class="receipt-divider">================================</div>
-                      <div class="receipt-totals">
-                        <div style="display: flex; justify-content: space-between;">
-                          <span>VALOR TOTAL:</span>
-                          <span>R$ 985,00</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; font-weight: bold;">
-                          <span>SINAL PAGO (PIX):</span>
-                          <span>R$ 900,00</span>
-                        </div>
                         <div class="receipt-divider">--------------------------------</div>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.95rem; font-weight: 800;">
-                          <span>SALDO NA RETIRADA:</span>
-                          <span>R$ 85,00</span>
+                        <div class="receipt-customer">
+                          <div>CLIENTE: CLIENTE</div>
+                          <div>TEL/WHATSAPP: (11) 98765-4321</div>
+                          <div>ATENDENTE: BALCÃO</div>
                         </div>
-                      </div>
 
-                      <div class="receipt-divider">================================</div>
-                      <div class="receipt-barcode">
-                        ||||| ||||||| ||| |||||| ||||| ||||||
-                        <div style="font-size: 0.68rem; letter-spacing: 2px;">ENC-2026-412</div>
-                      </div>
+                        <div class="receipt-divider">--------------------------------</div>
+                        <div class="receipt-items">
+                          <div style="display: flex; justify-content: space-between;">
+                            <span>1x OZEMPIC 1MG CANETA INJ</span>
+                            <strong>R$ 985,00</strong>
+                          </div>
+                          <small style="color: #475569;">* Medicamento Termolábil (Geladeira)</small>
+                        </div>
 
-                      <div class="receipt-footer">
-                        <p>Você receberá um aviso no seu WhatsApp assim que o produto chegar na farmácia!</p>
-                        <p>Apresente este cupom no balcão de retirada.</p>
-                        <small>EncoMed Sistemas • Gestão Farmacêutica</small>
+                        <div class="receipt-divider">================================</div>
+                        <div class="receipt-totals">
+                          <div style="display: flex; justify-content: space-between;">
+                            <span>VALOR TOTAL:</span>
+                            <span>R$ 985,00</span>
+                          </div>
+                          <div style="display: flex; justify-content: space-between; font-weight: bold;">
+                            <span>SINAL PAGO (PIX):</span>
+                            <span>R$ 900,00</span>
+                          </div>
+                          <div class="receipt-divider">--------------------------------</div>
+                          <div style="display: flex; justify-content: space-between; font-size: 0.95rem; font-weight: 800;">
+                            <span>SALDO NA RETIRADA:</span>
+                            <span>R$ 85,00</span>
+                          </div>
+                        </div>
+
+                        <div class="receipt-divider">================================</div>
+                        <div class="receipt-barcode">
+                          ||||| ||||||| ||| |||||| ||||| ||||||
+                          <div style="font-size: 0.68rem; letter-spacing: 2px;">ENC-2026-412</div>
+                        </div>
+
+                        <div class="receipt-footer">
+                          <p>Você receberá um aviso no seu WhatsApp assim que o produto chegar na farmácia!</p>
+                          <p>Apresente este cupom no balcão de retirada.</p>
+                          <small>EncoMed Sistemas • Gestão Farmacêutica</small>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                </Transition>
               </div>
             </div>
           </Transition>
@@ -2796,10 +2782,61 @@ onBeforeUnmount(() => {
 }
 
 /* ====================================================================
-   ESTILOS: PRÉ-VISUALIZAÇÃO DE DOCUMENTO FORMATADO (A4 & TÉRMICO)
+   ESTILOS: GAVETA DISCRETA & PRÉ-VISUALIZAÇÃO DE DOCUMENTO (A4 & TÉRMICO)
    ==================================================================== */
-.sim-report-preview-container {
+.sim-report-drawer-trigger-bar {
   margin-top: 1.5rem;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.btn-report-drawer-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 640px;
+  padding: 0.9rem 1.4rem;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 9999px;
+  color: #1e293b;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
+}
+
+.btn-report-drawer-toggle:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.btn-report-drawer-toggle.is-open {
+  background: #f1f5f9;
+  border-color: #64748b;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.drawer-toggle-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  color: #475569;
+  font-size: 0.76rem;
+}
+
+.sim-report-preview-container {
+  margin-top: 1.25rem;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 18px;

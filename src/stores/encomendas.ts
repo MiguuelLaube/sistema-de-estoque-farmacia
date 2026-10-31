@@ -227,7 +227,7 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     if (!cliente || !cliente.telefone) return null;
 
     const cfg = authStore.currentConfig;
-    const nomeLoja = cfg?.nome_sistema || 'Drogaria Aeroporto';
+    const nomeLoja = cfg?.nome_sistema || 'Drogaria';
     const medicamentosStr = encomenda.itens && encomenda.itens.length > 0
       ? encomenda.itens.map((i) => `${i.quantidade}x ${i.descricao}`).join(', ')
       : 'seus itens';

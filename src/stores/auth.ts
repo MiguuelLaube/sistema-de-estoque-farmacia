@@ -541,7 +541,7 @@ export const useAuthStore = defineStore('auth', () => {
           id: session.user.id,
           tenant_id: null,
           auth_user_id: session.user.id,
-          nome: session.user.user_metadata?.nome || session.user.user_metadata?.full_name || 'Miguel Laube (Super Admin)',
+          nome: session.user.user_metadata?.nome || session.user.user_metadata?.full_name || 'Gestor Plataforma (Super Admin)',
           email: emailNormalizado,
           perfil: 'super_admin',
           ativo: true,

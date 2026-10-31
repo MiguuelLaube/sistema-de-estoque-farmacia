@@ -345,7 +345,7 @@ async function copiarHistorico() {
   if (!props.cliente) return;
   const cliente = props.cliente;
   const meds = todosMedicamentosPlanificados.value;
-  const nomeLoja = authStore.currentConfig.header_title || 'DROGARIA AEROPORTO';
+  const nomeLoja = authStore.currentConfig.header_title || 'DROGARIA';
 
   let texto = `📋 *HISTÓRICO DE MEDICAMENTOS - ${nomeLoja}*\n`;
   texto += `👤 *Cliente:* ${cliente.nome}\n`;

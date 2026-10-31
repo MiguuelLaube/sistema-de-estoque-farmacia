@@ -488,7 +488,7 @@ async function desconectarContaWhatsApp() {
 // ============================================================================
 // 3. DEMAIS ABAS (CUPOM 80MM, FUNCIONÁRIOS, CLASSIFICAÇÕES, POLÍTICAS)
 // ============================================================================
-const formHeaderTitle = ref(authStore.currentConfig.header_title || 'DROGARIA AEROPORTO');
+const formHeaderTitle = ref(authStore.currentConfig.header_title || 'DROGARIA');
 const formHeaderSubtitle = ref(authStore.currentConfig.header_subtitle || 'Sistema de Encomendas');
 const formFooterText = ref(authStore.currentConfig.footer_text || 'Obrigado pela preferencia!');
 const formShowPhone = ref(authStore.currentConfig.show_phone !== false);
@@ -530,7 +530,7 @@ watch(
     formAutoWhatsappPedido.value = Boolean(cfg.auto_whatsapp_pedido);
     formAutoWhatsappEntregue.value = Boolean(cfg.auto_whatsapp_entregue);
 
-    formHeaderTitle.value = cfg.header_title || 'DROGARIA AEROPORTO';
+    formHeaderTitle.value = cfg.header_title || 'DROGARIA';
     formHeaderSubtitle.value = cfg.header_subtitle || 'Sistema de Encomendas';
     formFooterText.value = cfg.footer_text || 'Obrigado pela preferencia!';
     formShowPhone.value = cfg.show_phone !== false;
@@ -904,7 +904,7 @@ async function removerClassificacao(id: string) {
                 type="text"
                 class="form-input"
                 id="input-config-nome-sistema"
-                placeholder="Ex: Drogaria Aeroporto / EncoMed"
+                placeholder="Ex: Minha Drogaria / EncoMed"
               />
             </div>
 
@@ -1882,7 +1882,7 @@ async function removerClassificacao(id: string) {
               type="text"
               class="form-input"
               id="input-header-title"
-              placeholder="DROGARIA AEROPORTO"
+              placeholder="DROGARIA"
             />
           </div>
 
@@ -1951,7 +1951,7 @@ async function removerClassificacao(id: string) {
           :style="{ fontSize: `${formFontSize}px` }"
         >
           <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px;">
-            <div style="font-weight: bold; font-size: 1.05em;">{{ formHeaderTitle || 'DROGARIA AEROPORTO' }}</div>
+            <div style="font-weight: bold; font-size: 1.05em;">{{ formHeaderTitle || 'DROGARIA' }}</div>
             <div style="font-size: 0.9em;">{{ formHeaderSubtitle || 'Sistema de Encomendas' }}</div>
             <div style="font-size: 0.85em; margin-top: 4px;">RECIBO: #A1B2C3</div>
             <div style="font-size: 0.8em; color: #475569;">{{ new Date().toLocaleDateString('pt-BR') }} 14:30</div>

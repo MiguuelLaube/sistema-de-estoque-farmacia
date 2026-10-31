@@ -1341,7 +1341,7 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
         >
           <div style="text-align: center; margin-bottom: 0.75rem;">
             <div style="font-weight: 700; font-size: 1.05em;">
-              {{ authStore.currentConfig.header_title || 'DROGARIA AEROPORTO' }}
+              {{ authStore.currentConfig.header_title || 'DROGARIA' }}
             </div>
             <div style="font-size: 0.88em; color: #475569;">
               {{ authStore.currentConfig.header_subtitle || 'Sistema de Encomendas' }}

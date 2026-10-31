@@ -3,10 +3,10 @@ import type { Tenant, ConfigTenant, Usuario, Cliente, Classificacao, Fornecedor,
 export const initialTenants: Tenant[] = [
   {
     id: 'a0000000-0000-0000-0000-000000000001',
-    nome_empresa: 'Drogaria Aeroporto',
-    slug: 'aeroporto',
-    dominio: 'aeroporto.farmacia.local',
-    email_admin: 'gestor@drogariaaeroporto.com.br',
+    nome_empresa: 'Drogaria',
+    slug: 'drogaria',
+    dominio: 'drogaria.farmacia.local',
+    email_admin: 'gestor@drogaria.com.br',
     status: 'ativo',
     plano: 'profissional',
     limite_encomendas_mes: 1000,
@@ -30,7 +30,7 @@ export const initialTenants: Tenant[] = [
 export const initialConfigs: Record<string, ConfigTenant> = {
   'a0000000-0000-0000-0000-000000000001': {
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
-    nome_sistema: 'EncoMed • Drogaria Aeroporto',
+    nome_sistema: 'Drogaria',
     slogan_sistema: 'Gestão de Encomendas',
     saudacao_painel: 'Bem-vindo',
     logo_url: '/encomed-logo.png',
@@ -58,7 +58,7 @@ export const initialConfigs: Record<string, ConfigTenant> = {
     bloquear_entrega_com_saldo: false,
     dias_retencao_arquivamento: 90,
     evolution_api_ativo: true,
-    header_title: 'DROGARIA AEROPORTO',
+    header_title: 'DROGARIA',
     header_subtitle: 'Sistema de Encomendas',
     footer_text: 'Obrigado pela preferencia!',
     show_phone: true,
@@ -111,7 +111,7 @@ export const initialUsuarios: Usuario[] = [
     id: '01000000-0000-0000-0000-000000000001',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
     nome: 'Carlos Gerente',
-    email: 'carlos@aeroporto.com.br',
+    email: 'carlos@farmacia.local',
     perfil: 'admin',
     ativo: true,
     criado_em: '2026-01-10T10:00:00Z',
@@ -120,7 +120,7 @@ export const initialUsuarios: Usuario[] = [
     id: '01000000-0000-0000-0000-000000000002',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
     nome: 'Ana Balcão',
-    email: 'ana@aeroporto.com.br',
+    email: 'ana@farmacia.local',
     perfil: 'operador',
     ativo: true,
     criado_em: '2026-01-11T09:00:00Z',
@@ -129,7 +129,7 @@ export const initialUsuarios: Usuario[] = [
     id: '01000000-0000-0000-0000-000000000003',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
     nome: 'Roberto Compras',
-    email: 'roberto@aeroporto.com.br',
+    email: 'roberto@farmacia.local',
     perfil: 'comprador',
     ativo: true,
     criado_em: '2026-01-11T09:00:00Z',
@@ -418,9 +418,9 @@ export const initialEncomendas: Encomenda[] = [
       },
     ],
     historico: [
-      { employee_name: 'MIGUEL', action: 'criou a encomenda', timestamp: '2026-10-25T13:06:00Z' },
-      { employee_name: 'MIGUEL', action: 'marcou como "Pedido Feito"', timestamp: '2026-10-25T13:14:00Z' },
-      { employee_name: 'MIGUEL', action: 'registrou pagamento parcial de R$ 30,00 (pix)', timestamp: '2026-10-25T13:15:00Z' },
+      { employee_name: 'ATENDENTE', action: 'criou a encomenda', timestamp: '2026-10-25T13:06:00Z' },
+      { employee_name: 'ATENDENTE', action: 'marcou como "Pedido Feito"', timestamp: '2026-10-25T13:14:00Z' },
+      { employee_name: 'ATENDENTE', action: 'registrou pagamento parcial de R$ 30,00 (pix)', timestamp: '2026-10-25T13:15:00Z' },
     ],
     pagamentos: [
       {
@@ -536,7 +536,7 @@ export const initialEncomendas: Encomenda[] = [
         },
       ],
       historico: [
-        { employee_name: 'MIGUEL', action: 'criou a encomenda', timestamp: `2026-10-${dayStr}T10:00:00Z` },
+        { employee_name: 'ATENDENTE', action: 'criou a encomenda', timestamp: `2026-10-${dayStr}T10:00:00Z` },
         { employee_name: 'THAIS', action: 'marcou como "Entregue"', timestamp: `2026-10-${dayStr}T16:00:00Z` },
       ],
       pagamentos: [
@@ -559,7 +559,7 @@ export const initialFuncionarios: Funcionario[] = [
   {
     id: '0f000000-0000-0000-0000-000000000001',
     tenant_id: 'a0000000-0000-0000-0000-000000000001',
-    nome: 'MIGUEL',
+    nome: 'ATENDENTE',
     cargo: 'Farmacêutico / Atendente',
     criado_em: '2026-01-10T10:00:00Z',
   },
