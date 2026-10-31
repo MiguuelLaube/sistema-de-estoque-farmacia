@@ -84,9 +84,17 @@ watch(
   (val) => {
     if (typeof document !== 'undefined') {
       if (val) {
+        const supportsGutter = typeof CSS !== 'undefined' && CSS.supports && CSS.supports('scrollbar-gutter', 'stable');
+        if (!supportsGutter && typeof window !== 'undefined') {
+          const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+          if (scrollbarWidth > 0) {
+            document.body.style.paddingRight = `${scrollbarWidth}px`;
+          }
+        }
         document.body.style.overflow = 'hidden';
       } else {
         document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
       }
     }
   }
@@ -101,7 +109,10 @@ onMounted(() => {
 onUnmounted(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('keydown', handleKeyDown);
+  }
+  if (typeof document !== 'undefined') {
     document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
   }
 });
 
