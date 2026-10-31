@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import LoginModal from '../components/LoginModal.vue';
 import {
   PackageOpen,
   ClipboardList,
@@ -34,13 +35,14 @@ import {
 const router = useRouter();
 const authStore = useAuthStore();
 
+const showLoginModal = ref(false);
 const estaLogado = computed(() => authStore.isAuthenticated);
 
 function acessarPlataforma() {
   if (estaLogado.value) {
     router.push(authStore.isSuperAdmin ? { name: 'plataforma' } : { name: 'dashboard' });
   } else {
-    router.push('/login');
+    showLoginModal.value = true;
   }
 }
 
@@ -455,6 +457,10 @@ function simularCliqueExportacao(formato: 'PDF' | 'Excel (.xlsx)') {
 let observer: IntersectionObserver | null = null;
 
 onMounted(() => {
+  if (router.currentRoute.value.query.login === 'true' || (typeof window !== 'undefined' && window.location.hash === '#login')) {
+    showLoginModal.value = true;
+  }
+
   if (typeof IntersectionObserver !== 'undefined') {
     observer = new IntersectionObserver(
       (entries) => {
@@ -476,7 +482,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="landing-root">
+  <div class="landing-root" :class="{ 'landing-blurred-bg': showLoginModal }">
     <!-- NAVBAR FIXA COM LOGO E NOME DO SAAS ENCOMED -->
     <header class="landing-header" role="banner">
       <div class="landing-shell header-inner">
@@ -1630,6 +1636,9 @@ onBeforeUnmount(() => {
       </div>
     </footer>
   </div>
+
+  <!-- Janela Flutuante de Login Centralizada (Modal com Fundo Borrado) -->
+  <LoginModal v-model="showLoginModal" />
 </template>
 
 <style scoped>
@@ -1641,6 +1650,13 @@ onBeforeUnmount(() => {
   line-height: 1.5;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  transition: filter 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.landing-root.landing-blurred-bg {
+  filter: blur(6px) brightness(0.95);
+  pointer-events: none;
+  user-select: none;
 }
 
 .landing-shell {
