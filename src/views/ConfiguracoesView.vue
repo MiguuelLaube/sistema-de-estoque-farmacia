@@ -34,6 +34,10 @@ import {
   ChevronUp,
   Cookie as CookieIcon,
   Settings2,
+  LayoutDashboard,
+  PackageOpen,
+  ClipboardList,
+  Check,
 } from 'lucide-vue-next';
 import {
   consultarStatusWhatsAppProxy,
@@ -293,6 +297,11 @@ const previewRadiusPx = computed(() => {
   if (formEstiloBordas.value === 'arredondado') return '18px';
   if (formEstiloBordas.value === 'compacto') return '6px';
   return '12px';
+});
+
+const previewNomeEmpresa = computed(() => {
+  const nome = authStore.currentTenant?.nome_empresa || formNomeSistema.value || 'EncoMed';
+  return nome.replace(/\s+SaaS/gi, '').trim();
 });
 
 // ============================================================================
@@ -923,7 +932,7 @@ async function removerClassificacao(id: string) {
 
           <!-- Logotipo Upload & URL -->
           <div style="margin-top: 1rem; padding: 1rem; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0;">
-            <label class="form-label" style="margin-bottom: 0.6rem;">Logotipo da Unidade / SaaS</label>
+            <label class="form-label" style="margin-bottom: 0.6rem;">Logotipo da Unidade / Drogaria</label>
 
             <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
               <div
@@ -1137,7 +1146,7 @@ async function removerClassificacao(id: string) {
                   <span>Tipografia Principal</span>
                 </label>
                 <select v-model="formFonte" @change="aplicarPreviewTempoReal" class="form-select">
-                  <option value="jakarta">Plus Jakarta Sans (Geométrica SaaS)</option>
+                  <option value="jakarta">Plus Jakarta Sans (Moderna & Elegante)</option>
                   <option value="inter">Inter (Alta Legibilidade Clínica)</option>
                   <option value="system">Fonte Nativa do Sistema (Ultra Rápida)</option>
                 </select>
@@ -1178,121 +1187,225 @@ async function removerClassificacao(id: string) {
 
       <!-- Coluna Direita: Pré-Visualização Interativa ao Vivo -->
       <div style="position: sticky; top: 1.25rem; align-self: start;">
-        <div class="card" style="padding: 1.25rem;">
+        <div class="card" style="padding: 1.25rem; border: 1px solid var(--border-color); box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.06);">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.85rem;">
-            <div style="display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.92rem;">
-              <Eye :size="16" style="color: var(--color-primary);" />
+            <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.95rem; color: var(--text-main);">
+              <Eye :size="18" style="color: var(--color-primary);" />
               <span>Pré-visualização em Tempo Real</span>
             </div>
-            <span class="badge badge-chegou" style="font-size: 0.7rem;">Ao Vivo</span>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="display: inline-block; width: 7px; height: 7px; border-radius: 9999px; background: #10b981;"></span>
+              <span class="badge badge-chegou" style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">Ao Vivo</span>
+            </div>
           </div>
 
-          <!-- Mini App Shell Preview -->
+          <!-- Browser Mockup Shell -->
           <div
-            style="display: grid; grid-template-columns: 128px 1fr; min-height: 330px; border: 1px solid #cbd5e1; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);"
+            style="border: 1px solid #cbd5e1; overflow: hidden; background: #ffffff; box-shadow: 0 12px 32px -8px rgba(15, 23, 42, 0.12);"
             :style="{ borderRadius: previewRadiusPx }"
           >
-            <!-- Mini Sidebar -->
-            <div
-              :style="{ background: previewSidebarBg, color: previewSidebarText }"
-              style="padding: 0.85rem 0.65rem; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid rgba(148, 163, 184, 0.2);"
-            >
-              <div>
-                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 0.9rem;">
-                  <img
-                    :src="formLogoUrl || '/encomed-logo.png'"
-                    alt="Mini Logo"
-                    :style="{
-                      height: formFormatoLogo === 'retangular' ? '26px' : '32px',
-                      width: formFormatoLogo === 'retangular' ? 'auto' : '32px',
-                      borderRadius: formFormatoLogo === 'circular' ? '9999px' : '6px',
-                      background: formEstiloSidebar !== 'claro' ? '#ffffff' : 'transparent',
-                      padding: formEstiloSidebar !== 'claro' ? '2px 4px' : '0',
-                    }"
-                    style="object-fit: contain; align-self: flex-start;"
-                  />
-                  <div style="font-weight: 800; font-size: 0.76rem; line-height: 1.15; margin-top: 2px;">
-                    {{ formNomeSistema || 'EncoMed' }}
-                  </div>
-                  <div style="font-size: 0.62rem; opacity: 0.72;">
-                    {{ formSloganSistema || 'Encomendas & Estoque' }}
-                  </div>
-                </div>
-
-                <div style="display: flex; flex-direction: column; gap: 4px;">
-                  <div
-                    :style="{
-                      background: formEstiloSidebar === 'claro' ? `${formCorPrimaria}18` : 'rgba(255,255,255,0.16)',
-                      color: formEstiloSidebar === 'claro' ? formCorPrimaria : '#ffffff',
-                    }"
-                    style="padding: 5px 8px; border-radius: 6px; font-size: 0.68rem; font-weight: 700;"
-                  >
-                    ● Painel Geral
-                  </div>
-                  <div style="padding: 5px 8px; font-size: 0.68rem; opacity: 0.75;">Encomendas</div>
-                  <div style="padding: 5px 8px; font-size: 0.68rem; opacity: 0.75;">Pedidos & XML</div>
-                  <div style="padding: 5px 8px; font-size: 0.68rem; opacity: 0.75;">Relatórios PDF</div>
-                </div>
+            <!-- Browser Header Bar (macOS style window chrome) -->
+            <div style="background: #f1f5f9; border-bottom: 1px solid #e2e8f0; padding: 0.5rem 0.75rem; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <!-- 3 Mac Window Dots -->
+              <div style="display: flex; align-items: center; gap: 5px;">
+                <span style="width: 9px; height: 9px; border-radius: 9999px; background: #ef4444; display: inline-block;"></span>
+                <span style="width: 9px; height: 9px; border-radius: 9999px; background: #f59e0b; display: inline-block;"></span>
+                <span style="width: 9px; height: 9px; border-radius: 9999px; background: #10b981; display: inline-block;"></span>
               </div>
-
-              <div v-if="formExibirSeloEncomed" style="font-size: 0.56rem; opacity: 0.65; padding-top: 8px; border-top: 1px solid rgba(148,163,184,0.2);">
-                EncoMed
+              <!-- URL Bar -->
+              <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 9999px; padding: 2px 10px; font-size: 0.65rem; color: #64748b; display: flex; align-items: center; gap: 5px; max-width: 190px; width: 100%; justify-content: center;">
+                <Lock :size="10" style="color: #059669;" />
+                <span style="font-family: monospace; font-size: 0.62rem; color: #475569; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">app.encomed.com.br</span>
               </div>
+              <div style="font-size: 0.62rem; color: #94a3b8; font-weight: 600;">v2.0</div>
             </div>
 
-            <!-- Mini Content Area -->
-            <div style="background: #f8fafc; padding: 0.9rem; display: flex; flex-direction: column; gap: 0.75rem;">
-              <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
-                <div>
-                  <div style="font-weight: 800; font-size: 0.88rem; color: #0f172a;">
-                    {{ formSaudacaoPainel || 'Bem-vindo' }}
-                  </div>
-                  <div style="font-size: 0.66rem; color: #64748b;">
-                    Unidade {{ formNomeSistema || 'EncoMed' }}
-                  </div>
-                </div>
-                <span
-                  :style="{ background: formCorPrimaria }"
-                  style="color: #fff; font-size: 0.65rem; font-weight: 700; padding: 4px 10px; border-radius: 9999px;"
-                >
-                  + Nova Encomenda
-                </span>
-              </div>
-
-              <!-- Sample Card -->
+            <!-- Mini App Shell Layout (Sidebar + Content) -->
+            <div style="display: grid; grid-template-columns: 140px 1fr; min-height: 380px;">
+              
+              <!-- Mini Sidebar -->
               <div
-                style="background: #ffffff; border: 1px solid #e2e8f0; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem;"
-                :style="{ borderRadius: previewRadiusPx }"
+                :style="{ background: previewSidebarBg, color: previewSidebarText }"
+                style="padding: 0.85rem 0.65rem; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid rgba(148, 163, 184, 0.2);"
               >
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span
-                    :style="{ background: `${formCorDestaque}18`, color: formCorDestaque, border: `1px solid ${formCorDestaque}40` }"
-                    style="font-size: 0.62rem; font-weight: 700; padding: 2px 7px; border-radius: 9999px;"
+                <div>
+                  <!-- Sidebar Header: Nome da Empresa com destaque elegante, sem logo em cima -->
+                  <div style="padding-bottom: 0.75rem; margin-bottom: 0.75rem; border-bottom: 1px solid rgba(148, 163, 184, 0.2);">
+                    <div style="font-weight: 800; font-size: 0.82rem; line-height: 1.2; word-break: break-word;">
+                      {{ previewNomeEmpresa }}
+                    </div>
+                    <div style="font-size: 0.6rem; opacity: 0.72; margin-top: 2px; line-height: 1.2;">
+                      {{ formSloganSistema || 'Gestão de Encomendas' }}
+                    </div>
+                  </div>
+
+                  <!-- Nav Items with Icons -->
+                  <div style="display: flex; flex-direction: column; gap: 3px;">
+                    <div
+                      :style="{
+                        background: formEstiloSidebar === 'claro' ? `${formCorPrimaria}15` : 'rgba(255,255,255,0.16)',
+                        color: formEstiloSidebar === 'claro' ? formCorPrimaria : '#ffffff',
+                        borderLeft: `3px solid ${formCorPrimaria}`,
+                      }"
+                      style="padding: 5px 7px; border-radius: 4px; font-size: 0.68rem; font-weight: 700; display: flex; align-items: center; gap: 6px;"
+                    >
+                      <LayoutDashboard :size="13" />
+                      <span>Início</span>
+                    </div>
+
+                    <div style="padding: 5px 7px; font-size: 0.68rem; opacity: 0.75; display: flex; align-items: center; gap: 6px;">
+                      <Users :size="13" />
+                      <span>Clientes</span>
+                    </div>
+
+                    <div style="padding: 5px 7px; font-size: 0.68rem; opacity: 0.75; display: flex; align-items: center; justify-content: space-between;">
+                      <div style="display: flex; align-items: center; gap: 6px;">
+                        <PackageOpen :size="13" />
+                        <span>Encomendas</span>
+                      </div>
+                      <span
+                        :style="{ background: formCorPrimaria, color: '#fff' }"
+                        style="font-size: 0.58rem; font-weight: 700; padding: 1px 5px; border-radius: 9999px;"
+                      >
+                        3
+                      </span>
+                    </div>
+
+                    <div style="padding: 5px 7px; font-size: 0.68rem; opacity: 0.75; display: flex; align-items: center; gap: 6px;">
+                      <ClipboardList :size="13" />
+                      <span>Pedidos</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Botão Nova Encomenda & Logo EncoMed abaixo -->
+                <div style="display: flex; flex-direction: column; gap: 0.55rem; padding-top: 0.6rem;">
+                  <!-- Botão Pílula Nova Encomenda -->
+                  <button
+                    type="button"
+                    :style="{ background: formCorPrimaria }"
+                    style="color: #ffffff; border: none; border-radius: 9999px; padding: 5px 8px; font-size: 0.66rem; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 4px; cursor: default; box-shadow: 0 2px 6px -1px rgba(0,0,0,0.15);"
                   >
-                    FÓRMULA / ÉTICO
-                  </span>
-                  <span style="font-size: 0.68rem; font-weight: 700;" :style="{ color: formCorPrimaria }">
-                    R$ 189,90
-                  </span>
-                </div>
-                <div style="font-size: 0.74rem; font-weight: 700; color: #0f172a;">
-                  OZEMPIC 1MG CANETA INJETÁVEL
-                </div>
-                <div style="display: flex; gap: 4px; flex-wrap: wrap;">
-                  <span style="font-size: 0.62rem; padding: 2px 6px; border-radius: 6px; background: #fffbeb; color: #d97706; border: 1px solid #fde68a; font-weight: 600;">
-                    Aguardando
-                  </span>
-                  <span style="font-size: 0.62rem; padding: 2px 6px; border-radius: 6px; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-weight: 600;">
-                    Pedido Feito
-                  </span>
-                  <span style="font-size: 0.62rem; padding: 2px 6px; border-radius: 6px; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; font-weight: 700;">
-                    ✓ Chegou
-                  </span>
+                    <Plus :size="12" />
+                    <span>Nova Encomenda</span>
+                  </button>
+
+                  <!-- Logo EncoMed oficial APENAS abaixo do botão -->
+                  <div
+                    v-if="formExibirSeloEncomed"
+                    style="padding-top: 0.45rem; border-top: 1px solid rgba(148, 163, 184, 0.2); display: flex; align-items: center; justify-content: center; gap: 4px;"
+                  >
+                    <img src="/encomed-icon.svg" alt="EncoMed" style="height: 13px; width: 13px; object-fit: contain;" />
+                    <span style="font-size: 0.68rem; font-weight: 800; letter-spacing: -0.01em;">
+                      <span :style="{ color: formEstiloSidebar === 'claro' ? '#0f172a' : '#ffffff' }">Enco</span><span :style="{ color: formCorPrimaria }">Med</span>
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div style="font-size: 0.7rem; color: #64748b; line-height: 1.4;">
-                As cores semânticas de status (Âmbar, Azul e Esmeralda) permanecem protegidas para segurança operacional no balcão.
+              <!-- Mini Dashboard Content Area -->
+              <div style="background: #f8fafc; padding: 0.85rem; display: flex; flex-direction: column; gap: 0.65rem;">
+                
+                <!-- Mini Header: Title + Search & User -->
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <div style="font-weight: 800; font-size: 0.84rem; color: #0f172a; line-height: 1.2;">
+                      {{ formSaudacaoPainel || 'Painel de Balcão' }}
+                    </div>
+                    <div style="font-size: 0.62rem; color: #64748b;">
+                      Visão operacional em tempo real
+                    </div>
+                  </div>
+
+                  <!-- Mini User Profile Pill -->
+                  <div style="display: flex; align-items: center; gap: 5px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 9999px; padding: 2px 6px;">
+                    <div
+                      :style="{ background: `${formCorPrimaria}20`, color: formCorPrimaria }"
+                      style="width: 18px; height: 18px; border-radius: 9999px; display: flex; align-items: center; justify-content: center; font-size: 0.62rem; font-weight: 800;"
+                    >
+                      F
+                    </div>
+                    <span style="font-size: 0.62rem; font-weight: 600; color: #334155;">Farmacêutico</span>
+                  </div>
+                </div>
+
+                <!-- Mini KPI Cards Strip -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem;">
+                  <div
+                    style="background: #ffffff; border: 1px solid #e2e8f0; padding: 0.45rem 0.6rem; display: flex; flex-direction: column; gap: 2px;"
+                    :style="{ borderRadius: previewRadiusPx }"
+                  >
+                    <span style="font-size: 0.58rem; color: #64748b; font-weight: 600; text-transform: uppercase;">Ativas Hoje</span>
+                    <div style="display: flex; align-items: baseline; gap: 4px;">
+                      <span style="font-size: 0.95rem; font-weight: 800;" :style="{ color: formCorPrimaria }">14</span>
+                      <span style="font-size: 0.58rem; color: #059669; font-weight: 600;">● 3 urgentes</span>
+                    </div>
+                  </div>
+
+                  <div
+                    style="background: #ffffff; border: 1px solid #e2e8f0; padding: 0.45rem 0.6rem; display: flex; flex-direction: column; gap: 2px;"
+                    :style="{ borderRadius: previewRadiusPx }"
+                  >
+                    <span style="font-size: 0.58rem; color: #64748b; font-weight: 600; text-transform: uppercase;">A Receber</span>
+                    <div style="display: flex; align-items: baseline; gap: 4px;">
+                      <span style="font-size: 0.95rem; font-weight: 800; color: #059669;">R$ 840</span>
+                      <span style="font-size: 0.58rem; color: #64748b;">em saldo</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Realistic Order Card (Preview of Balcão) -->
+                <div
+                  style="background: #ffffff; border: 1px solid #e2e8f0; padding: 0.65rem 0.75rem; display: flex; flex-direction: column; gap: 0.45rem; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.03);"
+                  :style="{ borderRadius: previewRadiusPx }"
+                >
+                  <!-- Card Header: Category + Client & Price -->
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px;">
+                    <div>
+                      <span
+                        :style="{ background: `${formCorDestaque}18`, color: formCorDestaque, border: `1px solid ${formCorDestaque}40` }"
+                        style="font-size: 0.58rem; font-weight: 700; padding: 1px 6px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.03em;"
+                      >
+                        Termolábil / Ético
+                      </span>
+                      <div style="font-size: 0.66rem; font-weight: 600; color: #475569; margin-top: 3px;">
+                        Maria Aparecida Silva • <span style="color: #64748b; font-weight: 500;">(12) 99744-3863</span>
+                      </div>
+                    </div>
+
+                    <div style="text-align: right;">
+                      <div style="font-size: 0.76rem; font-weight: 800;" :style="{ color: formCorPrimaria }">
+                        R$ 189,90
+                      </div>
+                      <span style="font-size: 0.58rem; color: #059669; font-weight: 700;">
+                        Sinal R$ 50,00
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Medicine Name -->
+                  <div style="font-size: 0.74rem; font-weight: 800; color: #0f172a; line-height: 1.25;">
+                    OZEMPIC 1MG CANETA INJETÁVEL
+                  </div>
+
+                  <!-- Status Workflow Pipeline (Interactive Pills) -->
+                  <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;">
+                    <span style="font-size: 0.58rem; padding: 2px 7px; border-radius: 9999px; background: #f8fafc; color: #94a3b8; border: 1px solid #e2e8f0; font-weight: 600;">
+                      Aguardando
+                    </span>
+                    <span style="font-size: 0.58rem; padding: 2px 7px; border-radius: 9999px; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-weight: 700;">
+                      Pedido Feito
+                    </span>
+                    <span style="font-size: 0.58rem; padding: 2px 7px; border-radius: 9999px; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; font-weight: 700; display: inline-flex; align-items: center; gap: 3px;">
+                      <Check :size="10" /> Chegou
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Footer hint -->
+                <div style="font-size: 0.62rem; color: #64748b; line-height: 1.35; padding: 0.4rem 0.55rem; background: #f1f5f9; border-radius: 6px; border-left: 2px solid var(--color-primary);">
+                  Os botões semânticos de status (Âmbar, Azul e Esmeralda) operam em tempo real de acordo com as diretrizes do balcão.
+                </div>
               </div>
             </div>
           </div>
@@ -1636,7 +1749,7 @@ async function removerClassificacao(id: string) {
 
               <div v-if="showConfigAvancadaWhatsapp" style="margin-top: 0.85rem; display: flex; flex-direction: column; gap: 0.75rem; background: #ffffff; padding: 1rem; border-radius: 10px; border: 1.5px solid #cbd5e1;">
                 <p style="font-size: 0.76rem; color: #64748b; margin: 0; line-height: 1.4;">
-                  Por padrão, sua farmácia já utiliza a infraestrutura isolada do SaaS (instância: <code>{{ instanciaExclusivaWhatsApp || ('encomed_' + authStore.currentTenant.slug) }}</code>). Se sua empresa possui seu próprio servidor Evolution API hospedado na nuvem, preencha os dados abaixo:
+                  Por padrão, sua farmácia já utiliza a infraestrutura isolada do EncoMed (instância: <code>{{ instanciaExclusivaWhatsApp || ('encomed_' + authStore.currentTenant.slug) }}</code>). Se sua empresa possui seu próprio servidor Evolution API hospedado na nuvem, preencha os dados abaixo:
                 </p>
 
                 <div class="form-group" style="margin: 0;">
