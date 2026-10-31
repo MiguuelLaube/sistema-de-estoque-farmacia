@@ -8,6 +8,9 @@ import type {
   Funcionario,
   SuperAdminDispositivo,
   LogAuditoria,
+  AssinaturaTenant,
+  StatusAssinatura,
+  MetodoPagamentoSaaS,
 } from '../types';
 import { initialTenants, initialConfigs, initialUsuarios, initialFuncionarios } from '../data/mockData';
 import { supabase, isLiveSupabaseConfigured, CARREGADO_COM_LINK_DE_RECUPERACAO } from '../services/supabase';
@@ -125,44 +128,183 @@ export const useAuthStore = defineStore('auth', () => {
     criado_em: new Date().toISOString(),
   };
 
-  const superAdminPlatformConfig: ConfigTenant = {
-    tenant_id: 'plataforma',
-    nome_sistema: 'EncoMed',
-    slogan_sistema: 'Painel de Governança & Segurança',
-    saudacao_painel: 'Olá, Administrador Supremo',
-    logo_url: '/encomed-logo.png',
-    cor_primaria: '#4f46e5',
-    cor_secundaria: '#0f172a',
-    visual_opcoes: {
-      estilo_sidebar: 'escuro',
-      formato_logo: 'retangular',
-      estilo_bordas: 'padrao',
-      densidade_interface: 'confortavel',
-      fonte_interface: 'jakarta',
-      cor_destaque: '#6366f1',
-      exibir_selo_encomed: true,
-      animacoes_ativas: true,
-    },
-    modelo_cupom: 'padrao',
-    fuso: 'America/Sao_Paulo',
-    mensagem_whatsapp: '',
-    mensagem_whatsapp_pedido: '',
-    mensagem_whatsapp_cobranca: '',
-    mensagem_whatsapp_entregue: '',
-    auto_whatsapp_pedido: false,
-    auto_whatsapp_entregue: false,
-    base_legal_padrao: 'execucao_contrato',
-    bloquear_entrega_com_saldo: false,
-    dias_retencao_arquivamento: 90,
-    evolution_api_ativo: false,
-    header_title: 'ENCOMED',
-    header_subtitle: 'Plataforma Global',
-    footer_text: 'Governança Zero-Trust',
-    show_phone: false,
-    show_payment: false,
-    show_status: false,
-    font_size: 14,
-  };
+  function carregarConfigSuperAdminSalva(): ConfigTenant {
+    const padrao: ConfigTenant = {
+      tenant_id: 'plataforma',
+      nome_sistema: 'EncoMed',
+      slogan_sistema: 'Painel de Governança & Segurança',
+      saudacao_painel: 'Olá, Administrador Supremo',
+      logo_url: '/encomed-logo.png',
+      cor_primaria: '#4f46e5',
+      cor_secundaria: '#0f172a',
+      visual_opcoes: {
+        estilo_sidebar: 'escuro',
+        formato_logo: 'retangular',
+        estilo_bordas: 'padrao',
+        densidade_interface: 'confortavel',
+        fonte_interface: 'jakarta',
+        cor_destaque: '#6366f1',
+        exibir_selo_encomed: true,
+        animacoes_ativas: true,
+      },
+      modelo_cupom: 'padrao',
+      fuso: 'America/Sao_Paulo',
+      mensagem_whatsapp: '',
+      mensagem_whatsapp_pedido: '',
+      mensagem_whatsapp_cobranca: '',
+      mensagem_whatsapp_entregue: '',
+      auto_whatsapp_pedido: false,
+      auto_whatsapp_entregue: false,
+      base_legal_padrao: 'execucao_contrato',
+      bloquear_entrega_com_saldo: false,
+      dias_retencao_arquivamento: 90,
+      evolution_api_ativo: false,
+      header_title: 'ENCOMED',
+      header_subtitle: 'Plataforma Global',
+      footer_text: 'Governança Zero-Trust',
+      show_phone: false,
+      show_payment: false,
+      show_status: false,
+      font_size: 14,
+    };
+
+    if (typeof localStorage === 'undefined') return padrao;
+    try {
+      const salvo = localStorage.getItem('encomed_superadmin_config_v1');
+      if (salvo) {
+        const parsed = JSON.parse(salvo);
+        return {
+          ...padrao,
+          ...parsed,
+          visual_opcoes: {
+            ...padrao.visual_opcoes,
+            ...(parsed.visual_opcoes || {}),
+          },
+        };
+      }
+    } catch {}
+    return padrao;
+  }
+
+  const superAdminPlatformConfig = ref<ConfigTenant>(carregarConfigSuperAdminSalva());
+
+  function salvarConfigSuperAdmin(novosDados: Partial<ConfigTenant>) {
+    superAdminPlatformConfig.value = {
+      ...superAdminPlatformConfig.value,
+      ...novosDados,
+      visual_opcoes: {
+        ...superAdminPlatformConfig.value.visual_opcoes,
+        ...(novosDados.visual_opcoes || {}),
+      },
+    };
+    try {
+      localStorage.setItem('encomed_superadmin_config_v1', JSON.stringify(superAdminPlatformConfig.value));
+    } catch {}
+    if (isSuperAdmin.value && !breakGlassTenantId.value) {
+      applyTheme(superAdminPlatformConfig.value);
+    }
+  }
+
+  // ============================================================================
+  // GESTÃO DE ASSINATURAS SAAS POR FARMÁCIA (BILLING MULTI-TENANT)
+  // ============================================================================
+  const ASSINATURAS_STORAGE_KEY = 'encomed_assinaturas_saas_v1';
+
+  function gerarAssinaturaPadraoParaTenant(tenant: Tenant): AssinaturaTenant {
+    const ehBasico = tenant.plano === 'basico';
+    const ehEnterprise = tenant.plano === 'enterprise';
+    const planoNome = ehEnterprise ? 'Rede Enterprise' : ehBasico ? 'Starter Balcão' : 'Pro Farma';
+    const valor = ehEnterprise ? 599 : ehBasico ? 149 : 299;
+
+    return {
+      tenant_id: tenant.id,
+      plano_nome: planoNome,
+      valor_mensal: valor,
+      ciclo: 'mensal',
+      status: tenant.status === 'ativo' ? 'ativa' : 'pendente',
+      dia_vencimento: 10,
+      proximo_vencimento: '10/11/2026',
+      metodo_pagamento: 'pix',
+      dias_trial_restantes: 0,
+      desconto_percentual: 0,
+      observacoes_financeiras: 'Assinatura corporativa padrão EncoMed SaaS.',
+      chave_pix_cobranca: 'financeiro@encomed.com.br',
+      ultimo_pagamento: {
+        data: '10/10/2026',
+        valor: valor,
+        metodo: 'pix',
+      },
+    };
+  }
+
+  function carregarAssinaturasSalvas(): Record<string, AssinaturaTenant> {
+    const mapa: Record<string, AssinaturaTenant> = {};
+    const tenantsBase = initialTenants;
+    for (const t of tenantsBase) {
+      mapa[t.id] = gerarAssinaturaPadraoParaTenant(t);
+    }
+
+    if (typeof localStorage === 'undefined') return mapa;
+    try {
+      const salvo = localStorage.getItem(ASSINATURAS_STORAGE_KEY);
+      if (salvo) {
+        const parsed = JSON.parse(salvo);
+        return { ...mapa, ...parsed };
+      }
+    } catch {}
+    return mapa;
+  }
+
+  const assinaturasTenants = ref<Record<string, AssinaturaTenant>>(carregarAssinaturasSalvas());
+
+  function salvarAssinaturasCache() {
+    try {
+      localStorage.setItem(ASSINATURAS_STORAGE_KEY, JSON.stringify(assinaturasTenants.value));
+    } catch {}
+  }
+
+  function obterAssinaturaTenant(tenantId: string): AssinaturaTenant {
+    if (!assinaturasTenants.value[tenantId]) {
+      const tenant = tenants.value.find((t) => t.id === tenantId) || fallbackTenant;
+      assinaturasTenants.value[tenantId] = gerarAssinaturaPadraoParaTenant(tenant);
+      salvarAssinaturasCache();
+    }
+    return assinaturasTenants.value[tenantId];
+  }
+
+  function atualizarAssinaturaTenant(tenantId: string, dados: Partial<AssinaturaTenant>) {
+    const atual = obterAssinaturaTenant(tenantId);
+    assinaturasTenants.value[tenantId] = {
+      ...atual,
+      ...dados,
+    };
+    salvarAssinaturasCache();
+  }
+
+  function registrarPagamentoManualAssinatura(tenantId: string, valor?: number, metodo: MetodoPagamentoSaaS = 'pix') {
+    const sub = obterAssinaturaTenant(tenantId);
+    const val = valor || sub.valor_mensal;
+    const hoje = new Date().toLocaleDateString('pt-BR');
+    assinaturasTenants.value[tenantId] = {
+      ...sub,
+      status: 'ativa',
+      ultimo_pagamento: {
+        data: hoje,
+        valor: val,
+        metodo,
+      },
+    };
+    salvarAssinaturasCache();
+  }
+
+  function alternarStatusAssinaturaTenant(tenantId: string, novoStatus: StatusAssinatura) {
+    const sub = obterAssinaturaTenant(tenantId);
+    assinaturasTenants.value[tenantId] = {
+      ...sub,
+      status: novoStatus,
+    };
+    salvarAssinaturasCache();
+  }
 
   const superAdminPlatformTenant: Tenant = {
     id: 'plataforma',
@@ -185,7 +327,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const currentConfig = computed<ConfigTenant>(() => {
     if (isSuperAdmin.value && !breakGlassTenantId.value) {
-      return superAdminPlatformConfig;
+      return superAdminPlatformConfig.value;
     }
     return configs.value[activeTenantId.value] || fallbackConfig;
   });
@@ -1331,6 +1473,28 @@ export const useAuthStore = defineStore('auth', () => {
     );
     await carregarDadosContexto();
 
+    // Auto-provisiona a assinatura no painel de faturamento SaaS
+    const novoTenantId = tenants.value.find((t) => t.slug === slugLimpo)?.id || id;
+    const ehBasico = dados.plano === 'basico';
+    const ehEnterprise = dados.plano === 'enterprise';
+    const planoNome = ehEnterprise ? 'Rede Enterprise' : ehBasico ? 'Starter Balcão' : 'Pro Farma';
+    const valor = ehEnterprise ? 599 : ehBasico ? 149 : 299;
+    assinaturasTenants.value[novoTenantId] = {
+      tenant_id: novoTenantId,
+      plano_nome: planoNome,
+      valor_mensal: valor,
+      ciclo: 'mensal',
+      status: 'ativa',
+      dia_vencimento: 10,
+      proximo_vencimento: '10/11/2026',
+      metodo_pagamento: 'pix',
+      dias_trial_restantes: 14,
+      desconto_percentual: 0,
+      observacoes_financeiras: 'Assinatura provisionada pelo Administrador Supremo.',
+      chave_pix_cobranca: 'financeiro@encomed.com.br',
+    };
+    salvarAssinaturasCache();
+
     return {
       sucesso: true,
       mensagem: `Empresa "${dados.nomeEmpresa.trim()}" provisionada com sucesso com senha provisória!`,
@@ -1636,6 +1800,13 @@ export const useAuthStore = defineStore('auth', () => {
     autorizarDispositivoAtual,
     revogarDispositivo,
     salvarPoliticaZeroTrust,
+    superAdminPlatformConfig,
+    salvarConfigSuperAdmin,
+    assinaturasTenants,
+    obterAssinaturaTenant,
+    atualizarAssinaturaTenant,
+    registrarPagamentoManualAssinatura,
+    alternarStatusAssinaturaTenant,
     provisionarTenant,
     redefinirSenhaProvisoriaTenant,
     enviarLinkSenhaTenant,

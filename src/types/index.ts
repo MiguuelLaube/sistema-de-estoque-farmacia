@@ -5,6 +5,30 @@ export type StatusCompra = 'Aguardando' | 'Pedido Feito' | 'Chegou';
 export type SituacaoPagamento = 'Não pago' | 'Parcial' | 'Pago';
 export type FormaPagamento = 'dinheiro' | 'pix' | 'cartao_credito' | 'cartao_debito' | 'convenio' | 'outros';
 
+export type StatusAssinatura = 'ativa' | 'pendente' | 'atrasada' | 'trial' | 'cancelada';
+export type CicloCobranca = 'mensal' | 'trimestral' | 'semestral' | 'anual';
+export type MetodoPagamentoSaaS = 'pix' | 'boleto' | 'cartao_credito' | 'faturado';
+
+export interface AssinaturaTenant {
+  tenant_id: string;
+  plano_nome: 'Starter Balcão' | 'Pro Farma' | 'Rede Enterprise' | 'Personalizado';
+  valor_mensal: number;
+  ciclo: CicloCobranca;
+  status: StatusAssinatura;
+  dia_vencimento: number;
+  proximo_vencimento: string;
+  metodo_pagamento: MetodoPagamentoSaaS;
+  dias_trial_restantes?: number;
+  desconto_percentual?: number;
+  observacoes_financeiras?: string;
+  chave_pix_cobranca?: string;
+  ultimo_pagamento?: {
+    data: string;
+    valor: number;
+    metodo: MetodoPagamentoSaaS;
+  };
+}
+
 export interface Tenant {
   id: string;
   nome_empresa: string;
@@ -16,6 +40,7 @@ export interface Tenant {
   limite_encomendas_mes: number;
   criado_em: string;
   atualizado_em: string;
+  assinatura?: AssinaturaTenant;
 }
 
 export interface VisualOpcoesTenant {

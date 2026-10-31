@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
-import type { Tenant } from '../types';
+import type { Tenant, AssinaturaTenant, StatusAssinatura, CicloCobranca, MetodoPagamentoSaaS } from '../types';
 import {
   ShieldCheck,
   Building2,
@@ -29,13 +29,21 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  CreditCard,
+  Palette,
+  CircleDollarSign,
+  Clock,
+  SlidersHorizontal,
+  RotateCcw,
+  Sparkles,
+  QrCode,
 } from 'lucide-vue-next';
 import { gerarHtmlEmailCriarSenha } from '../utils/emailTemplates';
 
 const router = useRouter();
 const authStore = useAuthStore();
 
-const activePlatformTab = ref<'tenants' | 'seguranca' | 'auditoria'>('tenants');
+const activePlatformTab = ref<'tenants' | 'assinaturas' | 'cores' | 'seguranca' | 'auditoria'>('tenants');
 const feedbackMsg = ref<{ tipo: 'sucesso' | 'erro'; texto: string } | null>(null);
 
 function notificar(tipo: 'sucesso' | 'erro', texto: string) {
@@ -240,15 +248,15 @@ async function salvarNovoTenant() {
 async function copiarCredenciaisParaWhatsApp() {
   if (!credenciaisResultado.value) return;
   const c = credenciaisResultado.value;
-  const texto = `🏥 *Acesso ao EncoMed — ${c.nomeEmpresa}*
+  const texto = `[Acesso ao EncoMed — ${c.nomeEmpresa}]
 
 Olá! Seu acesso à plataforma de gestão de encomendas e medicamentos foi liberado:
 
-🔗 *Link de Acesso:* ${c.linkAcesso}
-👤 *Usuário / E-mail:* ${c.email}
-🔑 *Senha Provisória:* ${c.senhaProvisoria}
+* Link de Acesso: ${c.linkAcesso}
+* Usuário / E-mail: ${c.email}
+* Senha Provisória: ${c.senhaProvisoria}
 
-⚠️ *Aviso de Segurança:* No seu primeiro login, o sistema solicitará que você defina sua nova senha definitiva da drogaria.`;
+Aviso de Segurança: No seu primeiro login, o sistema solicitará que você defina sua nova senha definitiva da drogaria.`;
 
   try {
     await navigator.clipboard.writeText(texto);
@@ -391,6 +399,313 @@ async function confirmarBreakGlass() {
     }
   }
 }
+
+// ============================================================================
+// GESTÃO DE ASSINATURAS & COBRANÇA SAAS POR DROGARIA
+// ============================================================================
+const termoBuscaAssinatura = ref('');
+const filtroStatusAssinatura = ref<'todas' | 'ativa' | 'trial' | 'pendente' | 'atrasada' | 'cancelada'>('todas');
+
+const listaAssinaturasTenants = computed(() => {
+  return authStore.tenants.map((t) => {
+    const assinatura = authStore.obterAssinaturaTenant(t.id);
+    return {
+      tenant: t,
+      assinatura,
+    };
+  });
+});
+
+const listaAssinaturasFiltradas = computed(() => {
+  const busca = termoBuscaAssinatura.value.trim().toLowerCase();
+  return listaAssinaturasTenants.value.filter(({ tenant, assinatura }) => {
+    if (filtroStatusAssinatura.value !== 'todas' && assinatura.status !== filtroStatusAssinatura.value) {
+      return false;
+    }
+    if (!busca) return true;
+    const nome = (tenant.nome_empresa || '').toLowerCase();
+    const slug = (tenant.slug || '').toLowerCase();
+    const email = (tenant.email_admin || '').toLowerCase();
+    const plano = (assinatura.plano_nome || '').toLowerCase();
+    return nome.includes(busca) || slug.includes(busca) || email.includes(busca) || plano.includes(busca);
+  });
+});
+
+const totalMRRSaaS = computed(() => {
+  return listaAssinaturasTenants.value
+    .filter(({ assinatura }) => assinatura.status === 'ativa' || assinatura.status === 'trial')
+    .reduce((acc, { assinatura }) => acc + (assinatura.valor_mensal || 0), 0);
+});
+
+const totalAssinaturasAtivas = computed(() => {
+  return listaAssinaturasTenants.value.filter(({ assinatura }) => assinatura.status === 'ativa').length;
+});
+
+const totalAssinaturasTrial = computed(() => {
+  return listaAssinaturasTenants.value.filter(({ assinatura }) => assinatura.status === 'trial').length;
+});
+
+const totalAssinaturasPendentesOuAtrasadas = computed(() => {
+  return listaAssinaturasTenants.value.filter(
+    ({ assinatura }) => assinatura.status === 'pendente' || assinatura.status === 'atrasada'
+  ).length;
+});
+
+function formatarMoeda(val: number): string {
+  return Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+// Modal Edição de Assinatura
+const showModalEditarAssinatura = ref(false);
+const assinaturaEmEdicao = ref<{
+  tenantId: string;
+  nomeEmpresa: string;
+  planoNome: 'Starter Balcão' | 'Pro Farma' | 'Rede Enterprise' | 'Personalizado';
+  valorMensal: number;
+  ciclo: CicloCobranca;
+  status: StatusAssinatura;
+  diaVencimento: number;
+  metodoPagamento: MetodoPagamentoSaaS;
+  observacoes: string;
+  desconto: number;
+} | null>(null);
+
+function abrirEdicaoAssinatura(tenant: Tenant) {
+  const sub = authStore.obterAssinaturaTenant(tenant.id);
+  assinaturaEmEdicao.value = {
+    tenantId: tenant.id,
+    nomeEmpresa: tenant.nome_empresa,
+    planoNome: sub.plano_nome,
+    valorMensal: sub.valor_mensal,
+    ciclo: sub.ciclo,
+    status: sub.status,
+    diaVencimento: sub.dia_vencimento || 10,
+    metodoPagamento: sub.metodo_pagamento || 'pix',
+    observacoes: sub.observacoes_financeiras || '',
+    desconto: sub.desconto_percentual || 0,
+  };
+  showModalEditarAssinatura.value = true;
+}
+
+function salvarEdicaoAssinatura() {
+  if (!assinaturaEmEdicao.value) return;
+  const d = assinaturaEmEdicao.value;
+  authStore.atualizarAssinaturaTenant(d.tenantId, {
+    plano_nome: d.planoNome,
+    valor_mensal: Number(d.valorMensal) || 0,
+    ciclo: d.ciclo,
+    status: d.status,
+    dia_vencimento: Number(d.diaVencimento) || 10,
+    metodo_pagamento: d.metodoPagamento,
+    observacoes_financeiras: d.observacoes.trim(),
+    desconto_percentual: Number(d.desconto) || 0,
+  });
+  showModalEditarAssinatura.value = false;
+  notificar('sucesso', `Assinatura de "${d.nomeEmpresa}" atualizada com sucesso!`);
+}
+
+function darBaixaManualAssinatura(tenant: Tenant) {
+  authStore.registrarPagamentoManualAssinatura(tenant.id);
+  notificar('sucesso', `Pagamento da farmácia "${tenant.nome_empresa}" registrado com sucesso!`);
+}
+
+function alternarStatusAssinaturaRapido(tenant: Tenant, novoStatus: StatusAssinatura) {
+  authStore.alternarStatusAssinaturaTenant(tenant.id, novoStatus);
+  notificar('sucesso', `Status da assinatura de "${tenant.nome_empresa}" alterado para ${novoStatus.toUpperCase()}.`);
+}
+
+// Modal Cobrança PIX
+const showModalCobrancaPix = ref(false);
+const cobrancaPixTenant = ref<{
+  tenant: Tenant;
+  assinatura: AssinaturaTenant;
+  mensagem: string;
+} | null>(null);
+const msgPixCopiada = ref(false);
+
+function abrirModalCobrancaPix(tenant: Tenant) {
+  const sub = authStore.obterAssinaturaTenant(tenant.id);
+  const valorFormatado = formatarMoeda(sub.valor_mensal);
+  const mensagem = `[EncoMed SaaS] Faturamento Mensal - ${tenant.nome_empresa}
+
+Prezado(a) Gestor(a),
+
+Informamos que a mensalidade do sistema de encomendas EncoMed referente ao plano ${sub.plano_nome} está disponível para quitação:
+
+* Plano: ${sub.plano_nome}
+* Valor: ${valorFormatado}
+* Vencimento: ${sub.dia_vencimento}/mês
+* Chave PIX: financeiro@encomed.com.br (Banco Inter / CNPJ EncoMed)
+
+Após a realização do pagamento, favor nos encaminhar o comprovante para conferência e baixa imediata no sistema.
+
+Atenciosamente,
+EncoMed - Gestão e Governança Farmacêutica`;
+
+  cobrancaPixTenant.value = {
+    tenant,
+    assinatura: sub,
+    mensagem,
+  };
+  showModalCobrancaPix.value = true;
+}
+
+async function copiarMensagemPix() {
+  if (!cobrancaPixTenant.value) return;
+  try {
+    await navigator.clipboard.writeText(cobrancaPixTenant.value.mensagem);
+    msgPixCopiada.value = true;
+    setTimeout(() => {
+      msgPixCopiada.value = false;
+    }, 3500);
+    notificar('sucesso', 'Mensagem de cobrança copiada! Cole diretamente no WhatsApp da farmácia.');
+  } catch {
+    notificar('erro', 'Não foi possível copiar para a área de transferência.');
+  }
+}
+
+// ============================================================================
+// IDENTIDADE VISUAL & CORES DO PAINEL DO SUPER ADMINISTRADOR
+// ============================================================================
+const superAdminConfigForm = ref({
+  cor_primaria: authStore.superAdminPlatformConfig.cor_primaria || '#4f46e5',
+  cor_secundaria: authStore.superAdminPlatformConfig.cor_secundaria || '#0f172a',
+  cor_destaque: authStore.superAdminPlatformConfig.visual_opcoes?.cor_destaque || '#6366f1',
+  estilo_sidebar: authStore.superAdminPlatformConfig.visual_opcoes?.estilo_sidebar || 'escuro',
+  nome_sistema: authStore.superAdminPlatformConfig.nome_sistema || 'EncoMed',
+  slogan_sistema: authStore.superAdminPlatformConfig.slogan_sistema || 'Painel de Governança & Segurança',
+});
+
+watch(
+  () => authStore.superAdminPlatformConfig,
+  (cfg) => {
+    superAdminConfigForm.value = {
+      cor_primaria: cfg.cor_primaria || '#4f46e5',
+      cor_secundaria: cfg.cor_secundaria || '#0f172a',
+      cor_destaque: cfg.visual_opcoes?.cor_destaque || '#6366f1',
+      estilo_sidebar: cfg.visual_opcoes?.estilo_sidebar || 'escuro',
+      nome_sistema: cfg.nome_sistema || 'EncoMed',
+      slogan_sistema: cfg.slogan_sistema || 'Painel de Governança & Segurança',
+    };
+  },
+  { deep: true }
+);
+
+interface PresetVisual {
+  nome: string;
+  descricao: string;
+  corPrimaria: string;
+  corSecundaria: string;
+  corDestaque: string;
+  estiloSidebar: 'claro' | 'escuro' | 'marca';
+}
+
+const presetsSuperAdmin: PresetVisual[] = [
+  {
+    nome: 'Governança Índigo',
+    descricao: 'Padrão corporativo oficial com azul royal e menu escuro',
+    corPrimaria: '#4f46e5',
+    corSecundaria: '#0f172a',
+    corDestaque: '#6366f1',
+    estiloSidebar: 'escuro',
+  },
+  {
+    nome: 'Diretoria Obsidiana',
+    descricao: 'Elegância executiva com tons escuros profundos e ciano',
+    corPrimaria: '#0f172a',
+    corSecundaria: '#1e293b',
+    corDestaque: '#38bdf8',
+    estiloSidebar: 'escuro',
+  },
+  {
+    nome: 'Hospitalar Ciano Dark',
+    descricao: 'Ciano moderno com menu lateral de alto contraste',
+    corPrimaria: '#0284c7',
+    corSecundaria: '#0c4a6e',
+    corDestaque: '#38bdf8',
+    estiloSidebar: 'escuro',
+  },
+  {
+    nome: 'Esmeralda Executivo',
+    descricao: 'Verde farmacêutico nobre para auditoria e gestão',
+    corPrimaria: '#059669',
+    corSecundaria: '#064e3b',
+    corDestaque: '#34d399',
+    estiloSidebar: 'escuro',
+  },
+  {
+    nome: 'Farma Rubi Moderno',
+    descricao: 'Vermelho varejo elegante com acentos vibrantes',
+    corPrimaria: '#dc2626',
+    corSecundaria: '#450a0a',
+    corDestaque: '#f87171',
+    estiloSidebar: 'escuro',
+  },
+  {
+    nome: 'Clínico Clean (Menu Claro)',
+    descricao: 'Visual branco e cinza suave com menu lateral claro',
+    corPrimaria: '#2563eb',
+    corSecundaria: '#3b82f6',
+    corDestaque: '#60a5fa',
+    estiloSidebar: 'claro',
+  },
+];
+
+function aplicarPresetSuperAdmin(preset: PresetVisual) {
+  superAdminConfigForm.value.cor_primaria = preset.corPrimaria;
+  superAdminConfigForm.value.cor_secundaria = preset.corSecundaria;
+  superAdminConfigForm.value.cor_destaque = preset.corDestaque;
+  superAdminConfigForm.value.estilo_sidebar = preset.estiloSidebar;
+  authStore.salvarConfigSuperAdmin({
+    cor_primaria: preset.corPrimaria,
+    cor_secundaria: preset.corSecundaria,
+    visual_opcoes: {
+      ...authStore.superAdminPlatformConfig.visual_opcoes,
+      cor_destaque: preset.corDestaque,
+      estilo_sidebar: preset.estiloSidebar,
+    },
+  });
+  notificar('sucesso', `Tema "${preset.nome}" aplicado e salvo!`);
+}
+
+function salvarCoresSuperAdmin() {
+  authStore.salvarConfigSuperAdmin({
+    nome_sistema: superAdminConfigForm.value.nome_sistema.trim() || 'EncoMed',
+    slogan_sistema: superAdminConfigForm.value.slogan_sistema.trim() || 'Painel de Governança & Segurança',
+    cor_primaria: superAdminConfigForm.value.cor_primaria,
+    cor_secundaria: superAdminConfigForm.value.cor_secundaria,
+    visual_opcoes: {
+      ...authStore.superAdminPlatformConfig.visual_opcoes,
+      cor_destaque: superAdminConfigForm.value.cor_destaque,
+      estilo_sidebar: superAdminConfigForm.value.estilo_sidebar as any,
+    },
+  });
+  notificar('sucesso', 'Identidade visual do Super Administrador atualizada e salva com sucesso!');
+}
+
+function restaurarCoresPadraoSuperAdmin() {
+  const padrao = {
+    cor_primaria: '#4f46e5',
+    cor_secundaria: '#0f172a',
+    cor_destaque: '#6366f1',
+    estilo_sidebar: 'escuro' as const,
+    nome_sistema: 'EncoMed',
+    slogan_sistema: 'Painel de Governança & Segurança',
+  };
+  superAdminConfigForm.value = { ...padrao };
+  authStore.salvarConfigSuperAdmin({
+    nome_sistema: padrao.nome_sistema,
+    slogan_sistema: padrao.slogan_sistema,
+    cor_primaria: padrao.cor_primaria,
+    cor_secundaria: padrao.cor_secundaria,
+    visual_opcoes: {
+      ...authStore.superAdminPlatformConfig.visual_opcoes,
+      cor_destaque: padrao.cor_destaque,
+      estilo_sidebar: padrao.estilo_sidebar,
+    },
+  });
+  notificar('sucesso', 'Cores padrão da governança restauradas com sucesso!');
+}
 </script>
 
 <template>
@@ -435,6 +750,17 @@ async function confirmarBreakGlass() {
           <Plus :size="18" />
           <span>Provisionar Nova Empresa</span>
         </button>
+
+        <button
+          v-if="activePlatformTab === 'cores'"
+          @click="salvarCoresSuperAdmin"
+          class="btn-primary-pill"
+          id="btn-salvar-cores-topo"
+          style="padding: 0.55rem 1.4rem; font-size: 0.88rem;"
+        >
+          <Sparkles :size="16" />
+          <span>Salvar Preferências Visuais</span>
+        </button>
       </div>
     </div>
 
@@ -456,7 +782,8 @@ async function confirmarBreakGlass() {
         boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
       }"
     >
-      <span>{{ feedbackMsg.tipo === 'sucesso' ? '✅' : '⚠️' }}</span>
+      <CheckCircle2 v-if="feedbackMsg.tipo === 'sucesso'" :size="18" style="color: #059669;" />
+      <AlertOctagon v-else :size="18" style="color: #dc2626;" />
       <span>{{ feedbackMsg.texto }}</span>
     </div>
 
@@ -467,9 +794,32 @@ async function confirmarBreakGlass() {
         class="sub-tab-btn"
         :class="{ active: activePlatformTab === 'tenants' }"
         style="display: inline-flex; align-items: center; gap: 7px;"
+        id="tab-tenants"
       >
         <Building2 :size="16" />
         <span>Empresas / Lojas ({{ authStore.tenants.length }})</span>
+      </button>
+
+      <button
+        @click="activePlatformTab = 'assinaturas'"
+        class="sub-tab-btn"
+        :class="{ active: activePlatformTab === 'assinaturas' }"
+        style="display: inline-flex; align-items: center; gap: 7px;"
+        id="tab-assinaturas"
+      >
+        <CreditCard :size="16" />
+        <span>Assinaturas & Faturamento SaaS</span>
+      </button>
+
+      <button
+        @click="activePlatformTab = 'cores'"
+        class="sub-tab-btn"
+        :class="{ active: activePlatformTab === 'cores' }"
+        style="display: inline-flex; align-items: center; gap: 7px;"
+        id="tab-cores"
+      >
+        <Palette :size="16" />
+        <span>Identidade Visual do Painel</span>
       </button>
 
       <button
@@ -477,6 +827,7 @@ async function confirmarBreakGlass() {
         class="sub-tab-btn"
         :class="{ active: activePlatformTab === 'seguranca' }"
         style="display: inline-flex; align-items: center; gap: 7px;"
+        id="tab-seguranca"
       >
         <Lock :size="16" />
         <span>Proteções da Conta (IP & Dispositivos)</span>
@@ -487,6 +838,7 @@ async function confirmarBreakGlass() {
         class="sub-tab-btn"
         :class="{ active: activePlatformTab === 'auditoria' }"
         style="display: inline-flex; align-items: center; gap: 7px;"
+        id="tab-auditoria"
       >
         <FileText :size="16" />
         <span>Auditoria Imutável de Acessos</span>
@@ -827,6 +1179,679 @@ async function confirmarBreakGlass() {
     </div>
 
     <!-- ============================================================== -->
+    <!-- ABA: ASSINATURAS & FATURAMENTO SAAS (COBRANÇAS MULTI-TENANT)   -->
+    <!-- ============================================================== -->
+    <div v-if="activePlatformTab === 'assinaturas'">
+      <!-- Stat Cards Financeiros -->
+      <div class="stat-grid" style="margin-bottom: 1.25rem;">
+        <div class="stat-card" style="border: 1.5px solid var(--border-color); border-radius: 16px;">
+          <div class="stat-info">
+            <div class="stat-label">MRR Previsto (Mensal)</div>
+            <div class="stat-value" style="color: #0f172a;">
+              {{ formatarMoeda(totalMRRSaaS) }}
+            </div>
+            <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 0.2rem;">
+              Receita recorrente contratada
+            </div>
+          </div>
+          <div class="stat-icon" style="background: #e0e7ff; color: #4338ca; border: 1px solid #c7d2fe;">
+            <CircleDollarSign :size="22" />
+          </div>
+        </div>
+
+        <div class="stat-card" style="border: 1.5px solid var(--border-color); border-radius: 16px;">
+          <div class="stat-info">
+            <div class="stat-label">Assinaturas Ativas</div>
+            <div class="stat-value" style="color: #16a34a;">
+              {{ totalAssinaturasAtivas }}
+            </div>
+            <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 0.2rem;">
+              Em dia com pagamentos
+            </div>
+          </div>
+          <div class="stat-icon" style="background: #dcfce7; color: #16a34a; border: 1px solid #bbf7d0;">
+            <CheckCircle2 :size="22" />
+          </div>
+        </div>
+
+        <div class="stat-card" style="border: 1.5px solid var(--border-color); border-radius: 16px;">
+          <div class="stat-info">
+            <div class="stat-label">Em Degustação (Trial)</div>
+            <div class="stat-value" style="color: #7c3aed;">
+              {{ totalAssinaturasTrial }}
+            </div>
+            <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 0.2rem;">
+              14 dias de teste grátis
+            </div>
+          </div>
+          <div class="stat-icon" style="background: #f3e8ff; color: #7c3aed; border: 1px solid #ddd6fe;">
+            <Clock :size="22" />
+          </div>
+        </div>
+
+        <div class="stat-card" style="border: 1.5px solid var(--border-color); border-radius: 16px;">
+          <div class="stat-info">
+            <div class="stat-label">Pendentes / Atrasadas</div>
+            <div class="stat-value" style="color: #dc2626;">
+              {{ totalAssinaturasPendentesOuAtrasadas }}
+            </div>
+            <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 0.2rem;">
+              Exigem regularização ou cobrança
+            </div>
+          </div>
+          <div class="stat-icon" style="background: #fee2e2; color: #dc2626; border: 1px solid #fecaca;">
+            <AlertOctagon :size="22" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Barra de Filtros e Busca de Assinaturas -->
+      <div class="pedidos-filter-toolbar" style="margin-bottom: 1.25rem; border: 1.5px solid var(--border-color);">
+        <div style="position: relative; flex: 1; min-width: 260px;">
+          <Search :size="16" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #94a3b8;" />
+          <input
+            v-model="termoBuscaAssinatura"
+            type="text"
+            placeholder="Buscar assinatura por farmácia, plano ou e-mail..."
+            class="form-input"
+            style="padding-left: 2.4rem; height: 40px; border: 1.5px solid var(--border-color); border-radius: 12px; font-size: 0.85rem;"
+          />
+        </div>
+
+        <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
+          <button
+            type="button"
+            @click="filtroStatusAssinatura = 'todas'"
+            class="btn-outline-neutral"
+            :style="{
+              background: filtroStatusAssinatura === 'todas' ? '#2563eb' : '#ffffff',
+              color: filtroStatusAssinatura === 'todas' ? '#ffffff' : '#334155',
+              borderColor: filtroStatusAssinatura === 'todas' ? '#2563eb' : '#cbd5e1',
+            }"
+            style="padding: 0.35rem 0.9rem; font-size: 0.8rem;"
+          >
+            Todas ({{ listaAssinaturasTenants.length }})
+          </button>
+          <button
+            type="button"
+            @click="filtroStatusAssinatura = 'ativa'"
+            class="btn-outline-neutral"
+            :style="{
+              background: filtroStatusAssinatura === 'ativa' ? '#16a34a' : '#ffffff',
+              color: filtroStatusAssinatura === 'ativa' ? '#ffffff' : '#334155',
+              borderColor: filtroStatusAssinatura === 'ativa' ? '#16a34a' : '#cbd5e1',
+            }"
+            style="padding: 0.35rem 0.9rem; font-size: 0.8rem;"
+          >
+            Ativas ({{ totalAssinaturasAtivas }})
+          </button>
+          <button
+            type="button"
+            @click="filtroStatusAssinatura = 'trial'"
+            class="btn-outline-neutral"
+            :style="{
+              background: filtroStatusAssinatura === 'trial' ? '#7c3aed' : '#ffffff',
+              color: filtroStatusAssinatura === 'trial' ? '#ffffff' : '#334155',
+              borderColor: filtroStatusAssinatura === 'trial' ? '#7c3aed' : '#cbd5e1',
+            }"
+            style="padding: 0.35rem 0.9rem; font-size: 0.8rem;"
+          >
+            Trial ({{ totalAssinaturasTrial }})
+          </button>
+          <button
+            type="button"
+            @click="filtroStatusAssinatura = 'pendente'"
+            class="btn-outline-neutral"
+            :style="{
+              background: filtroStatusAssinatura === 'pendente' ? '#d97706' : '#ffffff',
+              color: filtroStatusAssinatura === 'pendente' ? '#ffffff' : '#334155',
+              borderColor: filtroStatusAssinatura === 'pendente' ? '#d97706' : '#cbd5e1',
+            }"
+            style="padding: 0.35rem 0.9rem; font-size: 0.8rem;"
+          >
+            Pendentes
+          </button>
+          <button
+            type="button"
+            @click="filtroStatusAssinatura = 'atrasada'"
+            class="btn-outline-neutral"
+            :style="{
+              background: filtroStatusAssinatura === 'atrasada' ? '#dc2626' : '#ffffff',
+              color: filtroStatusAssinatura === 'atrasada' ? '#ffffff' : '#334155',
+              borderColor: filtroStatusAssinatura === 'atrasada' ? '#dc2626' : '#cbd5e1',
+            }"
+            style="padding: 0.35rem 0.9rem; font-size: 0.8rem;"
+          >
+            Atrasadas
+          </button>
+        </div>
+      </div>
+
+      <!-- Lista Horizontal de Assinaturas (Pharmacy UI Design System) -->
+      <div v-if="listaAssinaturasFiltradas.length === 0" class="card" style="text-align: center; padding: 3rem 1.5rem; border: 1.5px solid var(--border-color); border-radius: 16px;">
+        <CreditCard :size="40" style="color: #94a3b8; margin: 0 auto 0.75rem auto;" />
+        <h4 style="font-size: 1.05rem; font-weight: 700; color: #334155; margin: 0 0 0.3rem 0;">
+          Nenhuma assinatura localizada
+        </h4>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">
+          Ajuste os filtros de busca ou o termo digitado para visualizar os faturamentos.
+        </p>
+      </div>
+
+      <div v-else style="display: flex; flex-direction: column; gap: 0.85rem;">
+        <div
+          v-for="{ tenant, assinatura } in listaAssinaturasFiltradas"
+          :key="tenant.id"
+          class="card"
+          style="border: 1.5px solid var(--border-color); border-radius: 16px; padding: 1.15rem 1.35rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; transition: box-shadow 0.2s;"
+        >
+          <!-- Info Empresa -->
+          <div style="display: flex; align-items: center; gap: 0.9rem; min-width: 260px;">
+            <div style="width: 44px; height: 44px; border-radius: 12px; background: #eff6ff; display: flex; align-items: center; justify-content: center; color: #2563eb; font-weight: 800; font-size: 1.05rem; border: 1.5px solid #bfdbfe; flex-shrink: 0;">
+              {{ (tenant.nome_empresa || 'F').charAt(0).toUpperCase() }}
+            </div>
+            <div>
+              <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                <h4 style="font-size: 1rem; font-weight: 800; color: #0f172a; margin: 0;">
+                  {{ tenant.nome_empresa }}
+                </h4>
+                <span
+                  class="badge"
+                  :style="{
+                    background:
+                      assinatura.status === 'ativa'
+                        ? '#ecfdf5'
+                        : assinatura.status === 'trial'
+                        ? '#f3e8ff'
+                        : assinatura.status === 'pendente'
+                        ? '#fffbeb'
+                        : assinatura.status === 'atrasada'
+                        ? '#fef2f2'
+                        : '#f1f5f9',
+                    color:
+                      assinatura.status === 'ativa'
+                        ? '#065f46'
+                        : assinatura.status === 'trial'
+                        ? '#6b21a8'
+                        : assinatura.status === 'pendente'
+                        ? '#92400e'
+                        : assinatura.status === 'atrasada'
+                        ? '#991b1b'
+                        : '#475569',
+                    border: `1px solid ${
+                      assinatura.status === 'ativa'
+                        ? '#a7f3d0'
+                        : assinatura.status === 'trial'
+                        ? '#d8b4fe'
+                        : assinatura.status === 'pendente'
+                        ? '#fde68a'
+                        : assinatura.status === 'atrasada'
+                        ? '#fecaca'
+                        : '#cbd5e1'
+                    }`,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    fontSize: '0.72rem',
+                    padding: '2px 8px',
+                    borderRadius: '9999px',
+                  }"
+                >
+                  {{ assinatura.status }}
+                </span>
+              </div>
+              <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">
+                Slug: <code>{{ tenant.slug }}</code> • {{ tenant.email_admin || 'Sem e-mail cadastrado' }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Info Plano & Preço -->
+          <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
+            <div>
+              <div style="font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 700;">
+                Plano Contratado
+              </div>
+              <div style="font-size: 0.92rem; font-weight: 800; color: #1e293b; margin-top: 0.1rem;">
+                {{ assinatura.plano_nome }}
+              </div>
+              <div style="font-size: 0.76rem; color: #64748b; text-transform: capitalize;">
+                Ciclo {{ assinatura.ciclo }} • {{ (assinatura.metodo_pagamento || 'pix').toUpperCase() }}
+              </div>
+            </div>
+
+            <div>
+              <div style="font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 700;">
+                Valor & Vencimento
+              </div>
+              <div style="font-size: 1.05rem; font-weight: 900; color: #0f172a; margin-top: 0.1rem;">
+                {{ formatarMoeda(assinatura.valor_mensal) }}<span style="font-size: 0.74rem; font-weight: 600; color: #64748b;">/mês</span>
+              </div>
+              <div style="font-size: 0.76rem; color: #64748b;">
+                Vence todo dia {{ assinatura.dia_vencimento || 10 }}
+              </div>
+            </div>
+
+            <div v-if="assinatura.ultimo_pagamento">
+              <div style="font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 700;">
+                Última Baixa
+              </div>
+              <div style="font-size: 0.82rem; font-weight: 700; color: #16a34a; margin-top: 0.1rem;">
+                {{ assinatura.ultimo_pagamento.data }}
+              </div>
+              <div style="font-size: 0.74rem; color: #64748b;">
+                {{ formatarMoeda(assinatura.ultimo_pagamento.valor) }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Ações Rápidas (Padrão Farmácia - rounded-full) -->
+          <div style="display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap;">
+            <!-- Dar Baixa Manual -->
+            <button
+              type="button"
+              @click="darBaixaManualAssinatura(tenant)"
+              class="btn-outline-neutral"
+              style="padding: 0.42rem 0.85rem; font-size: 0.79rem; color: #16a34a !important; border-color: #86efac; background: #f0fdf4;"
+              title="Registrar que a mensalidade deste mês foi quitada pela farmácia"
+            >
+              <CheckCircle :size="13" />
+              <span>Dar Baixa (Pago)</span>
+            </button>
+
+            <!-- Gerar Cobrança PIX WhatsApp -->
+            <button
+              type="button"
+              @click="abrirModalCobrancaPix(tenant)"
+              class="btn-outline-neutral"
+              style="padding: 0.42rem 0.85rem; font-size: 0.79rem; color: #2563eb !important; border-color: #bfdbfe; background: #eff6ff;"
+              title="Gerar texto formatado com chave PIX e valor para enviar via WhatsApp"
+            >
+              <QrCode :size="13" />
+              <span>Cobrança PIX</span>
+            </button>
+
+            <!-- Editar Assinatura -->
+            <button
+              type="button"
+              @click="abrirEdicaoAssinatura(tenant)"
+              class="btn-outline-neutral"
+              style="padding: 0.42rem 0.85rem; font-size: 0.79rem;"
+              title="Alterar plano, valor personalizado, ciclo ou observações"
+            >
+              <SlidersHorizontal :size="13" />
+              <span>Gerenciar</span>
+            </button>
+
+            <!-- Alternar Status (Pausar/Reativar) -->
+            <button
+              v-if="assinatura.status === 'ativa'"
+              type="button"
+              @click="alternarStatusAssinaturaRapido(tenant, 'pendente')"
+              class="btn-outline-neutral"
+              style="padding: 0.42rem 0.85rem; font-size: 0.79rem; color: #d97706 !important; border-color: #fde68a; background: #fffbeb;"
+              title="Marcar assinatura como aguardando pagamento"
+            >
+              <PauseCircle :size="13" />
+              <span>Pendente</span>
+            </button>
+            <button
+              v-else
+              type="button"
+              @click="alternarStatusAssinaturaRapido(tenant, 'ativa')"
+              class="btn-outline-neutral"
+              style="padding: 0.42rem 0.85rem; font-size: 0.79rem; color: #16a34a !important; border-color: #86efac; background: #f0fdf4;"
+              title="Reativar assinatura desta drogaria"
+            >
+              <PlayCircle :size="13" />
+              <span>Ativar</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- ABA: IDENTIDADE VISUAL & CORES DO SUPER ADMINISTRADOR          -->
+    <!-- ============================================================== -->
+    <div v-if="activePlatformTab === 'cores'" style="display: flex; flex-direction: column; gap: 1.5rem;">
+      <!-- Seção 1: Presets Rápidos Prontos -->
+      <div class="card" style="border: 1.5px solid var(--border-color); border-radius: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <div style="width: 36px; height: 36px; border-radius: 10px; background: #eff6ff; display: flex; align-items: center; justify-content: center; color: #2563eb; border: 1px solid #bfdbfe;">
+              <Sparkles :size="18" />
+            </div>
+            <div>
+              <h3 style="font-size: 1.15rem; font-weight: 800; color: #0f172a; margin: 0;">
+                Paletas Rápidas Prontas para o Painel de Governança
+              </h3>
+              <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
+                Escolha um tema pré-harmonizado para o seu ambiente de Administrador Supremo
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            @click="restaurarCoresPadraoSuperAdmin"
+            class="btn-outline-neutral"
+            style="padding: 0.45rem 1.1rem; font-size: 0.82rem;"
+          >
+            <RotateCcw :size="14" />
+            <span>Restaurar Padrão EncoMed</span>
+          </button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.9rem;">
+          <div
+            v-for="p in presetsSuperAdmin"
+            :key="p.nome"
+            @click="aplicarPresetSuperAdmin(p)"
+            style="border: 1.5px solid var(--border-color); border-radius: 14px; padding: 1rem; cursor: pointer; transition: all 0.2s; background: #ffffff;"
+            :style="{
+              borderColor: superAdminConfigForm.cor_primaria === p.corPrimaria ? p.corPrimaria : 'var(--border-color)',
+              boxShadow: superAdminConfigForm.cor_primaria === p.corPrimaria ? `0 0 0 2px ${p.corPrimaria}25` : 'none',
+            }"
+          >
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+              <div style="font-weight: 800; font-size: 0.92rem; color: #0f172a;">
+                {{ p.nome }}
+              </div>
+              <div style="display: flex; gap: 4px;">
+                <span :style="{ background: p.corPrimaria }" style="width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,0.1);"></span>
+                <span :style="{ background: p.corSecundaria }" style="width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,0.1);"></span>
+                <span :style="{ background: p.corDestaque }" style="width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,0.1);"></span>
+              </div>
+            </div>
+            <p style="font-size: 0.78rem; color: var(--text-muted); margin: 0 0 0.75rem 0; line-height: 1.4;">
+              {{ p.descricao }}
+            </p>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.74rem; font-weight: 600; color: #64748b; text-transform: uppercase;">
+                Sidebar {{ p.estiloSidebar }}
+              </span>
+              <button
+                type="button"
+                class="btn-outline-neutral"
+                style="padding: 2px 10px; font-size: 0.74rem;"
+                :style="{
+                  borderColor: p.corPrimaria,
+                  color: p.corPrimaria + ' !important',
+                }"
+              >
+                Aplicar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Seção 2: Personalização Fina de Cores e Interface -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.5rem;">
+        <!-- Formulário de Cores Manuais -->
+        <div class="card" style="border: 1.5px solid var(--border-color); border-radius: 16px;">
+          <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1.1rem;">
+            <Palette :size="20" style="color: #2563eb;" />
+            <h3 style="font-size: 1.1rem; font-weight: 800; margin: 0; color: #0f172a;">
+              Ajuste Manual de Cores & Identidade
+            </h3>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 1rem;">
+            <div class="form-group">
+              <label class="form-label" style="font-weight: 700; font-size: 0.82rem;">Cor Primária (Header e Ações Principais)</label>
+              <div style="display: flex; gap: 0.6rem; align-items: center;">
+                <input
+                  type="color"
+                  v-model="superAdminConfigForm.cor_primaria"
+                  style="width: 44px; height: 38px; border: 1.5px solid var(--border-color); border-radius: 8px; cursor: pointer; padding: 2px;"
+                />
+                <input
+                  type="text"
+                  v-model="superAdminConfigForm.cor_primaria"
+                  class="form-input"
+                  style="border: 1.5px solid var(--border-color); border-radius: 10px; font-family: monospace; font-size: 0.85rem;"
+                  placeholder="#4f46e5"
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" style="font-weight: 700; font-size: 0.82rem;">Cor Secundária (Menu Lateral & Contrastes)</label>
+              <div style="display: flex; gap: 0.6rem; align-items: center;">
+                <input
+                  type="color"
+                  v-model="superAdminConfigForm.cor_secundaria"
+                  style="width: 44px; height: 38px; border: 1.5px solid var(--border-color); border-radius: 8px; cursor: pointer; padding: 2px;"
+                />
+                <input
+                  type="text"
+                  v-model="superAdminConfigForm.cor_secundaria"
+                  class="form-input"
+                  style="border: 1.5px solid var(--border-color); border-radius: 10px; font-family: monospace; font-size: 0.85rem;"
+                  placeholder="#0f172a"
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" style="font-weight: 700; font-size: 0.82rem;">Cor de Destaque / Realce (Hover & Badges)</label>
+              <div style="display: flex; gap: 0.6rem; align-items: center;">
+                <input
+                  type="color"
+                  v-model="superAdminConfigForm.cor_destaque"
+                  style="width: 44px; height: 38px; border: 1.5px solid var(--border-color); border-radius: 8px; cursor: pointer; padding: 2px;"
+                />
+                <input
+                  type="text"
+                  v-model="superAdminConfigForm.cor_destaque"
+                  class="form-input"
+                  style="border: 1.5px solid var(--border-color); border-radius: 10px; font-family: monospace; font-size: 0.85rem;"
+                  placeholder="#6366f1"
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" style="font-weight: 700; font-size: 0.82rem;">Estilo da Barra Lateral (Sidebar)</label>
+              <div style="display: flex; gap: 0.5rem;">
+                <button
+                  type="button"
+                  @click="superAdminConfigForm.estilo_sidebar = 'escuro'"
+                  class="btn-outline-neutral"
+                  :style="{
+                    background: superAdminConfigForm.estilo_sidebar === 'escuro' ? '#0f172a' : '#ffffff',
+                    color: superAdminConfigForm.estilo_sidebar === 'escuro' ? '#ffffff' : '#334155',
+                    borderColor: superAdminConfigForm.estilo_sidebar === 'escuro' ? '#0f172a' : '#cbd5e1',
+                  }"
+                  style="flex: 1; padding: 0.45rem; font-size: 0.82rem;"
+                >
+                  Escuro
+                </button>
+                <button
+                  type="button"
+                  @click="superAdminConfigForm.estilo_sidebar = 'claro'"
+                  class="btn-outline-neutral"
+                  :style="{
+                    background: superAdminConfigForm.estilo_sidebar === 'claro' ? '#2563eb' : '#ffffff',
+                    color: superAdminConfigForm.estilo_sidebar === 'claro' ? '#ffffff' : '#334155',
+                    borderColor: superAdminConfigForm.estilo_sidebar === 'claro' ? '#2563eb' : '#cbd5e1',
+                  }"
+                  style="flex: 1; padding: 0.45rem; font-size: 0.82rem;"
+                >
+                  Claro
+                </button>
+                <button
+                  type="button"
+                  @click="superAdminConfigForm.estilo_sidebar = 'marca'"
+                  class="btn-outline-neutral"
+                  :style="{
+                    background: superAdminConfigForm.estilo_sidebar === 'marca' ? superAdminConfigForm.cor_primaria : '#ffffff',
+                    color: superAdminConfigForm.estilo_sidebar === 'marca' ? '#ffffff' : '#334155',
+                    borderColor: superAdminConfigForm.estilo_sidebar === 'marca' ? superAdminConfigForm.cor_primaria : '#cbd5e1',
+                  }"
+                  style="flex: 1; padding: 0.45rem; font-size: 0.82rem;"
+                >
+                  Marca Tingida
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" style="font-weight: 700; font-size: 0.82rem;">Nome do Sistema no Cabeçalho</label>
+              <input
+                type="text"
+                v-model="superAdminConfigForm.nome_sistema"
+                class="form-input"
+                style="border: 1.5px solid var(--border-color); border-radius: 10px;"
+                placeholder="EncoMed"
+              />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" style="font-weight: 700; font-size: 0.82rem;">Slogan / Subtítulo Institucional</label>
+              <input
+                type="text"
+                v-model="superAdminConfigForm.slogan_sistema"
+                class="form-input"
+                style="border: 1.5px solid var(--border-color); border-radius: 10px;"
+                placeholder="Painel de Governança & Segurança"
+              />
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.5rem; padding-top: 0.8rem; border-top: 1px solid #f1f5f9;">
+              <button
+                type="button"
+                @click="restaurarCoresPadraoSuperAdmin"
+                class="btn-outline-neutral"
+                style="padding: 0.5rem 1.2rem; font-size: 0.85rem;"
+              >
+                Restaurar
+              </button>
+              <button
+                type="button"
+                @click="salvarCoresSuperAdmin"
+                class="btn-primary-pill"
+                style="padding: 0.5rem 1.4rem; font-size: 0.85rem;"
+              >
+                Salvar Preferências Visuais
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preview em Tempo Real do Painel -->
+        <div class="card" style="border: 1.5px solid var(--border-color); border-radius: 16px; display: flex; flex-direction: column;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+            <div style="font-weight: 800; font-size: 1.05rem; color: #0f172a;">
+              Pré-visualização da Sua Interface
+            </div>
+            <span class="badge" style="background: #ecfdf5; color: #065f46; font-size: 0.72rem; border: 1px solid #a7f3d0;">
+              Ao Vivo
+            </span>
+          </div>
+
+          <!-- Mock da Janela do Sistema -->
+          <div style="flex: 1; border: 1.5px solid #cbd5e1; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; background: #f8fafc; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+            <!-- Mock Header -->
+            <div
+              :style="{ background: superAdminConfigForm.cor_primaria }"
+              style="padding: 0.75rem 1rem; color: #ffffff; display: flex; justify-content: space-between; align-items: center;"
+            >
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="width: 20px; height: 20px; border-radius: 6px; background: rgba(255,255,255,0.25); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 900;">
+                  E
+                </div>
+                <div>
+                  <div style="font-weight: 800; font-size: 0.82rem; line-height: 1;">
+                    {{ superAdminConfigForm.nome_sistema || 'EncoMed' }}
+                  </div>
+                  <div style="font-size: 0.65rem; opacity: 0.85; margin-top: 2px;">
+                    {{ superAdminConfigForm.slogan_sistema || 'Governança & Segurança' }}
+                  </div>
+                </div>
+              </div>
+              <div style="width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,0.3); font-size: 0.65rem; display: flex; align-items: center; justify-content: center; font-weight: 700;">
+                SA
+              </div>
+            </div>
+
+            <!-- Mock Body com Sidebar e Content -->
+            <div style="display: flex; flex: 1; min-height: 240px;">
+              <!-- Mock Sidebar -->
+              <div
+                :style="{
+                  background:
+                    superAdminConfigForm.estilo_sidebar === 'escuro'
+                      ? superAdminConfigForm.cor_secundaria
+                      : superAdminConfigForm.estilo_sidebar === 'marca'
+                      ? superAdminConfigForm.cor_primaria
+                      : '#ffffff',
+                  color: superAdminConfigForm.estilo_sidebar === 'claro' ? '#334155' : '#ffffff',
+                  borderRight: superAdminConfigForm.estilo_sidebar === 'claro' ? '1px solid #e2e8f0' : 'none',
+                }"
+                style="width: 90px; padding: 0.75rem 0.5rem; display: flex; flex-direction: column; gap: 0.4rem;"
+              >
+                <div
+                  :style="{
+                    background: superAdminConfigForm.cor_destaque,
+                    color: '#ffffff',
+                  }"
+                  style="padding: 4px 6px; border-radius: 9999px; font-size: 0.65rem; font-weight: 700; text-align: center;"
+                >
+                  Empresas
+                </div>
+                <div style="padding: 4px 6px; border-radius: 9999px; font-size: 0.65rem; opacity: 0.8; text-align: center;">
+                  Assinaturas
+                </div>
+                <div style="padding: 4px 6px; border-radius: 9999px; font-size: 0.65rem; opacity: 0.8; text-align: center;">
+                  Segurança
+                </div>
+                <div style="padding: 4px 6px; border-radius: 9999px; font-size: 0.65rem; opacity: 0.8; text-align: center;">
+                  Auditoria
+                </div>
+              </div>
+
+              <!-- Mock Content Area -->
+              <div style="flex: 1; padding: 0.85rem; display: flex; flex-direction: column; gap: 0.6rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div style="font-size: 0.76rem; font-weight: 800; color: #0f172a;">
+                    Painel Administrativo
+                  </div>
+                  <div
+                    :style="{ background: superAdminConfigForm.cor_primaria }"
+                    style="color: #ffffff; padding: 2px 8px; border-radius: 9999px; font-size: 0.65rem; font-weight: 700;"
+                  >
+                    + Provisionar
+                  </div>
+                </div>
+
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <div style="font-size: 0.7rem; font-weight: 700; color: #1e293b;">Drogaria São Paulo</div>
+                    <div style="font-size: 0.62rem; color: #64748b;">Plano Pro Farma • R$ 299/mês</div>
+                  </div>
+                  <span style="background: #ecfdf5; color: #065f46; font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 9999px;">
+                    Ativa
+                  </span>
+                </div>
+
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <div style="font-size: 0.7rem; font-weight: 700; color: #1e293b;">Drogaria Pacheco</div>
+                    <div style="font-size: 0.62rem; color: #64748b;">Rede Enterprise • R$ 599/mês</div>
+                  </div>
+                  <span style="background: #f3e8ff; color: #6b21a8; font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 9999px;">
+                    Trial
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
     <!-- ABA 2: SEGURANÇA ZERO-TRUST (IP ALLOWLIST & DISPOSITIVOS)       -->
     <!-- ============================================================== -->
     <div v-if="activePlatformTab === 'seguranca'" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.5rem;">
@@ -894,8 +1919,8 @@ async function confirmarBreakGlass() {
         >
           {{
             authStore.superAdminContext.dispositivo_reconhecido
-              ? '🛡️ Este computador/navegador possui certificado ativo de Dispositivo Confiável.'
-              : '⚠️ Este navegador ainda não foi certificado como Dispositivo Confiável.'
+              ? 'Este computador/navegador possui certificado ativo de Dispositivo Confiável.'
+              : 'Este navegador ainda não foi certificado como Dispositivo Confiável.'
           }}
         </div>
 
@@ -1117,7 +2142,7 @@ async function confirmarBreakGlass() {
             </div>
 
             <p style="font-size: 0.74rem; color: #166534; margin: 0.45rem 0 0 0; line-height: 1.4;">
-              🔒 <strong>Sem envio de e-mail:</strong> A drogaria fará login imediatamente com esta senha provisória e o sistema solicitará o cadastro da senha definitiva no primeiro acesso.
+              <strong>Sem envio de e-mail:</strong> A drogaria fará login imediatamente com esta senha provisória e o sistema solicitará o cadastro da senha definitiva no primeiro acesso.
             </p>
           </div>
 
@@ -1400,7 +2425,7 @@ async function confirmarBreakGlass() {
         <div style="display: flex; flex-direction: column; gap: 1.1rem;">
           <!-- Card de Como Funciona o Disparo -->
           <div style="padding: 0.85rem 1rem; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; font-size: 0.82rem; line-height: 1.5; color: #334155;">
-            💡 <strong>Envio Automático:</strong> Toda vez que você provisiona uma nova empresa ou clica em <em>"Enviar Link de Senha"</em>, o sistema gera um token seguro e despacha este e-mail corporativo para o endereço do gestor.
+            <strong>Envio Automático:</strong> Toda vez que você provisiona uma nova empresa ou clica em <em>"Enviar Link de Senha"</em>, o sistema gera um token seguro e despacha este e-mail corporativo para o endereço do gestor.
           </div>
 
           <!-- Preview em Miniatura do E-mail -->
@@ -1436,7 +2461,7 @@ async function confirmarBreakGlass() {
           <!-- Resumo de Configuração de API de E-mail Gratuita -->
           <div style="padding: 1rem; border-radius: 14px; background: #f0fdf4; border: 1.5px solid #a7f3d0; font-size: 0.82rem; color: #166534; line-height: 1.5;">
             <div style="font-weight: 800; font-size: 0.88rem; margin-bottom: 0.35rem; color: #065f46;">
-              🚀 Como Ativar uma API de E-mail 100% Gratuita:
+              Como Ativar uma API de E-mail 100% Gratuita:
             </div>
             <p style="margin: 0 0 0.5rem 0;">
               O sistema já está programado para integrar nativamente com <strong>Brevo (Sendinblue)</strong> ou <strong>Resend</strong> sem custos:
@@ -1452,6 +2477,218 @@ async function confirmarBreakGlass() {
         <div style="display: flex; justify-content: flex-end; margin-top: 1.25rem; border-top: 1px solid #f1f5f9; padding-top: 0.9rem;">
           <button @click="showEmailTemplateModal = false" class="btn-primary-pill" style="padding: 0.48rem 1.4rem;">
             Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- MODAL: GERENCIAR ASSINATURA & PLANO SAAS                       -->
+    <!-- ============================================================== -->
+    <div v-if="showModalEditarAssinatura && assinaturaEmEdicao" class="modal-backdrop">
+      <div class="base44-modal-dialog" style="max-width: 540px; border: 1.5px solid var(--border-color); border-radius: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.1rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <div style="width: 36px; height: 36px; border-radius: 10px; background: #eff6ff; display: flex; align-items: center; justify-content: center; color: #2563eb; border: 1px solid #bfdbfe;">
+              <CreditCard :size="18" />
+            </div>
+            <div>
+              <h3 style="font-size: 1.15rem; font-weight: 800; color: #0f172a; margin: 0;">
+                Gerenciar Assinatura SaaS
+              </h3>
+              <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
+                {{ assinaturaEmEdicao.nomeEmpresa }}
+              </p>
+            </div>
+          </div>
+          <button @click="showModalEditarAssinatura = false" style="background: none; border: none; cursor: pointer; color: #94a3b8;">
+            <X :size="20" />
+          </button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.95rem;">
+          <div class="form-group">
+            <label class="form-label" style="font-weight: 700; font-size: 0.82rem;">Plano Contratado</label>
+            <select
+              v-model="assinaturaEmEdicao.planoNome"
+              class="form-select"
+              style="border: 1.5px solid var(--border-color); border-radius: 12px;"
+              @change="
+                if (assinaturaEmEdicao.planoNome === 'Starter Balcão') assinaturaEmEdicao.valorMensal = 149;
+                else if (assinaturaEmEdicao.planoNome === 'Pro Farma') assinaturaEmEdicao.valorMensal = 299;
+                else if (assinaturaEmEdicao.planoNome === 'Rede Enterprise') assinaturaEmEdicao.valorMensal = 599;
+              "
+            >
+              <option value="Starter Balcão">Starter Balcão (Até 300 enc./mês — Sugerido: R$ 149)</option>
+              <option value="Pro Farma">Pro Farma (Até 1.000 enc./mês — Sugerido: R$ 299)</option>
+              <option value="Rede Enterprise">Rede Enterprise (Ilimitado + Múltiplos Balcões — Sugerido: R$ 599)</option>
+              <option value="Personalizado">Personalizado / Acordo Comercial Customizado</option>
+            </select>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div class="form-group">
+              <label class="form-label" style="font-weight: 700; font-size: 0.82rem;">Valor Mensal (R$)</label>
+              <input
+                v-model.number="assinaturaEmEdicao.valorMensal"
+                type="number"
+                min="0"
+                step="10"
+                class="form-input"
+                style="border: 1.5px solid var(--border-color); border-radius: 12px; font-weight: 700;"
+              />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" style="font-weight: 700; font-size: 0.82rem;">Ciclo de Faturamento</label>
+              <select v-model="assinaturaEmEdicao.ciclo" class="form-select" style="border: 1.5px solid var(--border-color); border-radius: 12px;">
+                <option value="mensal">Mensal</option>
+                <option value="trimestral">Trimestral</option>
+                <option value="semestral">Semestral</option>
+                <option value="anual">Anual</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div class="form-group">
+              <label class="form-label" style="font-weight: 700; font-size: 0.82rem;">Dia Fixo de Vencimento</label>
+              <select v-model.number="assinaturaEmEdicao.diaVencimento" class="form-select" style="border: 1.5px solid var(--border-color); border-radius: 12px;">
+                <option :value="5">Todo dia 05</option>
+                <option :value="10">Todo dia 10</option>
+                <option :value="15">Todo dia 15</option>
+                <option :value="20">Todo dia 20</option>
+                <option :value="25">Todo dia 25</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" style="font-weight: 700; font-size: 0.82rem;">Status da Assinatura</label>
+              <select v-model="assinaturaEmEdicao.status" class="form-select" style="border: 1.5px solid var(--border-color); border-radius: 12px; font-weight: 700;">
+                <option value="ativa">Ativa (Em dia)</option>
+                <option value="trial">Trial (Degustação 14 dias)</option>
+                <option value="pendente">Pendente (Aguardando)</option>
+                <option value="atrasada">Atrasada (Cobrança)</option>
+                <option value="cancelada">Cancelada</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" style="font-weight: 700; font-size: 0.82rem;">Método de Pagamento Preferencial</label>
+            <select v-model="assinaturaEmEdicao.metodoPagamento" class="form-select" style="border: 1.5px solid var(--border-color); border-radius: 12px;">
+              <option value="pix">PIX Automático / QR Code</option>
+              <option value="boleto">Boleto Bancário</option>
+              <option value="cartao_credito">Cartão de Crédito Recorrente</option>
+              <option value="faturado">Faturado Corporativo (NF-e)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" style="font-weight: 700; font-size: 0.82rem;">Observações Financeiras Internas</label>
+            <textarea
+              v-model="assinaturaEmEdicao.observacoes"
+              rows="2"
+              placeholder="Ex.: Desconto de R$ 50 no primeiro mês acordado com o sócio-proprietário"
+              class="form-textarea"
+              style="border: 1.5px solid var(--border-color); border-radius: 12px;"
+            ></textarea>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 1.25rem; border-top: 1px solid #f1f5f9; padding-top: 0.85rem;">
+          <button @click="showModalEditarAssinatura = false" class="btn-outline-neutral" style="padding: 0.5rem 1.2rem;">
+            Cancelar
+          </button>
+          <button @click="salvarEdicaoAssinatura" class="btn-primary-pill" style="padding: 0.5rem 1.4rem;">
+            Salvar Assinatura
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- MODAL: COBRANÇA PIX & WHATSAPP PARA DROGARIA                  -->
+    <!-- ============================================================== -->
+    <div v-if="showModalCobrancaPix && cobrancaPixTenant" class="modal-backdrop">
+      <div class="base44-modal-dialog" style="max-width: 560px; border: 1.5px solid var(--border-color); border-radius: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.65rem;">
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <div style="width: 36px; height: 36px; border-radius: 10px; background: #eff6ff; display: flex; align-items: center; justify-content: center; color: #2563eb; border: 1px solid #bfdbfe;">
+              <QrCode :size="18" />
+            </div>
+            <div>
+              <h3 style="font-size: 1.15rem; font-weight: 800; color: #0f172a; margin: 0;">
+                Cobrança PIX — {{ cobrancaPixTenant.tenant.nome_empresa }}
+              </h3>
+              <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
+                Mensagem pronta para WhatsApp e dados bancários de faturamento
+              </p>
+            </div>
+          </div>
+          <button @click="showModalCobrancaPix = false" style="background: none; border: none; cursor: pointer; color: #94a3b8;">
+            <X :size="20" />
+          </button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <!-- Card de Resumo do Pagamento -->
+          <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 14px; padding: 0.85rem 1rem; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-size: 0.74rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">
+                Valor da Fatura
+              </div>
+              <div style="font-size: 1.3rem; font-weight: 900; color: #0f172a;">
+                {{ formatarMoeda(cobrancaPixTenant.assinatura.valor_mensal) }}
+              </div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 0.74rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">
+                Vencimento
+              </div>
+              <div style="font-size: 0.95rem; font-weight: 800; color: #2563eb;">
+                Dia {{ cobrancaPixTenant.assinatura.dia_vencimento || 10 }} do mês
+              </div>
+            </div>
+          </div>
+
+          <!-- Mensagem Pronta para WhatsApp -->
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+              <span style="font-weight: 700; font-size: 0.82rem; color: #334155;">
+                Mensagem Formatada para WhatsApp:
+              </span>
+              <button
+                type="button"
+                @click="copiarMensagemPix"
+                class="btn-outline-neutral"
+                style="padding: 3px 10px; font-size: 0.75rem;"
+              >
+                <Check v-if="msgPixCopiada" :size="13" style="color: #16a34a;" />
+                <Copy v-else :size="13" />
+                <span>{{ msgPixCopiada ? 'Copiado!' : 'Copiar Mensagem' }}</span>
+              </button>
+            </div>
+            <textarea
+              v-model="cobrancaPixTenant.mensagem"
+              rows="8"
+              class="form-textarea"
+              style="border: 1.5px solid var(--border-color); border-radius: 12px; font-size: 0.82rem; font-family: monospace; line-height: 1.45; background: #ffffff;"
+            ></textarea>
+          </div>
+
+          <!-- Dica de Baixa Rápida -->
+          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 0.7rem 0.9rem; font-size: 0.78rem; color: #166534;">
+            Assim que a drogaria transferir o valor e enviar o comprovante, basta clicar no botão <strong>"Dar Baixa (Pago)"</strong> na lista de assinaturas para registrar a quitação deste mês.
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 1.25rem; border-top: 1px solid #f1f5f9; padding-top: 0.85rem;">
+          <button @click="showModalCobrancaPix = false" class="btn-outline-neutral" style="padding: 0.5rem 1.2rem;">
+            Fechar
+          </button>
+          <button @click="copiarMensagemPix" class="btn-primary-pill" style="padding: 0.5rem 1.4rem;">
+            Copiar Mensagem para WhatsApp
           </button>
         </div>
       </div>
