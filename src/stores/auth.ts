@@ -249,6 +249,15 @@ export const useAuthStore = defineStore('auth', () => {
     return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
   }
 
+  function hexToRgba(hex: string, alpha: number): string {
+    const clean = (hex || '').replace('#', '');
+    if (!/^[0-9a-fA-F]{6}$/.test(clean)) return `rgba(37, 99, 235, ${alpha})`;
+    const r = parseInt(clean.slice(0, 2), 16);
+    const g = parseInt(clean.slice(2, 4), 16);
+    const b = parseInt(clean.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
   function applyTheme(overrideConfig?: Partial<ConfigTenant>) {
     if (typeof document === 'undefined') return;
     const cfg = overrideConfig ? { ...currentConfig.value, ...overrideConfig } : currentConfig.value;
@@ -264,13 +273,16 @@ export const useAuthStore = defineStore('auth', () => {
     root.style.setProperty('--primary', hsl);
     root.style.setProperty('--color-primary', primaria);
     root.style.setProperty('--color-primary-hover', adjustColorBrightness(primaria, -12));
-    root.style.setProperty('--color-primary-alpha', `hsla(${hsl}, 0.12)`);
-    root.style.setProperty('--color-primary-subtle', `hsla(${hsl}, 0.05)`);
-    root.style.setProperty('--color-primary-border', `hsla(${hsl}, 0.25)`);
+    root.style.setProperty('--color-primary-alpha', hexToRgba(primaria, 0.12));
+    root.style.setProperty('--color-primary-subtle', hexToRgba(primaria, 0.05));
+    root.style.setProperty('--color-primary-border', hexToRgba(primaria, 0.28));
     root.style.setProperty('--color-secondary', secundaria);
     root.style.setProperty('--color-accent-brand', destaque);
-    root.style.setProperty('--border-color', '#e2e8f0');
-    root.style.setProperty('--border-card', '#e2e8f0');
+
+    // Bordas minimalistas, elegantes e harmonizadas com a cor personalizada da farmácia
+    // Elimina o aspecto de moldura cinza/preta rígida adaptando a transparência à cor selecionada
+    root.style.setProperty('--border-color', hexToRgba(primaria, 0.12));
+    root.style.setProperty('--border-card', hexToRgba(primaria, 0.14));
 
     // Estilo de Bordas dos Cards
     const bordas = visual.estilo_bordas || 'padrao';

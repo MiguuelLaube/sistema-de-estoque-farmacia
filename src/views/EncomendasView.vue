@@ -527,7 +527,7 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
               width: 100%;
               height: 42px;
               border-radius: 10px;
-              border: 1.5px solid var(--border-color);
+              border: 1px solid var(--border-card);
               background: #ffffff;
               padding-left: 2.5rem;
               padding-right: 1rem;

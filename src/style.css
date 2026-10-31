@@ -32,15 +32,15 @@
   /* Direct Color Tokens */
   --bg-body: #f1f5f9;
   --bg-surface: #ffffff;
-  --border-color: #e2e8f0; /* Borda minimalista, suave e moderna (Slate-200) */
-  --border-card: #e2e8f0;
+  --border-color: rgba(37, 99, 235, 0.12); /* Borda minimalista, suave e moderna */
+  --border-card: rgba(37, 99, 235, 0.14);
   --text-main: hsl(var(--foreground));
   --text-muted: hsl(var(--muted-foreground));
   --color-primary: hsl(var(--primary));
   --color-primary-hover: hsl(217, 72%, 48%);
-  --color-primary-alpha: hsla(var(--primary), 0.12);
-  --color-primary-subtle: hsla(var(--primary), 0.05);
-  --color-primary-border: hsla(var(--primary), 0.25);
+  --color-primary-alpha: rgba(37, 99, 235, 0.12);
+  --color-primary-subtle: rgba(37, 99, 235, 0.05);
+  --color-primary-border: rgba(37, 99, 235, 0.28);
 
   /* Status Colors from mavencomendas */
   --status-aguardando-bg: #fffbeb;
@@ -514,16 +514,16 @@ textarea {
 /* Glass Card & Dashboard Cards */
 .card {
   background: var(--bg-surface);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-card);
   border-radius: var(--radius-lg);
   padding: 1.5rem;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03), 0 1px 2px -1px rgba(0, 0, 0, 0.02);
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
 }
 
 .card:hover {
-  border-color: var(--color-primary-border, #cbd5e1);
-  box-shadow: 0 4px 14px var(--color-primary-alpha, rgba(0, 0, 0, 0.05));
+  border-color: var(--color-primary-border);
+  box-shadow: 0 4px 14px var(--color-primary-alpha);
 }
 
 .stat-grid {
@@ -539,15 +539,15 @@ textarea {
   justify-content: space-between;
   padding: 1.25rem 1.5rem;
   background: var(--bg-surface);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-card);
   border-radius: var(--radius-lg);
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03);
   transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .stat-card:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 8px 20px -4px var(--color-primary-alpha), 0 0 0 1.5px var(--color-primary-alpha);
+  box-shadow: 0 8px 20px -4px var(--color-primary-alpha), 0 0 0 1px var(--color-primary-border);
   transform: translateY(-2px);
 }
 
@@ -1085,16 +1085,16 @@ textarea {
   gap: 0.75rem;
   padding: 0.6rem 0.85rem;
   background-color: #ffffff;
-  border: 1.5px solid var(--border-color);
+  border: 1px solid var(--border-card);
   border-radius: 14px;
   flex-wrap: wrap;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 .filter-toolbar-select {
   padding: 0.45rem 1rem;
   background-color: #ffffff;
-  border: 1.5px solid #cbd5e1;
+  border: 1px solid var(--border-card);
   border-radius: 10px;
   font-size: 0.85rem;
   font-weight: 500;
@@ -1102,17 +1102,18 @@ textarea {
   cursor: pointer;
   outline: none;
   min-width: 175px;
-  transition: border-color var(--transition-fast);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .filter-toolbar-select:focus {
-  border-color: #2563eb;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-alpha);
 }
 
 .toolbar-divider {
   width: 1px;
   height: 22px;
-  background-color: #cbd5e1;
+  background-color: var(--border-card);
   margin: 0 0.25rem;
 }
 
@@ -1122,7 +1123,7 @@ textarea {
   gap: 0.4rem;
   padding: 0.45rem 0.9rem;
   background-color: #ffffff;
-  border: 1.5px solid #cbd5e1;
+  border: 1px solid var(--border-card);
   border-radius: 10px;
   font-size: 0.84rem;
   font-weight: 600;
@@ -1133,6 +1134,7 @@ textarea {
 
 .filter-toolbar-btn:hover {
   background-color: #f8fafc;
+  border-color: var(--color-primary-border);
   color: #0f172a;
 }
 
@@ -1214,7 +1216,7 @@ textarea {
   border-radius: 8px;
   font-size: 0.78rem;
   font-weight: 500;
-  border: 1.5px solid #cbd5e1;
+  border: 1px solid var(--border-card);
   background-color: #ffffff;
   color: #475569;
   cursor: pointer;
@@ -1224,7 +1226,7 @@ textarea {
 .pedido-status-pill:hover {
   background-color: #f8fafc;
   color: #0f172a;
-  border-color: #94a3b8;
+  border-color: var(--color-primary-border);
 }
 
 .pedido-status-pill.active-aguardo {
@@ -1253,7 +1255,7 @@ textarea {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  border: 1.5px solid #cbd5e1;
+  border: 1px solid var(--border-card);
   background-color: #ffffff;
   color: #64748b;
   display: flex;
@@ -1482,7 +1484,7 @@ textarea {
 .form-textarea {
   width: 100%;
   padding: 0.65rem 0.85rem;
-  border: 1.5px solid var(--border-color);
+  border: 1px solid var(--border-card);
   border-radius: var(--radius-md);
   font-size: 0.88rem;
   background-color: var(--bg-surface);
@@ -1560,7 +1562,7 @@ textarea {
   justify-content: center;
   gap: 8px;
   background-color: #ffffff;
-  border: 1.5px solid #cbd5e1;
+  border: 1px solid var(--border-card);
   color: #334155 !important;
   padding: 8px 16px;
   border-radius: 9999px;
@@ -1569,18 +1571,19 @@ textarea {
   transition: all 0.2s ease;
   cursor: pointer;
   text-decoration: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .btn-outline-neutral:hover {
   background-color: #f8fafc;
   color: #0f172a !important;
-  border-color: #94a3b8;
+  border-color: var(--color-primary-border);
 }
 
 .sub-tabs-container {
   display: flex;
   background-color: #e2e8f0;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-card);
   padding: 4px;
   border-radius: 9999px;
   width: fit-content;
@@ -1612,7 +1615,7 @@ textarea {
 
 .pedido-item-card {
   background-color: #ffffff;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-card);
   border-radius: 16px;
   padding: 1rem 1.25rem;
   display: flex;
@@ -1624,7 +1627,7 @@ textarea {
 
 .pedido-item-card:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 8px 24px -4px var(--color-primary-alpha), 0 0 0 1.5px var(--color-primary-border);
+  box-shadow: 0 8px 24px -4px var(--color-primary-alpha), 0 0 0 1px var(--color-primary-border);
   transform: translateY(-2px);
 }
 

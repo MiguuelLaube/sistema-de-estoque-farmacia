@@ -341,7 +341,7 @@ onBeforeUnmount(() => {
         background: #ffffff;
         border-radius: 1.25rem;
         box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
-        border: 1.5px solid var(--border-color);
+        border: 1px solid var(--border-card);
         padding: 1.5rem;
       "
     >

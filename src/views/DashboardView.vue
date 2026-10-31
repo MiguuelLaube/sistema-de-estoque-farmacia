@@ -186,7 +186,7 @@ async function dispararAvisoBot(enc: any) {
           <div
             v-for="enc in encomendasParaAvisar"
             :key="enc.id"
-            style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem 1rem; background: var(--bg-body); border-radius: var(--radius-md); border: 1px solid var(--border-color);"
+            class="ready-item-card"
           >
             <div>
               <div style="font-weight: 600; font-size: 0.92rem;">
@@ -244,7 +244,7 @@ async function dispararAvisoBot(enc: any) {
           <div
             v-for="(item, idx) in medicamentosMaisPedidos"
             :key="item.nome"
-            style="display: flex; align-items: center; justify-content: space-between;"
+            class="ranking-item-row"
           >
             <div style="display: flex; align-items: center; gap: 0.75rem;">
               <span
@@ -269,7 +269,7 @@ async function dispararAvisoBot(enc: any) {
         <div
           v-for="(count, statusName) in metricas.porStatus"
           :key="statusName"
-          style="padding: 1rem; border-radius: var(--radius-md); background: #ffffff; border: 1.5px solid var(--border-color); text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.03);"
+          class="status-breakdown-tile"
         >
           <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">
             {{ statusName }}
@@ -282,3 +282,52 @@ async function dispararAvisoBot(enc: any) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.ready-item-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1.15rem;
+  background: #ffffff;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ready-item-card:hover {
+  border-color: var(--color-primary-border);
+  box-shadow: 0 4px 12px var(--color-primary-alpha);
+  transform: translateY(-1px);
+}
+
+.status-breakdown-tile {
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  border: 1px solid var(--border-card);
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.status-breakdown-tile:hover {
+  border-color: var(--color-primary-border);
+  box-shadow: 0 4px 12px var(--color-primary-alpha);
+  transform: translateY(-1px);
+}
+
+.ranking-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.5rem;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease;
+}
+
+.ranking-item-row:hover {
+  background: var(--color-primary-subtle);
+}
+</style>

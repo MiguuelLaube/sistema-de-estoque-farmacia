@@ -931,12 +931,12 @@ async function removerClassificacao(id: string) {
           </div>
 
           <!-- Logotipo Upload & URL -->
-          <div style="margin-top: 1rem; padding: 1rem; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0;">
+          <div style="margin-top: 1rem; padding: 1rem; border-radius: 12px; background: #f8fafc; border: 1px solid var(--border-card);">
             <label class="form-label" style="margin-bottom: 0.6rem;">Logotipo da Unidade / Drogaria</label>
 
             <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
               <div
-                style="width: 72px; height: 72px; background: #ffffff; border: 1px solid #cbd5e1; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 6px; flex-shrink: 0;"
+                style="width: 72px; height: 72px; background: #ffffff; border: 1px solid var(--border-card); display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 6px; flex-shrink: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.02);"
                 :style="{
                   borderRadius: formFormatoLogo === 'circular' ? '9999px' : formFormatoLogo === 'quadrado' ? '14px' : '10px',
                 }"
@@ -1187,7 +1187,7 @@ async function removerClassificacao(id: string) {
 
       <!-- Coluna Direita: Pré-Visualização Interativa ao Vivo -->
       <div style="position: sticky; top: 1.25rem; align-self: start;">
-        <div class="card" style="padding: 1.25rem; border: 1px solid var(--border-color); box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.06);">
+        <div class="card" style="padding: 1.25rem; border: 1px solid var(--border-card); box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.06);">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.85rem;">
             <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.95rem; color: var(--text-main);">
               <Eye :size="18" style="color: var(--color-primary);" />
@@ -1201,11 +1201,11 @@ async function removerClassificacao(id: string) {
 
           <!-- Browser Mockup Shell -->
           <div
-            style="border: 1px solid #cbd5e1; overflow: hidden; background: #ffffff; box-shadow: 0 12px 32px -8px rgba(15, 23, 42, 0.12);"
+            style="border: 1px solid var(--border-card); overflow: hidden; background: #ffffff; box-shadow: 0 10px 28px -6px rgba(15, 23, 42, 0.08);"
             :style="{ borderRadius: previewRadiusPx }"
           >
             <!-- Browser Header Bar (macOS style window chrome) -->
-            <div style="background: #f1f5f9; border-bottom: 1px solid #e2e8f0; padding: 0.5rem 0.75rem; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <div style="background: #f8fafc; border-bottom: 1px solid var(--border-card); padding: 0.5rem 0.75rem; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
               <!-- 3 Mac Window Dots -->
               <div style="display: flex; align-items: center; gap: 5px;">
                 <span style="width: 9px; height: 9px; border-radius: 9999px; background: #ef4444; display: inline-block;"></span>
@@ -1213,7 +1213,7 @@ async function removerClassificacao(id: string) {
                 <span style="width: 9px; height: 9px; border-radius: 9999px; background: #10b981; display: inline-block;"></span>
               </div>
               <!-- URL Bar -->
-              <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 9999px; padding: 2px 10px; font-size: 0.65rem; color: #64748b; display: flex; align-items: center; gap: 5px; max-width: 190px; width: 100%; justify-content: center;">
+              <div style="background: #ffffff; border: 1px solid var(--border-card); border-radius: 9999px; padding: 2px 10px; font-size: 0.65rem; color: #64748b; display: flex; align-items: center; gap: 5px; max-width: 190px; width: 100%; justify-content: center;">
                 <Lock :size="10" style="color: #059669;" />
                 <span style="font-family: monospace; font-size: 0.62rem; color: #475569; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">app.encomed.com.br</span>
               </div>
@@ -1318,7 +1318,7 @@ async function removerClassificacao(id: string) {
                   </div>
 
                   <!-- Mini User Profile Pill -->
-                  <div style="display: flex; align-items: center; gap: 5px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 9999px; padding: 2px 6px;">
+                  <div style="display: flex; align-items: center; gap: 5px; background: #ffffff; border: 1px solid var(--border-card); border-radius: 9999px; padding: 2px 6px;">
                     <div
                       :style="{ background: `${formCorPrimaria}20`, color: formCorPrimaria }"
                       style="width: 18px; height: 18px; border-radius: 9999px; display: flex; align-items: center; justify-content: center; font-size: 0.62rem; font-weight: 800;"
@@ -1332,7 +1332,7 @@ async function removerClassificacao(id: string) {
                 <!-- Mini KPI Cards Strip -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem;">
                   <div
-                    style="background: #ffffff; border: 1px solid #e2e8f0; padding: 0.45rem 0.6rem; display: flex; flex-direction: column; gap: 2px;"
+                    style="background: #ffffff; border: 1px solid var(--border-card); padding: 0.45rem 0.6rem; display: flex; flex-direction: column; gap: 2px;"
                     :style="{ borderRadius: previewRadiusPx }"
                   >
                     <span style="font-size: 0.58rem; color: #64748b; font-weight: 600; text-transform: uppercase;">Ativas Hoje</span>
@@ -1343,7 +1343,7 @@ async function removerClassificacao(id: string) {
                   </div>
 
                   <div
-                    style="background: #ffffff; border: 1px solid #e2e8f0; padding: 0.45rem 0.6rem; display: flex; flex-direction: column; gap: 2px;"
+                    style="background: #ffffff; border: 1px solid var(--border-card); padding: 0.45rem 0.6rem; display: flex; flex-direction: column; gap: 2px;"
                     :style="{ borderRadius: previewRadiusPx }"
                   >
                     <span style="font-size: 0.58rem; color: #64748b; font-weight: 600; text-transform: uppercase;">A Receber</span>
@@ -1356,7 +1356,7 @@ async function removerClassificacao(id: string) {
 
                 <!-- Realistic Order Card (Preview of Balcão) -->
                 <div
-                  style="background: #ffffff; border: 1px solid #e2e8f0; padding: 0.65rem 0.75rem; display: flex; flex-direction: column; gap: 0.45rem; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.03);"
+                  style="background: #ffffff; border: 1px solid var(--border-card); padding: 0.65rem 0.75rem; display: flex; flex-direction: column; gap: 0.45rem; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.03);"
                   :style="{ borderRadius: previewRadiusPx }"
                 >
                   <!-- Card Header: Category + Client & Price -->
@@ -1437,7 +1437,7 @@ async function removerClassificacao(id: string) {
           </p>
 
           <!-- Chips de Variáveis Clicáveis -->
-          <div style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.25rem; padding: 0.75rem; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 12px;">
+          <div style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.25rem; padding: 0.75rem; background: #f8fafc; border: 1px solid var(--border-card); border-radius: 12px;">
             <span style="font-size: 0.75rem; font-weight: 700; color: #475569; width: 100%; margin-bottom: 2px;">
               Inserir variável no modelo em edição ({{ modeloAtivoFoco.toUpperCase() }}):
             </span>
@@ -1556,7 +1556,7 @@ async function removerClassificacao(id: string) {
 
             <label
               v-if="authStore.isAdmin"
-              style="display: flex; align-items: flex-start; gap: 0.6rem; cursor: pointer; padding-top: 0.6rem; border-top: 1px dashed #cbd5e1;"
+              style="display: flex; align-items: flex-start; gap: 0.6rem; cursor: pointer; padding-top: 0.6rem; border-top: 1px dashed var(--border-card);"
             >
               <input
                 v-model="formOcultarMedicamentosNotificacao"
@@ -1678,7 +1678,7 @@ async function removerClassificacao(id: string) {
             </div>
 
             <!-- Disparo de Teste Escolhendo o Modelo -->
-            <div style="margin-top: 1.15rem; padding-top: 1rem; border-top: 1px dashed #cbd5e1;">
+            <div style="margin-top: 1.15rem; padding-top: 1rem; border-top: 1px dashed var(--border-card);">
               <label class="form-label" style="font-size: 0.82rem; font-weight: 700;">
                 Testar Disparo Real pela API (Adequado ao Modelo Escolhido)
               </label>
@@ -1733,7 +1733,7 @@ async function removerClassificacao(id: string) {
             </div>
 
             <!-- Seção Expansível: Configurações Avançadas de Servidor Próprio (Opcional) -->
-            <div style="margin-top: 1.15rem; padding-top: 1rem; border-top: 1px dashed #cbd5e1;">
+            <div style="margin-top: 1.15rem; padding-top: 1rem; border-top: 1px dashed var(--border-card);">
               <button
                 type="button"
                 @click="showConfigAvancadaWhatsapp = !showConfigAvancadaWhatsapp; if (showConfigAvancadaWhatsapp) carregarCredenciaisWhatsapp();"
@@ -1747,7 +1747,7 @@ async function removerClassificacao(id: string) {
                 <ChevronDown v-else :size="16" style="color: #64748b;" />
               </button>
 
-              <div v-if="showConfigAvancadaWhatsapp" style="margin-top: 0.85rem; display: flex; flex-direction: column; gap: 0.75rem; background: #ffffff; padding: 1rem; border-radius: 10px; border: 1.5px solid #cbd5e1;">
+              <div v-if="showConfigAvancadaWhatsapp" style="margin-top: 0.85rem; display: flex; flex-direction: column; gap: 0.75rem; background: #ffffff; padding: 1rem; border-radius: 10px; border: 1px solid var(--border-card);">
                 <p style="font-size: 0.76rem; color: #64748b; margin: 0; line-height: 1.4;">
                   Por padrão, sua farmácia já utiliza a infraestrutura isolada do EncoMed (instância: <code>{{ instanciaExclusivaWhatsApp || ('encomed_' + authStore.currentTenant.slug) }}</code>). Se sua empresa possui seu próprio servidor Evolution API hospedado na nuvem, preencha os dados abaixo:
                 </p>
@@ -1834,7 +1834,7 @@ async function removerClassificacao(id: string) {
           </div>
 
           <!-- Mockup WhatsApp Header + Chat -->
-          <div style="border-radius: 16px; overflow: hidden; border: 1px solid #cbd5e1; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);">
+          <div style="border-radius: 16px; overflow: hidden; border: 1px solid var(--border-card); box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);">
             <div style="background: #075e54; color: #ffffff; padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.65rem;">
               <div style="width: 34px; height: 34px; border-radius: 50%; background: #ffffff; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 3px;">
                 <img :src="formLogoUrl || '/encomed-logo.png'" alt="Avatar" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
@@ -2246,24 +2246,27 @@ async function removerClassificacao(id: string) {
 .preset-card-btn {
   display: flex;
   flex-direction: column;
-  padding: 0.7rem 0.85rem;
+  padding: 0.75rem 0.9rem;
   border-radius: 12px;
-  border: 1.5px solid #cbd5e1;
+  border: 1px solid var(--border-card);
   background: #ffffff;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   text-align: left;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .preset-card-btn:hover {
-  border-color: #94a3b8;
+  border-color: var(--color-primary-border);
   background: #f8fafc;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px var(--color-primary-alpha);
 }
 
 .preset-card-btn.active {
-  border-color: var(--color-primary, #2563eb);
-  background: hsla(var(--primary), 0.05);
-  box-shadow: 0 0 0 2px hsla(var(--primary), 0.14);
+  border: 1.5px solid var(--color-primary, #2563eb);
+  background: var(--color-primary-subtle, rgba(37, 99, 235, 0.05));
+  box-shadow: 0 0 0 2px var(--color-primary-border, rgba(37, 99, 235, 0.18));
 }
 
 .color-dot {
@@ -2277,17 +2280,18 @@ async function removerClassificacao(id: string) {
 .option-chip-btn {
   padding: 0.42rem 0.9rem;
   border-radius: 9999px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-card);
   background: #ffffff;
   color: #334155;
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .option-chip-btn:hover {
-  border-color: #94a3b8;
+  border-color: var(--color-primary-border);
   background: #f8fafc;
 }
 
@@ -2295,6 +2299,7 @@ async function removerClassificacao(id: string) {
   background: var(--color-primary, #2563eb);
   border-color: var(--color-primary, #2563eb);
   color: #ffffff;
+  box-shadow: 0 2px 8px var(--color-primary-alpha);
 }
 
 .var-tag-chip {
@@ -2303,7 +2308,7 @@ async function removerClassificacao(id: string) {
   gap: 5px;
   padding: 4px 10px;
   border-radius: 9999px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-card);
   background: #ffffff;
   color: #334155;
   font-size: 0.74rem;
@@ -2317,8 +2322,8 @@ async function removerClassificacao(id: string) {
 }
 
 .var-tag-chip:hover {
-  border-color: var(--color-primary, #2563eb);
-  background: #eff6ff;
+  border-color: var(--color-primary-border);
+  background: var(--color-primary-subtle, #eff6ff);
 }
 
 .color-picker-box {
@@ -2327,14 +2332,15 @@ async function removerClassificacao(id: string) {
   gap: 0.5rem;
   padding: 4px;
   background: #ffffff;
-  border: 1.5px solid #cbd5e1;
+  border: 1px solid var(--border-card);
   border-radius: 12px;
   transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .color-picker-box:focus-within {
   border-color: var(--color-primary, #2563eb);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  box-shadow: 0 0 0 3px var(--color-primary-alpha);
 }
 
 .color-swatch-trigger {
