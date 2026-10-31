@@ -115,11 +115,15 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   if (!to.meta.public && !authStore.isAuthenticated) {
-    return next({ name: 'login' });
+    return next({ name: 'landing' });
   }
 
-  if (to.name === 'login' && authStore.isAuthenticated && !authStore.passwordRecoveryMode && authStore.mfaStage === 'none') {
-    return next(authStore.isSuperAdmin ? { name: 'plataforma' } : { name: 'dashboard' });
+  if (to.name === 'login' && !authStore.passwordRecoveryMode && authStore.mfaStage === 'none') {
+    if (authStore.isAuthenticated) {
+      return next(authStore.isSuperAdmin ? { name: 'plataforma' } : { name: 'dashboard' });
+    } else {
+      return next({ name: 'landing', query: { login: 'true' } });
+    }
   }
 
   // Isolamento Zero-Trust LGPD: Super Admin só acessa telas operacionais ou de configuração de tenants com sessão Break-Glass ativa

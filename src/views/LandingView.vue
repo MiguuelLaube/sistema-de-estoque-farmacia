@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import LoginModal from '../components/LoginModal.vue';
@@ -438,8 +438,18 @@ function simularCliqueExportacao(formato: 'PDF' | 'Excel (.xlsx)') {
 // ============================================================================
 let observer: IntersectionObserver | null = null;
 
+watch(
+  () => router.currentRoute.value.query.login,
+  (val) => {
+    if (val === 'true' || val === '1') {
+      showLoginModal.value = true;
+    }
+  }
+);
+
 onMounted(() => {
-  if (router.currentRoute.value.query.login === 'true' || (typeof window !== 'undefined' && window.location.hash === '#login')) {
+  const qLogin = router.currentRoute.value.query.login;
+  if (qLogin === 'true' || qLogin === '1' || (typeof window !== 'undefined' && window.location.hash === '#login')) {
     showLoginModal.value = true;
   }
 
