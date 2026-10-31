@@ -3527,18 +3527,19 @@ onBeforeUnmount(() => {
   background: #f8fafc;
   display: flex;
   flex-direction: column;
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-              box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-              border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-              background-color 0.25s ease;
-  cursor: default;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.28s ease;
+  cursor: pointer;
+  will-change: transform, box-shadow;
 }
 
 .pillar-box:hover {
-  transform: translateY(-5px);
+  transform: translateY(-6px);
   background: #ffffff;
   border-color: #cbd5e1;
-  box-shadow: 0 16px 32px -8px rgba(15, 23, 42, 0.08), 0 4px 10px -2px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 20px 36px -8px rgba(15, 23, 42, 0.10), 0 6px 14px -2px rgba(15, 23, 42, 0.04);
 }
 
 .pillar-icon-box {

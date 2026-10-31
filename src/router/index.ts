@@ -7,7 +7,6 @@ import RelatoriosView from '../views/RelatoriosView.vue';
 import ConfiguracoesView from '../views/ConfiguracoesView.vue';
 import PlataformaView from '../views/PlataformaView.vue';
 import NovaEncomendaView from '../views/NovaEncomendaView.vue';
-import LoginView from '../views/LoginView.vue';
 import LandingView from '../views/LandingView.vue';
 import { useAuthStore } from '../stores/auth';
 import type { PerfilUsuario } from '../types';
@@ -25,7 +24,7 @@ const router = createRouter({
     {
       path: '/login',
       name: 'login',
-      component: LoginView,
+      redirect: () => ({ name: 'landing', query: { login: '1' } }),
       meta: { title: 'Acesso Seguro ao Sistema', public: true },
     },
     {
@@ -105,11 +104,7 @@ router.beforeEach(async (to, _from, next) => {
     await authStore.initAuth();
   }
 
-  // Se 2FA ou redefinição de senha estiver em andamento, mantém na tela /login
-  if ((authStore.mfaStage !== 'none' || authStore.passwordRecoveryMode) && to.name !== 'login') {
-    return next({ name: 'login' });
-  }
-
+  // Se não autenticado, qualquer acesso a páginas privadas redireciona para a landing page
   if (to.path === '/' && !authStore.isAuthenticated) {
     return next({ name: 'landing' });
   }
@@ -118,11 +113,12 @@ router.beforeEach(async (to, _from, next) => {
     return next({ name: 'landing' });
   }
 
+  // Se acessar /login autenticado, redireciona para o painel operacional
   if (to.name === 'login') {
     if (authStore.isAuthenticated) {
       return next(authStore.isSuperAdmin ? { name: 'plataforma' } : { name: 'dashboard' });
     } else {
-      return next({ name: 'landing' });
+      return next({ name: 'landing', query: { login: '1' } });
     }
   }
 

@@ -1466,7 +1466,7 @@ async function removerClassificacao(id: string) {
 
                   <!-- Status Workflow Pipeline (Interactive Pills) -->
                   <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;">
-                    <span style="font-size: 0.58rem; padding: 2px 7px; border-radius: 9999px; background: #f8fafc; color: #94a3b8; border: 1px solid #e2e8f0; font-weight: 600;">
+                    <span style="font-size: 0.58rem; padding: 2px 7px; border-radius: 9999px; background: #f8fafc; color: #94a3b8; border: 1px solid var(--border-card); font-weight: 600;">
                       Aguardando
                     </span>
                     <span style="font-size: 0.58rem; padding: 2px 7px; border-radius: 9999px; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; font-weight: 700;">
@@ -1597,7 +1597,7 @@ async function removerClassificacao(id: string) {
           </div>
 
           <!-- Automações por Etapa + Sigilo Médico LGPD -->
-          <div style="margin-top: 1.25rem; display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0;">
+          <div style="margin-top: 1.25rem; display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem; border-radius: 12px; background: #f8fafc; border: 1px solid var(--border-card);">
             <div style="font-size: 0.85rem; font-weight: 700; color: #0f172a;">
               Gatilhos Automáticos & Conformidade LGPD
             </div>
@@ -1688,7 +1688,7 @@ async function removerClassificacao(id: string) {
             </div>
           </div>
 
-          <div style="padding: 1.15rem; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0;">
+          <div style="padding: 1.15rem; border-radius: 12px; background: #f8fafc; border: 1px solid var(--border-card);">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
               <span style="font-size: 0.88rem; font-weight: 700; color: #1e293b;">
                 Pareamento via QR Code Oficial
@@ -1701,7 +1701,7 @@ async function removerClassificacao(id: string) {
                 style="padding: 5px 14px; font-size: 0.78rem;"
               >
                 <Loader2 v-if="carregandoQr" class="animate-spin" :size="14" />
-                <span v-else>🔄 Sincronizar Estado</span>
+                <span v-else style="display: inline-flex; align-items: center; gap: 4px;"><RotateCcw :size="13" /> Sincronizar Estado</span>
               </button>
             </div>
 
@@ -1709,12 +1709,13 @@ async function removerClassificacao(id: string) {
             <div v-if="statusInstancia === 'open'" style="padding: 1.1rem; background: #ecfdf5; border: 1.5px solid #a7f3d0; border-radius: 12px; color: #065f46;">
               <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
                 <div>
-                  <div style="font-size: 0.95rem; font-weight: 800;">
-                    🎉 WhatsApp desta Farmácia Conectado & Operacional!
+                  <div style="font-size: 0.95rem; font-weight: 800; display: flex; align-items: center; gap: 6px;">
+                    <CheckCircle2 :size="16" style="color: #059669;" />
+                    WhatsApp desta Farmácia Conectado &amp; Operacional
                   </div>
                   <div style="font-size: 0.82rem; margin-top: 4px; color: #047857;">
-                    <span v-if="numeroConectadoWhatsApp">📱 <strong>Número Conectado:</strong> {{ numeroConectadoWhatsApp }}</span>
-                    <span v-if="perfilConectadoWhatsApp"> • 👤 <strong>Perfil:</strong> {{ perfilConectadoWhatsApp }}</span>
+                    <span v-if="numeroConectadoWhatsApp"><strong>Número Conectado:</strong> {{ numeroConectadoWhatsApp }}</span>
+                    <span v-if="perfilConectadoWhatsApp"> • <strong>Perfil:</strong> {{ perfilConectadoWhatsApp }}</span>
                   </div>
                   <div style="font-size: 0.76rem; color: #059669; margin-top: 2px;">
                     Instância ativa: <code>{{ instanciaExclusivaWhatsApp || ('encomed_' + authStore.currentTenant.slug) }}</code>
@@ -1737,7 +1738,7 @@ async function removerClassificacao(id: string) {
             </div>
 
             <!-- Cenário 2: Instância Desconectada / Aguardando QR Code -->
-            <div v-else style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem; padding: 1.25rem; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0;">
+            <div v-else style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem; padding: 1.25rem; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-card);">
               <div v-if="qrcodeBase64" style="background: white; padding: 12px; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.08); text-align: center;">
                 <img :src="qrcodeBase64" alt="QR Code WhatsApp" style="width: 230px; height: 230px; display: block; margin: 0 auto;" />
                 <div style="font-size: 0.74rem; font-weight: 700; color: #2563eb; margin-top: 8px;">
@@ -2306,7 +2307,7 @@ async function removerClassificacao(id: string) {
         <!-- Categorias de Cookies com Toggles -->
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0.85rem; margin-bottom: 1.25rem;">
           <!-- 1. Essenciais -->
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.9rem;">
+          <div style="background: #f8fafc; border: 1px solid var(--border-card); border-radius: 12px; padding: 0.9rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
               <span style="font-size: 0.86rem; font-weight: 700; color: #0f172a;">Estritamente Necessários</span>
               <span style="font-size: 0.68rem; background: #e0f2fe; color: #0369a1; font-weight: 700; padding: 2px 7px; border-radius: 9999px;">Sempre Ativo</span>
@@ -2317,7 +2318,7 @@ async function removerClassificacao(id: string) {
           </div>
 
           <!-- 2. Preferências -->
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.9rem;">
+          <div style="background: #f8fafc; border: 1px solid var(--border-card); border-radius: 12px; padding: 0.9rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
               <span style="font-size: 0.86rem; font-weight: 700; color: #0f172a;">Preferências &amp; Layout</span>
               <label style="display: inline-flex; align-items: center; cursor: pointer;">
@@ -2334,7 +2335,7 @@ async function removerClassificacao(id: string) {
           </div>
 
           <!-- 3. Analíticos -->
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.9rem;">
+          <div style="background: #f8fafc; border: 1px solid var(--border-card); border-radius: 12px; padding: 0.9rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
               <span style="font-size: 0.86rem; font-weight: 700; color: #0f172a;">Desempenho &amp; Estabilidade</span>
               <label style="display: inline-flex; align-items: center; cursor: pointer;">
@@ -2457,16 +2458,24 @@ async function removerClassificacao(id: string) {
 }
 
 .preset-card-btn:hover {
-  border-color: var(--color-primary-border);
-  background: #f8fafc;
+  border-color: var(--color-primary);
+  background: var(--color-primary-subtle);
   transform: translateY(-1px);
   box-shadow: 0 4px 10px var(--color-primary-alpha);
+}
+
+.preset-card-btn:hover strong {
+  color: var(--color-primary) !important;
 }
 
 .preset-card-btn.active {
   border: 1.5px solid var(--color-primary, #2563eb);
   background: var(--color-primary-subtle, rgba(37, 99, 235, 0.05));
   box-shadow: 0 0 0 2px var(--color-primary-border, rgba(37, 99, 235, 0.18));
+}
+
+.preset-card-btn.active strong {
+  color: var(--color-primary) !important;
 }
 
 .color-dot {
@@ -2491,8 +2500,9 @@ async function removerClassificacao(id: string) {
 }
 
 .option-chip-btn:hover {
-  border-color: var(--color-primary-border);
-  background: #f8fafc;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-subtle);
 }
 
 .option-chip-btn.active {
