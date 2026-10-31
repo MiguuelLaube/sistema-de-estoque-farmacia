@@ -44,6 +44,44 @@ const formCpf = ref('');
 const formEndereco = ref('');
 const alertaDuplicidade = ref<string | null>(null);
 
+function formatarTelefoneInput(val: string): string {
+  if (!val) return '';
+  let digits = val.replace(/\D/g, '');
+  if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+    digits = digits.slice(2);
+  }
+  digits = digits.slice(0, 11);
+  if (digits.length === 0) return '';
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+}
+
+function formatarCpfInput(val: string): string {
+  if (!val) return '';
+  const d = val.replace(/\D/g, '').slice(0, 11);
+  if (d.length === 0) return '';
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9, 11)}`;
+}
+
+function onTelefoneInput(e: Event) {
+  const target = e.target as HTMLInputElement;
+  formTelefone.value = formatarTelefoneInput(target.value);
+  verificarDuplicidadeTempoReal();
+}
+
+function onCpfInput(e: Event) {
+  const target = e.target as HTMLInputElement;
+  formCpf.value = formatarCpfInput(target.value);
+  verificarDuplicidadeTempoReal();
+}
+
 // Clientes Enriquecidos com contagem de pedidos
 const clientesEnriquecidos = computed(() => {
   const q = buscaTexto.value.toLowerCase().trim();
@@ -240,7 +278,9 @@ async function anonimizarTitular(c: Cliente) {
         v-model="buscaTexto"
         type="text"
         placeholder="Buscar por nome, CPF ou telefone..."
-        style="width: 100%; height: 44px; border-radius: 12px; border: 1.5px solid var(--border-color); background: #ffffff; padding-left: 2.6rem; padding-right: 1rem; font-size: 0.92rem; color: #0f172a; outline: none; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: border-color 0.15s ease;"
+        style="width: 100%; height: 44px; border-radius: 12px; border: 1px solid var(--border-color); background: #ffffff; padding-left: 2.6rem; padding-right: 1rem; font-size: 0.92rem; color: #0f172a; outline: none; box-shadow: 0 1px 2px rgba(0,0,0,0.03); transition: border-color 0.15s ease, box-shadow 0.15s ease;"
+        onfocus="this.style.borderColor='var(--color-primary)'; this.style.boxShadow='0 0 0 3px var(--color-primary-alpha)'"
+        onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='0 1px 2px rgba(0,0,0,0.03)'"
         id="input-busca-clientes"
       />
     </div>
@@ -261,8 +301,8 @@ async function anonimizarTitular(c: Cliente) {
         <!-- Left Side: Avatar + Info -->
         <div style="display: flex; align-items: center; gap: 1rem; min-width: 0;">
           <!-- Avatar Letter Box -->
-          <div style="width: 44px; height: 44px; border-radius: 14px; background-color: #eff6ff; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-            <span style="font-size: 1.05rem; font-weight: 700; color: #2563eb; font-family: var(--font-heading);">
+          <div style="width: 44px; height: 44px; border-radius: 14px; background-color: var(--color-primary-alpha); color: var(--color-primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <span style="font-size: 1.05rem; font-weight: 700; color: var(--color-primary); font-family: var(--font-heading);">
               {{ c.nome.charAt(0).toUpperCase() }}
             </span>
           </div>
@@ -306,9 +346,9 @@ async function anonimizarTitular(c: Cliente) {
                   display: inline-flex;
                   align-items: center;
                   gap: 4px;
-                  color: #2563eb;
-                  background: #eff6ff;
-                  border: 1px solid #bfdbfe;
+                  color: var(--color-primary);
+                  background: var(--color-primary-alpha);
+                  border: 1px solid var(--color-primary-border);
                   padding: 2px 8px;
                   border-radius: 9999px;
                   font-size: 0.76rem;
@@ -332,20 +372,6 @@ async function anonimizarTitular(c: Cliente) {
           <button
             @click="abrirHistorico(c)"
             class="btn-historico-pill"
-            style="
-              display: inline-flex;
-              align-items: center;
-              gap: 0.4rem;
-              background-color: #eff6ff;
-              color: #2563eb;
-              border: 1px solid #bfdbfe;
-              border-radius: 9999px;
-              padding: 0.42rem 0.95rem;
-              font-size: 0.82rem;
-              font-weight: 700;
-              cursor: pointer;
-              transition: all 150ms ease;
-            "
             title="Ver histórico de medicamentos, preços e datas deste cliente"
             :id="'btn-historico-cliente-' + c.id"
           >
@@ -434,9 +460,11 @@ async function anonimizarTitular(c: Cliente) {
             </label>
             <input
               v-model="formTelefone"
-              @input="verificarDuplicidadeTempoReal"
-              type="text"
-              placeholder="(12) 96225-4802"
+              @input="onTelefoneInput"
+              @focus="($event.target as HTMLInputElement).select()"
+              type="tel"
+              maxlength="15"
+              placeholder="(12) 99298-2535"
               class="base44-modal-input"
               required
               id="input-cliente-telefone"
@@ -450,8 +478,10 @@ async function anonimizarTitular(c: Cliente) {
             </label>
             <input
               v-model="formCpf"
-              @input="verificarDuplicidadeTempoReal"
+              @input="onCpfInput"
+              @focus="($event.target as HTMLInputElement).select()"
               type="text"
+              maxlength="14"
               placeholder="000.000.000-00"
               class="base44-modal-input"
               id="input-cliente-cpf"

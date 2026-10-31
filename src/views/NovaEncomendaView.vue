@@ -32,7 +32,7 @@ const showClientDropdown = ref(false);
 const formErrorMsg = ref<string>('');
 
 const itens = ref<Array<{ quantity: number; name: string; price: string }>>([
-  { quantity: 1, name: '', price: '0,00' },
+  { quantity: 1, name: '', price: '' },
 ]);
 
 const activeSuggestionIndex = ref<number | null>(null);
@@ -41,6 +41,34 @@ const suggestions = ref<Array<{ name: string; price?: number }>>([]);
 const valorJaPagoStr = ref<string>('');
 const observacoes = ref<string>('');
 const medicamentoPago = ref<boolean>(false);
+
+function formatarMoedaInput(valor: string | number): string {
+  if (valor === '' || valor === null || valor === undefined) return '';
+  const numStr = String(valor).replace(/\D/g, '');
+  if (!numStr) return '';
+  const cents = parseInt(numStr, 10);
+  if (isNaN(cents) || cents === 0) return '';
+  return (cents / 100).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatarTelefoneInput(val: string): string {
+  if (!val) return '';
+  let digits = val.replace(/\D/g, '');
+  if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+    digits = digits.slice(2);
+  }
+  digits = digits.slice(0, 11);
+  if (digits.length === 0) return '';
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+}
 
 // Employee Modal State
 const showEmployeeModal = ref<boolean>(false);
@@ -86,7 +114,7 @@ function handleClientBlur() {
 
 // Medications Management
 function addItem() {
-  itens.value.push({ quantity: 1, name: '', price: '0,00' });
+  itens.value.push({ quantity: 1, name: '', price: '' });
 }
 
 function removeItem(index: number) {
@@ -109,14 +137,15 @@ function handleMedicationInput(index: number) {
 function selectSuggestion(index: number, sug: { name: string; price?: number }) {
   itens.value[index].name = sug.name;
   if (sug.price && sug.price > 0) {
-    itens.value[index].price = sug.price.toFixed(2).replace('.', ',');
+    itens.value[index].price = sug.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   activeSuggestionIndex.value = null;
 }
 
-function parseMoney(valStr: string): number {
+function parseMoney(valStr: string | number): number {
+  if (typeof valStr === 'number') return isNaN(valStr) ? 0 : valStr;
   if (!valStr) return 0;
-  const clean = valStr.toString().replace(/[^\d,\.]/g, '').replace(',', '.');
+  const clean = valStr.toString().replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '');
   const num = parseFloat(clean);
   return isNaN(num) ? 0 : num;
 }
@@ -143,9 +172,11 @@ const valorACobrar = computed(() => {
 // Watch payment toggle
 watch(medicamentoPago, (pago) => {
   if (pago) {
-    valorJaPagoStr.value = totalCalculado.value.toFixed(2).replace('.', ',');
+    valorJaPagoStr.value = totalCalculado.value > 0
+      ? totalCalculado.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : '';
   } else {
-    valorJaPagoStr.value = '0,00';
+    valorJaPagoStr.value = '';
   }
 });
 
@@ -347,8 +378,8 @@ onBeforeUnmount(() => {
                 width: '100%',
                 height: '42px',
                 borderRadius: '10px',
-                border: selectedClientId ? '1px solid #2563eb' : '1px solid #e2e8f0',
-                background: selectedClientId ? '#eff6ff' : '#ffffff',
+                border: selectedClientId ? '1px solid var(--color-primary)' : '1px solid var(--border-color)',
+                background: selectedClientId ? 'var(--color-primary-alpha)' : '#ffffff',
                 padding: '0 2.2rem 0 0.85rem',
                 fontSize: '0.9rem',
                 color: '#0f172a',
@@ -362,7 +393,7 @@ onBeforeUnmount(() => {
             <!-- Selected checkmark -->
             <span
               v-if="selectedClientId"
-              style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: #2563eb; font-weight: 700; font-size: 0.88rem;"
+              style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--color-primary); font-weight: 700; font-size: 0.88rem;"
             >
               ✓
             </span>
@@ -421,19 +452,25 @@ onBeforeUnmount(() => {
             </label>
             <input
               v-model="clientQuickPhone"
-              type="text"
-              placeholder="(12) 99999-9999"
+              @input="clientQuickPhone = formatarTelefoneInput(($event.target as HTMLInputElement).value)"
+              @focus="($event.target as HTMLInputElement).select()"
+              type="tel"
+              maxlength="15"
+              placeholder="(12) 99298-2535"
               style="
                 width: 100%;
                 height: 38px;
                 border-radius: 10px;
-                border: 1px solid #cbd5e1;
+                border: 1px solid var(--border-color);
                 background: #f8fafc;
                 padding: 0 0.85rem;
                 font-size: 0.86rem;
                 color: #0f172a;
                 outline: none;
+                transition: border-color 0.15s ease, box-shadow 0.15s ease;
               "
+              onfocus="this.style.borderColor='var(--color-primary)'; this.style.boxShadow='0 0 0 3px var(--color-primary-alpha)'"
+              onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'"
               id="input-nova-encomenda-cliente-telefone"
             />
           </div>
@@ -545,26 +582,32 @@ onBeforeUnmount(() => {
               </div>
 
               <!-- Price Input with R$ prefix -->
-              <div style="position: relative; width: 105px; flex-shrink: 0;">
+              <div style="position: relative; width: 110px; flex-shrink: 0;">
                 <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.82rem; color: #64748b;">
                   R$
                 </span>
                 <input
                   v-model="it.price"
+                  @input="it.price = formatarMoedaInput(($event.target as HTMLInputElement).value)"
+                  @focus="($event.target as HTMLInputElement).select()"
                   type="text"
+                  inputmode="numeric"
                   placeholder="0,00"
                   style="
                     width: 100%;
                     height: 40px;
                     border-radius: 10px;
-                    border: 1px solid #e2e8f0;
+                    border: 1px solid var(--border-color);
                     background: #ffffff;
                     padding-left: 2.1rem;
                     padding-right: 0.6rem;
                     font-size: 0.88rem;
                     color: #0f172a;
                     outline: none;
+                    transition: border-color 0.15s ease, box-shadow 0.15s ease;
                   "
+                  onfocus="this.style.borderColor='var(--color-primary)'; this.style.boxShadow='0 0 0 3px var(--color-primary-alpha)'"
+                  onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'"
                   required
                 />
               </div>
@@ -624,24 +667,24 @@ onBeforeUnmount(() => {
             <span>Adicionar Medicamento</span>
           </button>
 
-          <!-- Total Banner (matching Screenshot 2: light blue container) -->
+          <!-- Total Banner (matching Screenshot 2: dynamic primary color container) -->
           <div
             style="
               display: flex;
               align-items: center;
               justify-content: space-between;
-              background: #eff6ff;
-              border: 1px solid #bfdbfe;
+              background: var(--color-primary-alpha);
+              border: 1px solid var(--color-primary-border);
               border-radius: 10px;
               padding: 0.75rem 1rem;
               margin-top: 0.5rem;
             "
           >
-            <span style="display: flex; align-items: center; gap: 0.45rem; font-size: 0.9rem; font-weight: 600; color: #1e3a8a;">
-              <DollarSign :size="16" style="color: #2563eb;" />
+            <span style="display: flex; align-items: center; gap: 0.45rem; font-size: 0.9rem; font-weight: 600; color: var(--color-primary);">
+              <DollarSign :size="16" style="color: var(--color-primary);" />
               <span>Total</span>
             </span>
-            <span style="font-size: 1.15rem; font-weight: 700; color: #2563eb;">
+            <span style="font-size: 1.15rem; font-weight: 700; color: var(--color-primary);">
               {{ formatBRL(totalCalculado) }}
             </span>
           </div>
@@ -660,21 +703,27 @@ onBeforeUnmount(() => {
               </span>
               <input
                 v-model="valorJaPagoStr"
+                @input="valorJaPagoStr = formatarMoedaInput(($event.target as HTMLInputElement).value)"
+                @focus="($event.target as HTMLInputElement).select()"
                 :disabled="medicamentoPago"
                 type="text"
+                inputmode="numeric"
                 placeholder="0,00"
                 style="
                   width: 100%;
                   height: 38px;
                   border-radius: 8px;
-                  border: 1px solid #e2e8f0;
+                  border: 1px solid var(--border-color);
                   background: #ffffff;
                   padding-left: 2.1rem;
                   padding-right: 0.75rem;
                   font-size: 0.88rem;
                   color: #0f172a;
                   outline: none;
+                  transition: border-color 0.15s ease, box-shadow 0.15s ease;
                 "
+                onfocus="this.style.borderColor='var(--color-primary)'; this.style.boxShadow='0 0 0 3px var(--color-primary-alpha)'"
+                onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'"
               />
             </div>
           </div>
@@ -691,11 +740,11 @@ onBeforeUnmount(() => {
                 height: 38px;
                 padding: 0 0.85rem;
                 border-radius: 8px;
-                border: 1px solid #bfdbfe;
-                background: #eff6ff;
+                border: 1px solid var(--color-primary-border);
+                background: var(--color-primary-alpha);
                 font-size: 0.9rem;
                 font-weight: 600;
-                color: #2563eb;
+                color: var(--color-primary);
               "
             >
               {{ formatBRL(valorACobrar) }}
@@ -717,7 +766,7 @@ onBeforeUnmount(() => {
             style="
               width: 100%;
               border-radius: 10px;
-              border: 1px solid #e2e8f0;
+              border: 1px solid var(--border-color);
               background: #ffffff;
               padding: 0.65rem 0.85rem;
               font-size: 0.88rem;
@@ -725,7 +774,10 @@ onBeforeUnmount(() => {
               resize: none;
               outline: none;
               font-family: inherit;
+              transition: border-color 0.15s ease, box-shadow 0.15s ease;
             "
+            onfocus="this.style.borderColor='var(--color-primary)'; this.style.boxShadow='0 0 0 3px var(--color-primary-alpha)'"
+            onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'"
           ></textarea>
         </div>
 
@@ -745,9 +797,9 @@ onBeforeUnmount(() => {
             text-align: left;
           "
           :style="{
-            border: medicamentoPago ? '2px solid #2563eb' : '2px solid #e2e8f0',
-            background: medicamentoPago ? '#eff6ff' : '#ffffff',
-            color: medicamentoPago ? '#2563eb' : '#64748b',
+            border: medicamentoPago ? '2px solid var(--color-primary)' : '1px solid var(--border-color)',
+            background: medicamentoPago ? 'var(--color-primary-alpha)' : '#ffffff',
+            color: medicamentoPago ? 'var(--color-primary)' : '#64748b',
           }"
           id="btn-toggle-medicamento-pago"
         >
@@ -763,8 +815,8 @@ onBeforeUnmount(() => {
               transition: all 0.15s ease;
             "
             :style="{
-              border: medicamentoPago ? '2px solid #2563eb' : '2px solid #94a3b8',
-              background: medicamentoPago ? '#2563eb' : 'transparent',
+              border: medicamentoPago ? '2px solid var(--color-primary)' : '2px solid #94a3b8',
+              background: medicamentoPago ? 'var(--color-primary)' : 'transparent',
             }"
           >
             <Check v-if="medicamentoPago" :size="12" style="color: #ffffff; stroke-width: 3;" />

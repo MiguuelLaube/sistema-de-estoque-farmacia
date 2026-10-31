@@ -36,3 +36,6 @@ cloudflared.exe
 *.log
 .obsidian/
 Athena-Public/
+
+.vercel
+.env*

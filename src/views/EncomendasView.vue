@@ -1447,14 +1447,14 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
 .encomenda-card-block {
   background: #ffffff;
   border-radius: 1.25rem;
-  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.06);
-  border: 1.5px solid var(--border-color);
+  box-shadow: 0 2px 8px -2px rgba(15, 23, 42, 0.04);
+  border: 1px solid var(--border-color);
   padding: 1.25rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   position: relative;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   box-sizing: border-box;
   max-width: 100%;
   height: fit-content;
@@ -1464,16 +1464,16 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
   box-sizing: border-box;
 }
 
-/* ANIMAÇÃO AO PASSAR O MOUSE: Apenas realce de cor e sombra suave, sem alterar tamanho */
+/* ANIMAÇÃO AO PASSAR O MOUSE: Apenas realce dinâmico da cor primária e sombra suave */
 .encomenda-card-block:hover {
-  border-color: #2563eb;
-  box-shadow: 0 6px 16px -2px rgba(37, 99, 235, 0.14);
+  border-color: var(--color-primary);
+  box-shadow: 0 6px 16px -2px var(--color-primary-alpha);
 }
 
 /* BLOCO DE ENCOMENDA NA ABA DE PESQUISA */
 .encomenda-search-card-block {
   background: #ffffff;
-  border: 1.5px solid var(--border-color);
+  border: 1px solid var(--border-color);
   border-radius: 14px;
   padding: 0.9rem 1.15rem;
   display: flex;
@@ -1485,8 +1485,8 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
 }
 
 .encomenda-search-card-block:hover {
-  border-color: #2563eb;
-  box-shadow: 0 8px 22px -3px rgba(37, 99, 235, 0.14), 0 0 0 2.5px rgba(37, 99, 235, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: 0 8px 22px -3px var(--color-primary-alpha), 0 0 0 1.5px var(--color-primary-border);
   transform: translateY(-2px);
 }
 </style>

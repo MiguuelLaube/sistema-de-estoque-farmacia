@@ -438,15 +438,15 @@ const linkWhatsAppCliente = computed(() => {
               width: 52px;
               height: 52px;
               border-radius: 16px;
-              background-color: #eff6ff;
-              border: 1px solid #bfdbfe;
+              background-color: var(--color-primary-alpha);
+              border: 1px solid var(--color-primary-border);
               display: flex;
               align-items: center;
               justify-content: center;
               flex-shrink: 0;
             "
           >
-            <span style="font-size: 1.35rem; font-weight: 800; color: #2563eb; font-family: var(--font-heading);">
+            <span style="font-size: 1.35rem; font-weight: 800; color: var(--color-primary); font-family: var(--font-heading);">
               {{ cliente.nome.charAt(0).toUpperCase() }}
             </span>
           </div>
@@ -474,9 +474,9 @@ const linkWhatsAppCliente = computed(() => {
                   display: inline-flex;
                   align-items: center;
                   gap: 4px;
-                  background: #eff6ff;
-                  color: #2563eb;
-                  border: 1px solid #bfdbfe;
+                  background: var(--color-primary-alpha);
+                  color: var(--color-primary);
+                  border: 1px solid var(--color-primary-border);
                   padding: 2px 8px;
                   border-radius: 9999px;
                   font-size: 0.72rem;
@@ -660,14 +660,14 @@ const linkWhatsAppCliente = computed(() => {
             gap: 0.75rem;
           "
         >
-          <div style="width: 38px; height: 38px; border-radius: 10px; background: #eff6ff; display: flex; align-items: center; justify-content: center; color: #2563eb; flex-shrink: 0;">
+          <div style="width: 38px; height: 38px; border-radius: 10px; background: var(--color-primary-alpha); display: flex; align-items: center; justify-content: center; color: var(--color-primary); flex-shrink: 0;">
             <DollarSign :size="20" />
           </div>
           <div>
             <div style="font-size: 0.74rem; font-weight: 600; color: #64748b; text-transform: uppercase;">
               Total em Compras
             </div>
-            <div style="font-size: 1.15rem; font-weight: 800; color: #2563eb; line-height: 1.2;">
+            <div style="font-size: 1.15rem; font-weight: 800; color: var(--color-primary); line-height: 1.2;">
               {{ formatBRL(estatisticas.totalValorGasto) }}
             </div>
           </div>
@@ -827,7 +827,7 @@ const linkWhatsAppCliente = computed(() => {
               @click="viewMode = 'medicamentos'"
               :style="{
                 background: viewMode === 'medicamentos' ? '#ffffff' : 'transparent',
-                color: viewMode === 'medicamentos' ? '#2563eb' : '#64748b',
+                color: viewMode === 'medicamentos' ? 'var(--color-primary)' : '#64748b',
                 fontWeight: viewMode === 'medicamentos' ? 700 : 500,
                 boxShadow: viewMode === 'medicamentos' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
               }"
@@ -841,7 +841,7 @@ const linkWhatsAppCliente = computed(() => {
               @click="viewMode = 'pedidos'"
               :style="{
                 background: viewMode === 'pedidos' ? '#ffffff' : 'transparent',
-                color: viewMode === 'pedidos' ? '#2563eb' : '#64748b',
+                color: viewMode === 'pedidos' ? 'var(--color-primary)' : '#64748b',
                 fontWeight: viewMode === 'pedidos' ? 700 : 500,
                 boxShadow: viewMode === 'pedidos' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
               }"
@@ -925,12 +925,12 @@ const linkWhatsAppCliente = computed(() => {
                   width: 44px;
                   height: 44px;
                   border-radius: 12px;
-                  background: #eff6ff;
-                  border: 1px solid #bfdbfe;
+                  background: var(--color-primary-alpha);
+                  border: 1px solid var(--color-primary-border);
                   display: flex;
                   align-items: center;
                   justify-content: center;
-                  color: #2563eb;
+                  color: var(--color-primary);
                   flex-shrink: 0;
                   margin-top: 2px;
                 "
@@ -941,7 +941,7 @@ const linkWhatsAppCliente = computed(() => {
               <!-- Detalhes do Medicamento -->
               <div style="min-width: 0;">
                 <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                  <span style="font-weight: 800; font-size: 0.95rem; color: #2563eb; background: #eff6ff; padding: 1px 7px; border-radius: 6px;">
+                  <span style="font-weight: 800; font-size: 0.95rem; color: var(--color-primary); background: var(--color-primary-alpha); padding: 1px 7px; border-radius: 6px;">
                     {{ item.quantidade }}x
                   </span>
                   <h4

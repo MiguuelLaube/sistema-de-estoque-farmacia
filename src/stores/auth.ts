@@ -260,12 +260,17 @@ export const useAuthStore = defineStore('auth', () => {
     const visual = cfg.visual_opcoes || {};
     const destaque = visual.cor_destaque || '#059669';
 
-    root.style.setProperty('--primary', hexToHslTriplet(primaria));
+    const hsl = hexToHslTriplet(primaria);
+    root.style.setProperty('--primary', hsl);
     root.style.setProperty('--color-primary', primaria);
     root.style.setProperty('--color-primary-hover', adjustColorBrightness(primaria, -12));
-    root.style.setProperty('--color-primary-alpha', `${primaria}22`);
+    root.style.setProperty('--color-primary-alpha', `hsla(${hsl}, 0.12)`);
+    root.style.setProperty('--color-primary-subtle', `hsla(${hsl}, 0.05)`);
+    root.style.setProperty('--color-primary-border', `hsla(${hsl}, 0.25)`);
     root.style.setProperty('--color-secondary', secundaria);
     root.style.setProperty('--color-accent-brand', destaque);
+    root.style.setProperty('--border-color', '#e2e8f0');
+    root.style.setProperty('--border-card', '#e2e8f0');
 
     // Estilo de Bordas dos Cards
     const bordas = visual.estilo_bordas || 'padrao';

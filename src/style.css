@@ -32,13 +32,15 @@
   /* Direct Color Tokens */
   --bg-body: #f1f5f9;
   --bg-surface: #ffffff;
-  --border-color: #94a3b8; /* Borda bem definida (Slate-400) visível em qualquer monitor */
-  --border-card: #94a3b8;
+  --border-color: #e2e8f0; /* Borda minimalista, suave e moderna (Slate-200) */
+  --border-card: #e2e8f0;
   --text-main: hsl(var(--foreground));
   --text-muted: hsl(var(--muted-foreground));
   --color-primary: hsl(var(--primary));
   --color-primary-hover: hsl(217, 72%, 48%);
   --color-primary-alpha: hsla(var(--primary), 0.12);
+  --color-primary-subtle: hsla(var(--primary), 0.05);
+  --color-primary-border: hsla(var(--primary), 0.25);
 
   /* Status Colors from mavencomendas */
   --status-aguardando-bg: #fffbeb;
@@ -513,16 +515,16 @@ textarea {
 /* Glass Card & Dashboard Cards */
 .card {
   background: var(--bg-surface);
-  border: 1.5px solid var(--border-color);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: 1.5rem;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.02);
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
 }
 
 .card:hover {
-  border-color: #94a3b8;
-  box-shadow: var(--shadow-md);
+  border-color: var(--color-primary-border, #cbd5e1);
+  box-shadow: 0 4px 14px var(--color-primary-alpha, rgba(0, 0, 0, 0.05));
 }
 
 .stat-grid {
@@ -538,15 +540,15 @@ textarea {
   justify-content: space-between;
   padding: 1.25rem 1.5rem;
   background: var(--bg-surface);
-  border: 1.5px solid var(--border-color);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
   transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .stat-card:hover {
-  border-color: #2563eb;
-  box-shadow: 0 10px 24px -4px rgba(37, 99, 235, 0.14), 0 0 0 2.5px rgba(37, 99, 235, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: 0 8px 20px -4px var(--color-primary-alpha), 0 0 0 1.5px var(--color-primary-alpha);
   transform: translateY(-2px);
 }
 
@@ -785,18 +787,18 @@ textarea {
 }
 
 .base44-order-card {
-  border: 1.5px solid var(--border-color);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: 1.25rem;
   background-color: #ffffff;
-  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.05);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .base44-order-card:hover {
-  border-color: #2563eb;
-  box-shadow: 0 12px 28px -4px rgba(37, 99, 235, 0.16), 0 0 0 3px rgba(37, 99, 235, 0.22);
-  transform: translateY(-3px);
+  border-color: var(--color-primary);
+  box-shadow: 0 8px 24px -4px var(--color-primary-alpha), 0 0 0 1.5px var(--color-primary-alpha);
+  transform: translateY(-2px);
 }
 
 /* Base44 Search Mode Selector */
@@ -1142,9 +1144,9 @@ textarea {
 }
 
 .filter-toolbar-btn.active-az {
-  background-color: #eff6ff;
-  border-color: #2563eb;
-  color: #2563eb;
+  background-color: var(--color-primary-alpha);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 /* Category Header Pill (e.g. 🏷 FORMULA 3 item(s)) */
@@ -1154,9 +1156,9 @@ textarea {
   gap: 0.45rem;
   padding: 0.25rem 0.8rem;
   border-radius: 9999px;
-  border: 1px solid #bfdbfe;
-  background-color: #eff6ff;
-  color: #2563eb;
+  border: 1px solid var(--color-primary-border);
+  background-color: var(--color-primary-alpha);
+  color: var(--color-primary);
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -1170,15 +1172,16 @@ textarea {
   justify-content: space-between;
   padding: 1.1rem 1.4rem;
   background-color: #ffffff;
-  border: 1.5px solid var(--border-color);
+  border: 1px solid var(--border-color);
   border-radius: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  transition: all var(--transition-smooth);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .pedido-item-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  border-color: #2563eb;
+  box-shadow: 0 6px 20px -2px var(--color-primary-alpha), 0 0 0 1.5px var(--color-primary-border);
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
 }
 
 .pedido-item-name {
@@ -1315,8 +1318,8 @@ textarea {
 }
 
 .base44-modal-input:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-alpha);
 }
 
 .modal-btn-cancelar {
@@ -1337,7 +1340,7 @@ textarea {
 }
 
 .modal-btn-adicionar {
-  background-color: #2563eb;
+  background-color: var(--color-primary);
   border: none;
   color: #ffffff;
   border-radius: 12px;
@@ -1345,12 +1348,12 @@ textarea {
   font-weight: 600;
   font-size: 0.9rem;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 4px 12px var(--color-primary-alpha);
   transition: all var(--transition-fast);
 }
 
 .modal-btn-adicionar:hover {
-  background-color: #1d4ed8;
+  background-color: var(--color-primary-hover);
 }
 
 .autocomplete-dropdown {
@@ -1610,18 +1613,41 @@ textarea {
 
 .pedido-item-card {
   background-color: #ffffff;
-  border: 1.5px solid var(--border-color);
+  border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 1rem 1.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .pedido-item-card:hover {
-  border-color: #2563eb;
-  box-shadow: 0 8px 24px -4px rgba(37, 99, 235, 0.14), 0 0 0 2.5px rgba(37, 99, 235, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: 0 8px 24px -4px var(--color-primary-alpha), 0 0 0 1.5px var(--color-primary-border);
   transform: translateY(-2px);
+}
+
+.btn-historico-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background-color: var(--color-primary-alpha);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary-border);
+  border-radius: 9999px;
+  padding: 0.42rem 0.95rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.btn-historico-pill:hover {
+  background-color: var(--color-primary);
+  color: #ffffff;
+  border-color: var(--color-primary);
+  box-shadow: 0 4px 12px var(--color-primary-alpha);
+  transform: translateY(-1px);
 }
