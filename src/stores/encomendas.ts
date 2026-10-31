@@ -37,6 +37,20 @@ export const useEncomendasStore = defineStore('encomendas', () => {
   const isLoading = ref<boolean>(false);
   const erroOperacao = ref<string | null>(null);
 
+  // Controle de Pop-up Global de Nova Encomenda
+  const showNovaEncomendaModal = ref<boolean>(false);
+  const clientePreSelecionadoId = ref<string | null>(null);
+
+  function abrirModalNovaEncomenda(clienteId?: string) {
+    clientePreSelecionadoId.value = clienteId || null;
+    showNovaEncomendaModal.value = true;
+  }
+
+  function fecharModalNovaEncomenda() {
+    showNovaEncomendaModal.value = false;
+    clientePreSelecionadoId.value = null;
+  }
+
   /**
    * Carrega encomendas ativas do tenant logado sob isolamento RLS
    */
@@ -984,5 +998,9 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     obterResumoEncomenda,
     dispararNotificacaoModeloEvolution,
     dispararNotificacaoChegadaEvolution,
+    showNovaEncomendaModal,
+    clientePreSelecionadoId,
+    abrirModalNovaEncomenda,
+    fecharModalNovaEncomenda,
   };
 });

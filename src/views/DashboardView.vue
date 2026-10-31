@@ -121,7 +121,7 @@ async function dispararAvisoBot(enc: any) {
       </div>
 
       <button
-        @click="router.push('/nova-encomenda')"
+        @click="encomendasStore.abrirModalNovaEncomenda()"
         class="btn-primary-pill"
         id="btn-dashboard-nova-encomenda"
       >

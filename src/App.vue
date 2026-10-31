@@ -6,6 +6,7 @@ import { useEncomendasStore } from './stores/encomendas';
 import CookieBanner from './components/CookieBanner.vue';
 import PrimeiroAcessoModal from './components/PrimeiroAcessoModal.vue';
 import AppDialogModal from './components/AppDialogModal.vue';
+import NovaEncomendaModal from './components/NovaEncomendaModal.vue';
 import {
   LayoutDashboard,
   PackageOpen,
@@ -217,14 +218,15 @@ async function encerrarSuporteBreakGlass() {
 
       <!-- Quick Action: Nova Encomenda button pinned in sidebar -->
       <div v-if="!authStore.isSuperAdmin || authStore.breakGlassTenantId" class="sidebar-quick-action">
-        <router-link
-          to="/nova-encomenda"
+        <button
+          type="button"
+          @click="encomendasStore.abrirModalNovaEncomenda()"
           class="btn-nova-encomenda-sidebar"
           id="btn-sidebar-nova-encomenda"
         >
           <PlusCircle :size="16" />
           <span>Nova Encomenda</span>
-        </router-link>
+        </button>
       </div>
 
       <!-- Logo do site EncoMed apenas abaixo de Nova Encomenda -->
@@ -330,6 +332,9 @@ async function encerrarSuporteBreakGlass() {
 
   <!-- Pop-up Global de Avisos e Confirmações Personalizado -->
   <AppDialogModal />
+
+  <!-- Pop-up Global de Nova Encomenda -->
+  <NovaEncomendaModal />
 
   <!-- Modal de Confirmação de Saída / Logout Seguro -->
   <transition name="modal-fade">

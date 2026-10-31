@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useEncomendasStore } from '../stores/encomendas';
 import { useClientesStore } from '../stores/clientes';
@@ -35,7 +34,6 @@ import type { TipoModeloWhatsApp } from '../services/evolutionApi';
 import HistoricoClienteModal from '../components/HistoricoClienteModal.vue';
 import type { Cliente } from '../types';
 
-const router = useRouter();
 const authStore = useAuthStore();
 const encomendasStore = useEncomendasStore();
 const clientesStore = useClientesStore();
@@ -439,7 +437,7 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
 
         <!-- Button: Nova Encomenda (primary pill button) -->
         <button
-          @click="router.push('/nova-encomenda')"
+          @click="encomendasStore.abrirModalNovaEncomenda()"
           class="btn-primary-pill"
           id="btn-nova-encomenda-top"
         >
@@ -1606,7 +1604,7 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
     <HistoricoClienteModal
       v-model="showHistoricoModal"
       :cliente="clienteHistorico"
-      @novo-pedido="(clienteId) => router.push({ path: '/nova-encomenda', query: { clienteId } })"
+      @novo-pedido="(clienteId) => encomendasStore.abrirModalNovaEncomenda(clienteId)"
     />
   </div>
 </template>

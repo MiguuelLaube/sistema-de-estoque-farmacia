@@ -80,3 +80,4 @@ if (typeof window !== 'undefined') {
     dialog.alert(String(msg ?? ''));
   };
 }
+

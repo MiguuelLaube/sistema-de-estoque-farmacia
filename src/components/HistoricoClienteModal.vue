@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { useRouter } from 'vue-router';
 import { useEncomendasStore } from '../stores/encomendas';
 import { useClientesStore } from '../stores/clientes';
 import { useAuthStore } from '../stores/auth';
@@ -40,7 +39,6 @@ const emit = defineEmits<{
   (e: 'editarCliente', cliente: Cliente): void;
 }>();
 
-const router = useRouter();
 const encomendasStore = useEncomendasStore();
 const clientesStore = useClientesStore();
 const authStore = useAuthStore();
@@ -324,8 +322,9 @@ function getStatusBadgeConfig(status: StatusEncomenda | string) {
 // Iniciar Nova Encomenda para este Cliente
 function irParaNovaEncomenda() {
   if (props.cliente) {
+    const cId = props.cliente.id;
     fechar();
-    router.push({ path: '/nova-encomenda', query: { clienteId: props.cliente.id } });
+    encomendasStore.abrirModalNovaEncomenda(cId);
   }
 }
 

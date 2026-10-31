@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useClientesStore } from '../stores/clientes';
 import { useEncomendasStore } from '../stores/encomendas';
@@ -26,7 +26,6 @@ import {
 } from 'lucide-vue-next';
 
 const route = useRoute();
-const router = useRouter();
 const authStore = useAuthStore();
 const clientesStore = useClientesStore();
 const encomendasStore = useEncomendasStore();
@@ -590,7 +589,7 @@ async function anonimizarTitular(c: Cliente) {
     <HistoricoClienteModal
       v-model="showHistoricoModal"
       :cliente="clienteHistorico"
-      @novo-pedido="(clienteId) => router.push({ path: '/nova-encomenda', query: { clienteId } })"
+      @novo-pedido="(clienteId) => encomendasStore.abrirModalNovaEncomenda(clienteId)"
       @editar-cliente="(c) => abrirEdicao(c)"
     />
   </div>
