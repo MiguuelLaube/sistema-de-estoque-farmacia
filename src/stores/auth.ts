@@ -127,7 +127,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const superAdminPlatformConfig: ConfigTenant = {
     tenant_id: 'plataforma',
-    nome_sistema: 'EncoMed SaaS',
+    nome_sistema: 'EncoMed',
     slogan_sistema: 'Painel de Governança & Segurança',
     saudacao_painel: 'Olá, Administrador Supremo',
     logo_url: '/encomed-logo.png',
@@ -155,7 +155,7 @@ export const useAuthStore = defineStore('auth', () => {
     bloquear_entrega_com_saldo: false,
     dias_retencao_arquivamento: 90,
     evolution_api_ativo: false,
-    header_title: 'ENCOMED SAAS',
+    header_title: 'ENCOMED',
     header_subtitle: 'Plataforma Global',
     footer_text: 'Governança Zero-Trust',
     show_phone: false,
@@ -166,7 +166,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const superAdminPlatformTenant: Tenant = {
     id: 'plataforma',
-    nome_empresa: 'EncoMed SaaS • Governança Global',
+    nome_empresa: 'EncoMed • Governança Global',
     slug: 'plataforma',
     dominio: 'plataforma.encomed.com.br',
     status: 'ativo',

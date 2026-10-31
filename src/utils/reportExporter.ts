@@ -303,7 +303,7 @@ export function gerarBytesExcelXlsx(opcoes: OpcoesRelatorioExportacao): Uint8Arr
   // Linha 2: Subtítulo + Data de emissão
   const sub = opcoes.subtituloRelatorio
     ? `${opcoes.subtituloRelatorio} | Emitido em ${dataEmissao}`
-    : `Emitido em ${dataEmissao} via EncoMed SaaS`;
+    : `Emitido em ${dataEmissao} via EncoMed`;
   xmlRows.push(
     `<row r="${rowNum}"><c r="A${rowNum}" s="2" t="inlineStr"><is><t>${escaparXml(sub)}</t></is></c></row>`
   );
@@ -537,7 +537,7 @@ export function gerarBytesPdfRelatorio(opcoes: OpcoesRelatorioExportacao): Uint8
     );
 
     if (pIdx === 0) {
-      const sub = opcoes.subtituloRelatorio || 'Relatório Oficial Gerado pelo Sistema EncoMed SaaS';
+      const sub = opcoes.subtituloRelatorio || 'Relatório Oficial Gerado pelo Sistema EncoMed';
       cmds.push(`BT /F1 8.5 Tf ${marginX + 14} ${y - 39} Td (${escaparTextoPdfWinAnsi(sub)}) Tj ET`);
       cmds.push(
         `BT /F1 8 Tf ${marginX + 14} ${y - 52} Td (${escaparTextoPdfWinAnsi(`Emitido em: ${dataEmissao}`)}) Tj ET`
@@ -643,7 +643,7 @@ export function gerarBytesPdfRelatorio(opcoes: OpcoesRelatorioExportacao): Uint8
     // Rodapé da Página
     const rodapeEsq =
       opcoes.notaRodape ||
-      'Documento gerencial emitido sob governança LGPD (Lei nº 13.709/2018) • EncoMed SaaS';
+      'Documento gerencial emitido sob governança LGPD (Lei nº 13.709/2018) • EncoMed';
     const rodapeDir = `Página ${pIdx + 1} de ${paginas.length}`;
 
     cmds.push(`0.886 0.910 0.941 RG 0.6 w`);

@@ -240,7 +240,7 @@ async function salvarNovoTenant() {
 async function copiarCredenciaisParaWhatsApp() {
   if (!credenciaisResultado.value) return;
   const c = credenciaisResultado.value;
-  const texto = `🏥 *Acesso ao EncoMed SaaS — ${c.nomeEmpresa}*
+  const texto = `🏥 *Acesso ao EncoMed — ${c.nomeEmpresa}*
 
 Olá! Seu acesso à plataforma de gestão de encomendas e medicamentos foi liberado:
 
@@ -404,7 +404,7 @@ async function confirmarBreakGlass() {
           </div>
           <div>
             <h2 style="font-size: 1.55rem; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.2;">
-              Governança SaaS & Empresas
+              Governança & Empresas
             </h2>
             <p style="color: var(--text-muted); font-size: 0.88rem; margin: 0.2rem 0 0 0;">
               Painel exclusivo do Super Administrador • Provisionamento com envio de link de senha por e-mail • Zero-Trust

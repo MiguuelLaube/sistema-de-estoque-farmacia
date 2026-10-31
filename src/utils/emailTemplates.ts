@@ -164,7 +164,7 @@ export function gerarHtmlEmailCriarSenha(entrada: DadosEmailCriarSenha): string 
     <div class="container">
       <div class="header-bar"></div>
       <div class="content">
-        <span class="brand-badge">ENCOMED SAAS • GESTÃO FARMACÊUTICA</span>
+        <span class="brand-badge">ENCOMED • GESTÃO FARMACÊUTICA</span>
         <h1>Seja bem-vindo(a), ${dados.nomeAdmin}!</h1>
         <p>
           A unidade <strong>${dados.nomeEmpresa}</strong> foi provisionada com sucesso na plataforma EncoMed. Para começar a gerenciar encomendas de balcão e conferência de medicamentos, clique no botão abaixo para definir sua senha de acesso inicial.
@@ -208,7 +208,7 @@ export function gerarHtmlEmailCriarSenha(entrada: DadosEmailCriarSenha): string 
       </div>
 
       <div class="footer">
-        EncoMed SaaS • Sistema de Encomendas & Conciliação Farmacêutica<br>
+        EncoMed • Sistema de Encomendas & Conciliação Farmacêutica<br>
         Ambiente protegido sob os preceitos da Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018).
       </div>
     </div>

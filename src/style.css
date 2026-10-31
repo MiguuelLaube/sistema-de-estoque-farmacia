@@ -177,18 +177,17 @@ textarea {
 
 .tenant-meta .brand-title {
   color: var(--text-main);
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: 1.05rem;
+  font-weight: 800;
   font-family: var(--font-heading);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
 }
 
 .tenant-meta .brand-plan {
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   color: var(--text-muted);
   font-weight: 500;
+  margin-top: 2px;
 }
 
 .sidebar-nav {

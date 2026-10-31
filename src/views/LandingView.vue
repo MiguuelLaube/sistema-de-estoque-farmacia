@@ -488,12 +488,12 @@ onBeforeUnmount(() => {
         >
           <img
             src="/encomed-icon.svg"
-            alt="Logo EncoMed SaaS"
+            alt="Logo EncoMed"
             class="brand-logo-img"
           />
           <div class="brand-text-col">
             <span class="brand-title-main">EncoMed</span>
-            <span class="brand-subtitle-meta">SaaS de Encomendas &amp; Gestão Farmacêutica</span>
+            <span class="brand-subtitle-meta">Sistema de Encomendas &amp; Gestão Farmacêutica</span>
           </div>
         </a>
 
@@ -537,7 +537,7 @@ onBeforeUnmount(() => {
           <div class="hero-lead-block">
             <div class="hero-brand-pill animate-float-slow">
               <img src="/encomed-icon.svg" alt="" style="height: 20px; width: 20px; object-fit: contain;" />
-              <span>PLATAFORMA SAAS OFICIAL • <strong>ENCOMED</strong></span>
+              <span>PLATAFORMA OFICIAL • <strong>ENCOMED</strong></span>
             </div>
 
             <h1 id="hero-title" class="hero-headline">
@@ -605,7 +605,7 @@ onBeforeUnmount(() => {
 
                 <div class="window-brand-center">
                   <img src="/encomed-icon.svg" alt="EncoMed" style="height: 20px; width: 20px; object-fit: contain;" />
-                  <span><strong>EncoMed SaaS</strong> — Ambiente Interativo de Demonstração</span>
+                  <span><strong>EncoMed</strong> — Ambiente Interativo de Demonstração</span>
                 </div>
 
                 <div class="window-live-pill">
@@ -1574,7 +1574,7 @@ onBeforeUnmount(() => {
             <div class="access-text-group">
               <div style="display: inline-flex; align-items: center; gap: 0.6rem; background: rgba(255,255,255,0.12); padding: 5px 12px; border-radius: 9999px; margin-bottom: 0.85rem;">
                 <img src="/encomed-icon.svg" alt="EncoMed" style="height: 20px; width: 20px; object-fit: contain;" />
-                <span style="font-size: 0.76rem; font-weight: 700; letter-spacing: 0.04em; color: #dbeafe;">ENCOMED SAAS • PRONTO PARA OPERAÇÃO</span>
+                <span style="font-size: 0.76rem; font-weight: 700; letter-spacing: 0.04em; color: #dbeafe;">ENCOMED • PRONTO PARA OPERAÇÃO</span>
               </div>
               <h2 class="access-h2">
                 Eleve o padrão de atendimento e controle de encomendas da sua farmácia
@@ -1610,7 +1610,7 @@ onBeforeUnmount(() => {
           <div>
             <span class="footer-company-name">EncoMed</span>
             <span class="footer-tagline">
-              Sistema SaaS de Encomendas, Conciliação NF-e por IA e Gestão de Medicamentos
+              Sistema de Encomendas, Conciliação NF-e por IA e Gestão de Medicamentos
             </span>
           </div>
         </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue';
+import { onMounted, watch, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from './stores/auth';
 import { useEncomendasStore } from './stores/encomendas';
@@ -24,6 +24,14 @@ const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const encomendasStore = useEncomendasStore();
+
+const nomeEmpresaExibicao = computed(() => {
+  if (authStore.isSuperAdmin && !authStore.breakGlassTenantId) {
+    return 'EncoMed';
+  }
+  const nome = authStore.currentConfig.nome_sistema || authStore.currentTenant.nome_empresa || 'Minha Drogaria';
+  return nome.replace(/\s+SaaS/gi, '').trim();
+});
 
 onMounted(() => {
   authStore.applyTheme();
@@ -58,28 +66,22 @@ async function encerrarSuporteBreakGlass() {
   <div v-else class="app-container">
     <!-- Sidebar Navigation -->
     <aside class="app-sidebar">
-      <div class="sidebar-header" style="align-items: center; gap: 0.75rem;">
-        <img
-          :src="authStore.currentConfig.logo_url || '/encomed-logo.svg'"
-          :alt="authStore.currentConfig.nome_sistema || 'EncoMed Logo'"
-          :style="{
-            height: '40px',
-            width: authStore.currentConfig.visual_opcoes?.formato_logo === 'quadrado' || authStore.currentConfig.visual_opcoes?.formato_logo === 'circular' ? '40px' : 'auto',
-            maxWidth: '92px',
-            objectFit: authStore.currentConfig.visual_opcoes?.formato_logo === 'circular' ? 'cover' : 'contain',
-            borderRadius: authStore.currentConfig.visual_opcoes?.formato_logo === 'circular' ? '50%' : '8px',
-            flexShrink: 0,
-            background: 'transparent',
-            padding: '2px',
-          }"
-        />
-        <div class="tenant-meta" style="min-width: 0;">
-          <span class="brand-title" :title="authStore.isSuperAdmin && !authStore.breakGlassTenantId ? 'EncoMed SaaS' : authStore.currentConfig.nome_sistema">
-            {{ authStore.isSuperAdmin && !authStore.breakGlassTenantId ? 'EncoMed SaaS' : authStore.currentConfig.nome_sistema }}
-          </span>
-          <span class="brand-plan" style="color: #64748b; font-size: 0.75rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+      <!-- Sidebar Header: Nome da Empresa com destaque elegante, sem logo em cima -->
+      <div class="sidebar-header" style="padding: 1.15rem 1.25rem; display: flex; flex-direction: column; justify-content: center; min-height: 64px;">
+        <div class="tenant-meta" style="width: 100%;">
+          <div
+            class="brand-title"
+            :title="nomeEmpresaExibicao"
+            style="font-size: 1.05rem; font-weight: 800; color: var(--text-main); font-family: var(--font-heading); line-height: 1.3; white-space: normal; word-break: break-word;"
+          >
+            {{ nomeEmpresaExibicao }}
+          </div>
+          <div
+            class="brand-plan"
+            style="font-size: 0.76rem; color: var(--text-muted); font-weight: 500; margin-top: 3px;"
+          >
             {{ authStore.isSuperAdmin && !authStore.breakGlassTenantId ? 'Painel de Governança' : (authStore.currentConfig.slogan_sistema || 'Gestão de Encomendas') }}
-          </span>
+          </div>
         </div>
       </div>
 
@@ -172,13 +174,15 @@ async function encerrarSuporteBreakGlass() {
         </router-link>
       </div>
 
-      <!-- Selo institucional opcional Powered by EncoMed -->
+      <!-- Logo do site EncoMed apenas abaixo de Nova Encomenda -->
       <div
         v-if="authStore.currentConfig.visual_opcoes?.exibir_selo_encomed !== false"
-        style="padding: 0.45rem 1.25rem; display: flex; align-items: center; justify-content: center; gap: 0.45rem; font-size: 0.72rem; opacity: 0.85; border-top: 1px solid var(--border-color);"
+        style="padding: 0.65rem 1.25rem; display: flex; align-items: center; justify-content: center; gap: 0.45rem; border-top: 1px solid var(--border-color);"
       >
         <img src="/encomed-icon.svg" alt="EncoMed" style="height: 18px; width: 18px; object-fit: contain; background: transparent;" />
-        <span style="color: var(--text-muted);">Tecnologia <strong style="color: var(--primary-color, #2563eb);">EncoMed SaaS</strong></span>
+        <span style="font-family: var(--font-heading); font-size: 0.88rem; font-weight: 800; letter-spacing: -0.01em;">
+          <span style="color: var(--text-main);">Enco</span><span style="color: var(--color-primary, #2563eb);">Med</span>
+        </span>
       </div>
 
       <!-- Active User Profile & Role Indicator -->
@@ -233,8 +237,8 @@ async function encerrarSuporteBreakGlass() {
           <div
             style="display: inline-flex; align-items: center; gap: 0.45rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9999px; padding: 0.32rem 0.85rem; font-size: 0.8rem; font-weight: 600; color: #334155;"
           >
-            <Building2 :size="14" style="color: #2563eb;" />
-            <span>{{ authStore.isSuperAdmin && !authStore.breakGlassTenantId ? 'Plano de Controle SaaS' : authStore.currentTenant.nome_empresa }}</span>
+            <Building2 :size="14" style="color: var(--color-primary, #2563eb);" />
+            <span>{{ authStore.isSuperAdmin && !authStore.breakGlassTenantId ? 'Plano de Controle' : (authStore.currentTenant.nome_empresa || '').replace(/\s+SaaS/gi, '').trim() }}</span>
           </div>
 
           <div

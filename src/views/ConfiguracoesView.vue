@@ -1152,7 +1152,7 @@ async function removerClassificacao(id: string) {
                   v-model="formExibirSeloEncomed"
                   style="width: 16px; height: 16px; accent-color: var(--color-primary);"
                 />
-                <span>Exibir assinatura discreta <strong>"Tecnologia EncoMed SaaS"</strong> no rodapé do menu</span>
+                <span>Exibir assinatura discreta <strong>"EncoMed"</strong> no rodapé do menu</span>
               </label>
 
               <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-size: 0.88rem; font-weight: 500;">
@@ -1236,7 +1236,7 @@ async function removerClassificacao(id: string) {
               </div>
 
               <div v-if="formExibirSeloEncomed" style="font-size: 0.56rem; opacity: 0.65; padding-top: 8px; border-top: 1px solid rgba(148,163,184,0.2);">
-                Tecnologia EncoMed SaaS
+                EncoMed
               </div>
             </div>
 
