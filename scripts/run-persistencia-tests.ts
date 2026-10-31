@@ -62,3 +62,4 @@ for (const r of resultados) {
 }
 console.log(`\n${resultados.filter((r) => r.passou).length}/${resultados.length} testes passaram.`);
 if (!ok) process.exit(1);
+

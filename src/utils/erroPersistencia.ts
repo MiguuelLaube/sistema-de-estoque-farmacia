@@ -37,3 +37,4 @@ export function traduzirErroPersistencia(err: unknown, acao = 'salvar o registro
   }
   return msg ? `Não foi possível ${acao}: ${msg}` : `Não foi possível ${acao}. Tente novamente.`;
 }
+

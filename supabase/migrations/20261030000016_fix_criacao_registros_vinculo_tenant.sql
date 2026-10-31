@@ -197,3 +197,4 @@ END;
 $$;
 
 NOTIFY pgrst, 'reload schema';
+
