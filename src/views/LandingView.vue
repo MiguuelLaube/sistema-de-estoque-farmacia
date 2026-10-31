@@ -26,6 +26,9 @@ import {
   Check,
   Play,
   RotateCcw,
+  Copy,
+  Truck,
+  AlertTriangle,
 } from 'lucide-vue-next';
 
 const router = useRouter();
@@ -52,7 +55,7 @@ function rolarParaSecao(id: string) {
 // SIMULADOR INTERATIVO ("CAIXINHA" DE MÓDULOS E STATUS CLICÁVEIS DO ENCOMED)
 // ============================================================================
 type StatusDemo = 'Aguardando' | 'Pedido Feito' | 'Chegou' | 'Entregue';
-type AbaSimulador = 'status' | 'xml_ia' | 'relatorios_marca';
+type AbaSimulador = 'status' | 'pedidos' | 'xml_ia' | 'relatorios_marca';
 
 interface ItemSimulador {
   id: string;
@@ -63,7 +66,6 @@ interface ItemSimulador {
   valor: string;
   saldo: string;
   status: StatusDemo;
-  urgente: boolean;
   pago: boolean;
   animando: boolean;
 }
@@ -81,7 +83,6 @@ const itensDemo = ref<ItemSimulador[]>([
     valor: 'R$ 985,00',
     saldo: 'R$ 85,00',
     status: 'Aguardando',
-    urgente: true,
     pago: false,
     animando: false,
   },
@@ -94,7 +95,6 @@ const itensDemo = ref<ItemSimulador[]>([
     valor: 'R$ 24,90',
     saldo: 'R$ 0,00',
     status: 'Pedido Feito',
-    urgente: false,
     pago: true,
     animando: false,
   },
@@ -107,7 +107,6 @@ const itensDemo = ref<ItemSimulador[]>([
     valor: 'R$ 468,00',
     saldo: 'R$ 168,00',
     status: 'Chegou',
-    urgente: false,
     pago: false,
     animando: false,
   },
@@ -123,7 +122,7 @@ interface EventoReacao {
 }
 
 const ultimaReacao = ref<EventoReacao>({
-  titulo: 'Clique em qualquer botão de status ao lado!',
+  titulo: 'Clique em qualquer botão de status da encomenda!',
   subtitulo: 'Experimente mudar de "Aguardando" para "Pedido Feito", "Chegou" ou "Entregue"',
   corTema: 'emerald',
   mensagemWhatsapp:
@@ -146,11 +145,10 @@ const contagemModulosDemo = computed(() => {
 });
 
 const itensFiltradosSimulador = computed(() => {
-  const base =
-    filtroModuloBox.value === 'Todos'
-      ? itensDemo.value
-      : itensDemo.value.filter((i) => i.status === filtroModuloBox.value);
-  return [...base].sort((a, b) => Number(b.urgente) - Number(a.urgente));
+  if (filtroModuloBox.value === 'Todos') {
+    return itensDemo.value;
+  }
+  return itensDemo.value.filter((i) => i.status === filtroModuloBox.value);
 });
 
 function clicarStatusDemo(item: ItemSimulador, novoStatus: StatusDemo) {
@@ -208,24 +206,6 @@ function clicarStatusDemo(item: ItemSimulador, novoStatus: StatusDemo) {
   }
 }
 
-function alternarUrgenciaDemo(item: ItemSimulador) {
-  item.urgente = !item.urgente;
-  item.animando = true;
-  setTimeout(() => {
-    item.animando = false;
-  }, 550);
-  chaveAnimacaoReacao.value++;
-  ultimaReacao.value = {
-    titulo: item.urgente ? 'Prioridade URGENTE ativada!' : 'Prioridade urgente removida',
-    subtitulo: item.medicamento,
-    corTema: item.urgente ? 'red' : 'slate',
-    detalheExtra: item.urgente
-      ? 'O item sobe imediatamente para o topo da tela do comprador com destaque vermelho semântico.'
-      : 'O item retorna à ordenação padrão da categoria.',
-    horario: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-  };
-}
-
 function alternarPagamentoDemo(item: ItemSimulador) {
   item.pago = !item.pago;
   chaveAnimacaoReacao.value++;
@@ -238,6 +218,169 @@ function alternarPagamentoDemo(item: ItemSimulador) {
       : `Saldo pendente (${item.saldo}) incluído automaticamente no Relatório de Valores a Receber.`,
     horario: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
   };
+}
+
+// ============================================================================
+// SUB-SIMULADOR: CENTRAL DE PEDIDOS (COMPRAS & COTAÇÃO COM URGÊNCIA)
+// ============================================================================
+interface ItemPedidoDemo {
+  id: string;
+  medicamento: string;
+  categoria: string;
+  quantidade: number;
+  fornecedor: string;
+  urgente: boolean;
+  status: 'Aguardando' | 'Pedido Feito' | 'Chegou';
+  animando?: boolean;
+}
+
+const filtroPedidosBox = ref<'Todos' | 'Urgentes' | 'Aguardando' | 'Pedido Feito' | 'Chegou'>('Todos');
+const itensPedidosDemo = ref<ItemPedidoDemo[]>([
+  {
+    id: 'p-1',
+    medicamento: 'OZEMPIC 1MG CANETA INJETÁVEL',
+    categoria: 'TERMOLÁBIL / GELADEIRA',
+    quantidade: 2,
+    fornecedor: 'Panpharma',
+    urgente: true,
+    status: 'Aguardando',
+    animando: false,
+  },
+  {
+    id: 'p-2',
+    medicamento: 'LOSARTANA POTÁSSICA 50MG 30 COMP',
+    categoria: 'GENÉRICO / USO CONTÍNUO',
+    quantidade: 6,
+    fornecedor: 'Santa Cruz',
+    urgente: false,
+    status: 'Pedido Feito',
+    animando: false,
+  },
+  {
+    id: 'p-3',
+    medicamento: 'VENVANSE 30MG C/ 28 CÁPSULAS',
+    categoria: 'CONTROLADO PORTARIA 344',
+    quantidade: 1,
+    fornecedor: 'Profarma',
+    urgente: false,
+    status: 'Chegou',
+    animando: false,
+  },
+  {
+    id: 'p-4',
+    medicamento: 'DORFLEX 36 COMPRIMIDOS',
+    categoria: 'MIP / ANALGÉSICO',
+    quantidade: 12,
+    fornecedor: 'Emifarma',
+    urgente: false,
+    status: 'Aguardando',
+    animando: false,
+  },
+]);
+
+const feedbackCopiaPedidos = ref<string | null>(null);
+
+function copiarListaPedidosWhatsApp() {
+  const texto = itensPedidosDemo.value
+    .map(
+      (it) =>
+        `• ${it.quantidade}x ${it.medicamento} (${it.categoria})${
+          it.urgente ? ' [⚡ CORTE URGENTE]' : ''
+        } - ${it.fornecedor}`
+    )
+    .join('\n');
+  if (typeof navigator !== 'undefined' && navigator.clipboard) {
+    navigator.clipboard.writeText(`*LISTA DE PEDIDOS / COTAÇÃO - DROGARIA AEROPORTO*\n\n${texto}`);
+  }
+  feedbackCopiaPedidos.value = 'Lista de cotação formatada copiada para o WhatsApp do representante!';
+  setTimeout(() => {
+    feedbackCopiaPedidos.value = null;
+  }, 3500);
+}
+
+const contagemPedidosDemo = computed(() => {
+  const todos = itensPedidosDemo.value;
+  return {
+    Todos: todos.length,
+    Urgentes: todos.filter((i) => i.urgente).length,
+    Aguardando: todos.filter((i) => i.status === 'Aguardando').length,
+    'Pedido Feito': todos.filter((i) => i.status === 'Pedido Feito').length,
+    Chegou: todos.filter((i) => i.status === 'Chegou').length,
+  };
+});
+
+const itensFiltradosPedidos = computed(() => {
+  let lista = itensPedidosDemo.value;
+  if (filtroPedidosBox.value === 'Urgentes') {
+    lista = lista.filter((i) => i.urgente);
+  } else if (filtroPedidosBox.value !== 'Todos') {
+    lista = lista.filter((i) => i.status === filtroPedidosBox.value);
+  }
+  // Os itens urgentes SEMPRE sobem para o topo da lista de cotação!
+  return [...lista].sort((a, b) => Number(b.urgente) - Number(a.urgente));
+});
+
+const ultimaReacaoPedidos = ref<EventoReacao>({
+  titulo: 'Central de Pedidos e Cotação Integrada',
+  subtitulo: 'A demanda dos clientes vira automaticamente lista de compras agrupada',
+  corTema: 'blue',
+  detalheExtra: 'Clique no botão ⚡ URGENTE para subir o medicamento para o corte prioritário da distribuidora.',
+  horario: 'Agora mesmo',
+});
+const chaveAnimacaoReacaoPedidos = ref(1);
+
+function alternarUrgenciaPedido(item: ItemPedidoDemo) {
+  item.urgente = !item.urgente;
+  item.animando = true;
+  setTimeout(() => {
+    item.animando = false;
+  }, 550);
+  chaveAnimacaoReacaoPedidos.value++;
+  const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  ultimaReacaoPedidos.value = {
+    titulo: item.urgente ? '🚨 URGÊNCIA ATIVADA NO PEDIDO DE COMPRA!' : 'Prioridade de compra normalizada',
+    subtitulo: `${item.medicamento} • ${item.quantidade}x caixas para cotar`,
+    corTema: item.urgente ? 'red' : 'slate',
+    detalheExtra: item.urgente
+      ? `Destaque vermelho semântico ativado. O comprador é alertado para fechar este item antes do corte da distribuidora ${item.fornecedor}.`
+      : `O item voltou para a esteira padrão de compras da categoria ${item.categoria}.`,
+    horario: hora,
+  };
+}
+
+function clicarStatusPedido(item: ItemPedidoDemo, novoStatus: 'Aguardando' | 'Pedido Feito' | 'Chegou') {
+  item.status = novoStatus;
+  item.animando = true;
+  setTimeout(() => {
+    item.animando = false;
+  }, 550);
+  chaveAnimacaoReacaoPedidos.value++;
+  const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  if (novoStatus === 'Aguardando') {
+    ultimaReacaoPedidos.value = {
+      titulo: 'Item em "Aguardando Cotação"',
+      subtitulo: `${item.medicamento} na fila de preços com distribuidoras`,
+      corTema: 'amber',
+      detalheExtra: `Agrupando unidades de clientes e reposição de estoque com a distribuidora ${item.fornecedor}.`,
+      horario: hora,
+    };
+  } else if (novoStatus === 'Pedido Feito') {
+    ultimaReacaoPedidos.value = {
+      titulo: 'Pedido Feito com a Distribuidora!',
+      subtitulo: `Faturado em ${item.fornecedor} • Previsão no próximo roteiro`,
+      corTema: 'blue',
+      detalheExtra: 'Quando a distribuidora emitir a NF-e, o XML IA identifica o pacote automaticamente.',
+      horario: hora,
+    };
+  } else {
+    ultimaReacaoPedidos.value = {
+      titulo: 'Medicamento Chegou na Farmácia! 📦',
+      subtitulo: `${item.quantidade}x caixas de ${item.medicamento} conferidas`,
+      corTema: 'emerald',
+      detalheExtra: 'Estoque atualizado e encomendas de balcão vinculadas avisadas imediatamente no WhatsApp!',
+      horario: hora,
+    };
+  }
 }
 
 // ============================================================================
@@ -297,6 +440,7 @@ function confirmarChegadaXmlDemo() {
 // ============================================================================
 const corDemoMarca = ref('#2563eb');
 const feedbackDownloadDemo = ref<string | null>(null);
+const tipoDocumentoExemplo = ref<'pdf_a4' | 'bobina_80mm'>('pdf_a4');
 
 function simularCliqueExportacao(formato: 'PDF' | 'Excel (.xlsx)') {
   feedbackDownloadDemo.value = `Relatório ${formato} gerado com cabeçalho da farmácia e trilha LGPD!`;
@@ -478,8 +622,18 @@ onBeforeUnmount(() => {
                   class="sim-mode-btn"
                   :class="{ active: abaSimulador === 'status' }"
                 >
-                  <MousePointerClick :size="15" />
-                  <span>1. Módulos de Status &amp; WhatsApp</span>
+                  <PackageOpen :size="15" />
+                  <span>1. Encomendas de Balcão</span>
+                </button>
+
+                <button
+                  type="button"
+                  @click="abaSimulador = 'pedidos'"
+                  class="sim-mode-btn"
+                  :class="{ active: abaSimulador === 'pedidos' }"
+                >
+                  <ClipboardList :size="15" />
+                  <span>2. Pedidos &amp; Cotação ⚡</span>
                 </button>
 
                 <button
@@ -489,7 +643,7 @@ onBeforeUnmount(() => {
                   :class="{ active: abaSimulador === 'xml_ia' }"
                 >
                   <Sparkles :size="15" />
-                  <span>2. Importar XML com IA</span>
+                  <span>3. Importar XML com IA</span>
                 </button>
 
                 <button
@@ -499,11 +653,11 @@ onBeforeUnmount(() => {
                   :class="{ active: abaSimulador === 'relatorios_marca' }"
                 >
                   <FileText :size="15" />
-                  <span>3. Relatórios PDF/Excel &amp; Marca</span>
+                  <span>4. Relatórios PDF &amp; Marca</span>
                 </button>
               </div>
 
-              <!-- MODO 1: STATUS INTERATIVOS ("AGUARDANDO", "PEDIDO FEITO", "CHEGOU", "ENTREGUE") -->
+              <!-- MODO 1: ENCOMENDAS DE BALCÃO (STATUS INTERATIVOS + WHATSAPP SEM RAIO DE EMERGÊNCIA) -->
               <div v-if="abaSimulador === 'status'" class="simulator-body-grid">
                 <!-- Coluna Esquerda: Lista Interativa com Filtro por Módulo -->
                 <div class="sim-orders-column">
@@ -543,7 +697,7 @@ onBeforeUnmount(() => {
                             <span class="sim-cat-tag">{{ item.categoria }}</span>
                             <span class="sim-patient">{{ item.paciente }}</span>
                           </div>
-                          <h4 class="sim-med-title" :class="{ 'urgent-red': item.urgente }">
+                          <h4 class="sim-med-title">
                             {{ item.medicamento }}
                           </h4>
                         </div>
@@ -554,19 +708,9 @@ onBeforeUnmount(() => {
                             @click="alternarPagamentoDemo(item)"
                             class="sim-paid-pill"
                             :class="item.pago ? 'is-paid' : 'is-unpaid'"
-                            title="Clique para alternar Pago / Pendente"
+                            title="Clique para alternar Pago / Pendente no Balcão"
                           >
-                            {{ item.pago ? '✓ Pago' : `Falta ${item.saldo}` }}
-                          </button>
-
-                          <button
-                            type="button"
-                            @click="alternarUrgenciaDemo(item)"
-                            class="btn-icon-urgent"
-                            :class="{ 'active-urgent': item.urgente }"
-                            title="Clique para marcar/desmarcar Urgente"
-                          >
-                            <Zap :size="14" />
+                            {{ item.pago ? '✓ 100% Pago' : `Falta ${item.saldo}` }}
                           </button>
                         </div>
                       </div>
@@ -621,7 +765,7 @@ onBeforeUnmount(() => {
                 <div class="sim-reaction-column">
                   <div :key="chaveAnimacaoReacao" class="reaction-live-card" :class="`theme-${ultimaReacao.corTema}`">
                     <div class="reaction-header">
-                      <span class="reaction-kicker">REAÇÃO EM TEMPO REAL DO ENCOMED</span>
+                      <span class="reaction-kicker">DISPARO &amp; REAÇÃO EM TEMPO REAL</span>
                       <span class="reaction-time">{{ ultimaReacao.horario }}</span>
                     </div>
 
@@ -632,11 +776,11 @@ onBeforeUnmount(() => {
                     <div v-if="ultimaReacao.mensagemWhatsapp" class="whatsapp-sim-phone">
                       <div class="wa-sim-top">
                         <img src="/encomed-icon.svg" alt="" style="width: 20px; height: 20px; object-fit: contain;" />
-                        <span>WhatsApp API Oficial • Modelo Dinâmico</span>
+                        <span>WhatsApp API Oficial • Mensagem Automática</span>
                       </div>
                       <div class="wa-sim-bubble">
                         {{ ultimaReacao.mensagemWhatsapp }}
-                        <span class="wa-sim-ticks">✓✓ Enviado pela API</span>
+                        <span class="wa-sim-ticks">✓✓ Enviado com sucesso</span>
                       </div>
                     </div>
 
@@ -648,23 +792,177 @@ onBeforeUnmount(() => {
                 </div>
               </div>
 
-              <!-- MODO 2: SIMULADOR DE IMPORTAÇÃO DE XML COM IA + CONFIRMAÇÃO -->
+              <!-- MODO 2: CENTRAL DE PEDIDOS (COMPRAS & COTAÇÃO COM URGÊNCIA) -->
+              <div v-else-if="abaSimulador === 'pedidos'" class="simulator-body-grid">
+                <!-- Coluna Esquerda: Lista de Pedidos de Compra -->
+                <div class="sim-orders-column">
+                  <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+                    <div class="sim-filter-pills" role="tablist" aria-label="Filtrar pedidos de compra">
+                      <button
+                        v-for="mod in (['Todos', 'Urgentes', 'Aguardando', 'Pedido Feito', 'Chegou'] as const)"
+                        :key="mod"
+                        type="button"
+                        @click="filtroPedidosBox = mod"
+                        class="sim-module-tab"
+                        :class="[
+                          { active: filtroPedidosBox === mod },
+                          mod === 'Urgentes' ? 'tab-urgent' : '',
+                          mod === 'Aguardando' ? 'tab-amber' : '',
+                          mod === 'Pedido Feito' ? 'tab-blue' : '',
+                          mod === 'Chegou' ? 'tab-emerald' : '',
+                        ]"
+                      >
+                        <span v-if="mod === 'Urgentes'">⚡ Urgentes</span>
+                        <span v-else>{{ mod }}</span>
+                        <span class="sim-count-bubble">{{ contagemPedidosDemo[mod] }}</span>
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      @click="copiarListaPedidosWhatsApp"
+                      class="btn-outline-neutral"
+                      style="font-size: 0.75rem; padding: 0.35rem 0.85rem;"
+                      title="Copiar lista formatada para enviar no WhatsApp da distribuidora"
+                    >
+                      <Copy :size="13" />
+                      <span>Copiar p/ Distribuidora</span>
+                    </button>
+                  </div>
+
+                  <div v-if="feedbackCopiaPedidos" style="margin-bottom: 0.65rem; padding: 0.5rem 0.85rem; border-radius: 10px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; font-size: 0.78rem; font-weight: 600;">
+                    ✅ {{ feedbackCopiaPedidos }}
+                  </div>
+
+                  <TransitionGroup name="sim-list" tag="div" class="sim-cards-stack">
+                    <div
+                      v-for="item in itensFiltradosPedidos"
+                      :key="item.id"
+                      class="sim-order-card"
+                      :class="[
+                        `border-state-${item.status.toLowerCase().replace(' ', '-')}`,
+                        { 'card-urgent-highlight': item.urgente },
+                        { 'card-pop-anim': item.animando },
+                      ]"
+                    >
+                      <div class="sim-card-top">
+                        <div>
+                          <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+                            <span class="sim-cat-tag">{{ item.categoria }}</span>
+                            <span style="font-size: 0.74rem; color: #64748b; font-weight: 600;">Distribuidora: <strong>{{ item.fornecedor }}</strong></span>
+                            <span v-if="item.urgente" class="badge-urgent-pulse">⚡ CORTE URGENTE</span>
+                          </div>
+                          <div style="display: flex; align-items: baseline; gap: 0.5rem; margin-top: 4px;">
+                            <h4 class="sim-med-title" :class="{ 'urgent-red': item.urgente }">
+                              {{ item.medicamento }}
+                            </h4>
+                            <span class="badge badge-qty">📦 {{ item.quantidade }} un.</span>
+                          </div>
+                        </div>
+
+                        <!-- BOTÃO DE URGÊNCIA EXCLUSIVO DOS PEDIDOS DE COMPRA -->
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                          <button
+                            type="button"
+                            @click="alternarUrgenciaPedido(item)"
+                            class="btn-urgent-pill"
+                            :class="{ 'is-urgent-active': item.urgente }"
+                            title="Clique para marcar/desmarcar prioridade urgente na cotação"
+                          >
+                            <Zap :size="13" />
+                            <span>{{ item.urgente ? '⚡ Urgente Ativo' : 'Marcar Urgente' }}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <!-- Botões de Status do Pedido de Compra -->
+                      <div class="sim-status-buttons-row" style="grid-template-columns: repeat(3, 1fr);" role="group" aria-label="Alterar status do pedido de compra">
+                        <button
+                          type="button"
+                          @click="clicarStatusPedido(item, 'Aguardando')"
+                          class="pedido-status-pill sim-clickable-pill"
+                          :class="{ 'active-aguardo': item.status === 'Aguardando' }"
+                        >
+                          <Clock :size="13" />
+                          <span>Aguardando Cotação</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          @click="clicarStatusPedido(item, 'Pedido Feito')"
+                          class="pedido-status-pill sim-clickable-pill"
+                          :class="{ 'active-feito': item.status === 'Pedido Feito' }"
+                        >
+                          <Truck :size="13" />
+                          <span>Pedido Feito</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          @click="clicarStatusPedido(item, 'Chegou')"
+                          class="pedido-status-pill sim-clickable-pill"
+                          :class="{ 'active-chegou': item.status === 'Chegou' }"
+                        >
+                          <Package :size="13" />
+                          <span>Chegou na Loja</span>
+                        </button>
+                      </div>
+                    </div>
+                  </TransitionGroup>
+                </div>
+
+                <!-- Coluna Direita: Reação dos Pedidos em Tempo Real -->
+                <div class="sim-reaction-column">
+                  <div :key="chaveAnimacaoReacaoPedidos" class="reaction-live-card" :class="`theme-${ultimaReacaoPedidos.corTema}`">
+                    <div class="reaction-header">
+                      <span class="reaction-kicker">CENTRAL DE COMPRAS &amp; COTAÇÃO</span>
+                      <span class="reaction-time">{{ ultimaReacaoPedidos.horario }}</span>
+                    </div>
+
+                    <h3 class="reaction-title">{{ ultimaReacaoPedidos.titulo }}</h3>
+                    <p class="reaction-sub">{{ ultimaReacaoPedidos.subtitulo }}</p>
+
+                    <div class="sim-order-kpi-box">
+                      <div class="kpi-mini-col">
+                        <span class="kpi-label">Itens na Lista</span>
+                        <strong class="kpi-val">{{ contagemPedidosDemo.Todos }} itens</strong>
+                      </div>
+                      <div class="kpi-mini-col">
+                        <span class="kpi-label">Cortes Urgentes</span>
+                        <strong class="kpi-val" style="color: #dc2626;">{{ contagemPedidosDemo.Urgentes }} emergenciais</strong>
+                      </div>
+                      <div class="kpi-mini-col">
+                        <span class="kpi-label">Previsão Entrega</span>
+                        <strong class="kpi-val" style="color: #059669;">Hoje 16:30</strong>
+                      </div>
+                    </div>
+
+                    <div class="reaction-footer-note">
+                      <AlertTriangle v-if="ultimaReacaoPedidos.corTema === 'red'" :size="16" style="flex-shrink: 0; color: #dc2626;" />
+                      <ShieldCheck v-else :size="16" style="flex-shrink: 0;" />
+                      <span>{{ ultimaReacaoPedidos.detalheExtra }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- MODO 3: SIMULADOR DE IMPORTAÇÃO DE XML COM IA (FORMATO RECONCILIAÇÃO ELEGANTE) -->
               <div v-else-if="abaSimulador === 'xml_ia'" class="sim-xml-panel">
-                <div class="sim-xml-header">
+                <div class="sim-xml-header-clean">
                   <div>
-                    <span class="category-header-pill" style="margin-bottom: 6px;">
+                    <span class="category-header-pill" style="margin-bottom: 8px;">
                       <Sparkles :size="12" />
-                      <span>ENCOPHARMA AI • LEITOR DE NF-E</span>
+                      <span>ENCOPHARMA AI • CONFERÊNCIA INTELIGENTE DE NF-E SEFAZ</span>
                     </span>
-                    <h3 style="font-size: 1.15rem; font-weight: 800; color: #0f172a; margin: 4px 0;">
+                    <h3 style="font-size: 1.25rem; font-weight: 800; color: #0f172a; margin: 4px 0 6px;">
                       A IA identifica o que chegou na Nota Fiscal e seleciona sozinha — você só confirma!
                     </h3>
-                    <p style="font-size: 0.85rem; color: #64748b; margin: 0;">
-                      Mesmo quando a distribuidora envia nomes abreviados como <code>LOSART POT 50MG</code>, a IA reconhece o pedido, valida a concentração e pede sua confirmação antes de mudar para <strong>"Chegou"</strong>.
+                    <p style="font-size: 0.88rem; color: #64748b; margin: 0; max-width: 720px; line-height: 1.5;">
+                      Mesmo quando a distribuidora envia abreviações como <code>LOSART POT 50MG C/30 COMP MEDLEY</code>, a inteligência do EncoMed localiza a encomenda, valida dosagens e deixa pré-marcado para você dar entrada em 1 clique.
                     </p>
                   </div>
 
-                  <button type="button" @click="rodarDemonstracaoXmlIa" class="btn-outline-neutral">
+                  <button type="button" @click="rodarDemonstracaoXmlIa" class="btn-primary-pill" style="white-space: nowrap;">
                     <Play v-if="xmlSimEtapa !== 'confirmado'" :size="15" />
                     <RotateCcw v-else :size="15" />
                     <span>{{ xmlSimEtapa === 'confirmado' ? 'Repetir Simulação IA' : 'Simular Leitura de XML' }}</span>
@@ -673,50 +971,85 @@ onBeforeUnmount(() => {
 
                 <div v-if="xmlSimEtapa === 'escaneando'" class="xml-scanning-box">
                   <div class="scanning-bar"></div>
-                  <strong>🤖 IA analisando XML SEFAZ #0048921...</strong>
-                  <span>Expandindo abreviações farmacêuticas e validando dosagens (mg/mcg)</span>
+                  <strong style="color: #0f172a; font-size: 0.95rem;">🤖 IA decodificando XML SEFAZ #0048921 da Distribuidora Panpharma...</strong>
+                  <span style="color: #64748b; font-size: 0.82rem;">Normalizando dosagens (mg/mcg), EAN de barras e localizando encomendas de balcão correspondentes.</span>
                 </div>
 
-                <div v-else class="sim-xml-list">
-                  <div
-                    v-for="row in xmlSimItens"
-                    :key="row.id"
-                    class="sim-xml-row"
-                    :class="{ 'row-selected': row.selecionado }"
-                  >
-                    <input
-                      type="checkbox"
-                      v-model="row.selecionado"
-                      :disabled="row.confianca === 0 || xmlSimEtapa === 'confirmado'"
-                      style="width: 18px; height: 18px; accent-color: #059669;"
-                    />
-                    <div style="flex: 1; min-width: 180px;">
-                      <div style="font-size: 0.72rem; color: #64748b; font-weight: 600;">DESCRIÇÃO NO XML DA DISTRIBUIDORA</div>
-                      <div style="font-weight: 700; font-size: 0.86rem; color: #0f172a;">{{ row.xmlNome }}</div>
-                    </div>
-                    <div style="flex: 1; min-width: 180px;">
-                      <div style="font-size: 0.72rem; color: #64748b; font-weight: 600;">ENCOMENDA VINCULADA</div>
-                      <div style="font-weight: 700; font-size: 0.86rem; color: #1e293b;">{{ row.pedidoNome }}</div>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                      <span v-if="row.confianca > 0" class="badge badge-pedido-feito">
-                        ✨ IA {{ row.confianca }}%
-                      </span>
-                      <span
-                        class="pedido-status-pill"
-                        :class="row.status === 'Chegou' ? 'active-chegou' : row.status === 'Pedido Feito' ? 'active-feito' : ''"
-                      >
-                        {{ row.status }}
-                      </span>
+                <div v-else class="sim-xml-table-wrap">
+                  <!-- Cabeçalho de Tabela Formatado -->
+                  <div class="sim-xml-table-head">
+                    <span style="width: 38px; text-align: center;">Sel.</span>
+                    <span style="flex: 2; min-width: 200px;">Item na Nota Fiscal (Distribuidora)</span>
+                    <span style="flex: 2; min-width: 200px;">Encomenda Vinculada no Balcão</span>
+                    <span style="width: 140px; text-align: center;">Acurácia da IA</span>
+                    <span style="width: 130px; text-align: right;">Status / Ação</span>
+                  </div>
+
+                  <!-- Linhas da Tabela Formatadas com Alto Contraste -->
+                  <div class="sim-xml-table-body">
+                    <div
+                      v-for="row in xmlSimItens"
+                      :key="row.id"
+                      class="sim-xml-table-row"
+                      :class="{ 'row-active-match': row.selecionado, 'row-ignored': row.confianca === 0 }"
+                    >
+                      <div style="width: 38px; display: flex; justify-content: center;">
+                        <input
+                          type="checkbox"
+                          v-model="row.selecionado"
+                          :disabled="row.confianca === 0 || xmlSimEtapa === 'confirmado'"
+                          class="sim-checkbox-round"
+                        />
+                      </div>
+
+                      <div style="flex: 2; min-width: 200px;">
+                        <span class="xml-source-tag">XML DANFE</span>
+                        <div class="xml-source-title">{{ row.xmlNome }}</div>
+                      </div>
+
+                      <div style="flex: 2; min-width: 200px;">
+                        <span class="xml-target-tag">{{ row.confianca > 0 ? 'Balcão Vinculado' : 'Estoque Geral' }}</span>
+                        <div class="xml-target-title" :class="{ 'text-muted-row': row.confianca === 0 }">
+                          {{ row.pedidoNome }}
+                        </div>
+                      </div>
+
+                      <div style="width: 140px; display: flex; justify-content: center;">
+                        <span v-if="row.confianca > 0" class="badge-ai-confidence">
+                          <Sparkles :size="12" />
+                          <span>{{ row.confianca }}% Precisão</span>
+                        </span>
+                        <span v-else class="badge-ai-none">
+                          Sem vínculo
+                        </span>
+                      </div>
+
+                      <div style="width: 130px; display: flex; justify-content: flex-end;">
+                        <span
+                          class="pedido-status-pill"
+                          :class="row.status === 'Chegou' ? 'active-chegou' : row.status === 'Pedido Feito' ? 'active-feito' : 'status-pill-neutral'"
+                        >
+                          <Package v-if="row.status === 'Chegou'" :size="12" />
+                          <CheckCircle v-else-if="row.status === 'Pedido Feito'" :size="12" />
+                          <span>{{ row.status }}</span>
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <div class="sim-xml-confirm-bar">
-                    <div v-if="xmlSimEtapa !== 'confirmado'" style="font-size: 0.84rem; color: #1e3a8a;">
-                      🛡️ <strong>Confirmação Obrigatória:</strong> 2 medicamentos pré-selecionados pela IA aguardam sua autorização para virar <em>"Chegou"</em>.
+                  <!-- Barra de Confirmação Final com Design Limpo -->
+                  <div class="sim-xml-confirm-bar-clean">
+                    <div v-if="xmlSimEtapa !== 'confirmado'" style="display: flex; align-items: center; gap: 0.65rem;">
+                      <ShieldCheck :size="20" style="color: #2563eb; flex-shrink: 0;" />
+                      <span style="font-size: 0.88rem; color: #1e3a8a;">
+                        <strong>Confirmação Segura:</strong> 2 medicamentos pré-selecionados pela IA aguardam sua autorização para atualizar o status e disparar mensagens automáticas aos clientes.
+                      </span>
                     </div>
-                    <div v-else style="font-size: 0.86rem; color: #065f46; font-weight: 700;">
-                      ✅ Confirmado! Os itens mudaram para "Chegou" e os avisos do WhatsApp foram disparados!
+                    <div v-else style="display: flex; align-items: center; gap: 0.65rem; color: #065f46;">
+                      <CheckCircle2 :size="20" style="color: #059669; flex-shrink: 0;" />
+                      <span style="font-size: 0.88rem; font-weight: 700;">
+                        Sucesso! 2 encomendas atualizadas para "Chegou" e notificações de WhatsApp enviadas aos pacientes!
+                      </span>
                     </div>
 
                     <button
@@ -724,7 +1057,7 @@ onBeforeUnmount(() => {
                       type="button"
                       @click="confirmarChegadaXmlDemo"
                       class="btn-primary-pill"
-                      style="background: #059669;"
+                      style="background: #059669; white-space: nowrap;"
                     >
                       <Check :size="16" />
                       <span>Confirmar Mudança para "Chegou"</span>
@@ -733,7 +1066,7 @@ onBeforeUnmount(() => {
                 </div>
               </div>
 
-              <!-- MODO 3: WHITE-LABEL & EXPORTAÇÃO PDF / EXCEL -->
+              <!-- MODO 4: RELATÓRIOS PDF & MARCA + PRÉ-VISUALIZAÇÃO REAL DO DOCUMENTO GERADO -->
               <div v-else class="sim-whitelabel-panel">
                 <div class="sim-wl-grid">
                   <div class="sim-wl-card">
@@ -742,7 +1075,7 @@ onBeforeUnmount(() => {
                       <h4 style="margin: 0; font-size: 1rem; font-weight: 800;">Identidade Visual Completa</h4>
                     </div>
                     <p style="font-size: 0.84rem; color: #64748b; margin-bottom: 1rem;">
-                      Personalize logo, cores primária/secundária, menu claro ou escuro, arredondamento, densidade e fontes. Clique numa cor para testar:
+                      Personalize logo, cores primária/secundária, menu claro ou escuro, arredondamento e fontes. Clique numa cor para ver o relatório mudar em tempo real:
                     </p>
                     <div style="display: flex; gap: 0.6rem; margin-bottom: 1rem; flex-wrap: wrap;">
                       <button
@@ -778,7 +1111,7 @@ onBeforeUnmount(() => {
                   <div class="sim-wl-card">
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.6rem;">
                       <FileSpreadsheet :size="18" style="color: #059669;" />
-                      <h4 style="margin: 0; font-size: 1rem; font-weight: 800;">Relatórios em PDF &amp; Excel (.xlsx)</h4>
+                      <h4 style="margin: 0; font-size: 1rem; font-weight: 800;">Exportação de Relatórios</h4>
                     </div>
                     <p style="font-size: 0.84rem; color: #64748b; margin-bottom: 1rem;">
                       Exporte a carteira de saldos a receber, curva ABC dos medicamentos mais procurados e trilha de auditoria LGPD em 1 clique:
@@ -798,6 +1131,212 @@ onBeforeUnmount(() => {
                       style="margin-top: 0.85rem; padding: 0.6rem 0.85rem; border-radius: 10px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; font-size: 0.8rem; font-weight: 600;"
                     >
                       ✅ {{ feedbackDownloadDemo }}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- PRÉ-VISUALIZAÇÃO REALISTA DO DOCUMENTO FORMATADO GERADO PELO SISTEMA -->
+                <div class="sim-report-preview-container">
+                  <div class="preview-mode-header">
+                    <div>
+                      <span class="preview-kicker">DOCUMENTO FORMATADO GERADO AUTOMATICAMENTE</span>
+                      <h4 style="margin: 2px 0 0; font-size: 1.05rem; font-weight: 800; color: #0f172a;">
+                        Veja como seus relatórios e cupons chegam prontos para impressão
+                      </h4>
+                    </div>
+
+                    <div class="preview-format-tabs" role="tablist">
+                      <button
+                        type="button"
+                        @click="tipoDocumentoExemplo = 'pdf_a4'"
+                        class="preview-tab-btn"
+                        :class="{ active: tipoDocumentoExemplo === 'pdf_a4' }"
+                      >
+                        <FileText :size="14" />
+                        <span>📄 Folha A4 (PDF Executivo)</span>
+                      </button>
+                      <button
+                        type="button"
+                        @click="tipoDocumentoExemplo = 'bobina_80mm'"
+                        class="preview-tab-btn"
+                        :class="{ active: tipoDocumentoExemplo === 'bobina_80mm' }"
+                      >
+                        <Printer :size="14" />
+                        <span>🧾 Cupom Térmico (Bobina 80mm)</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- DOCUMENTO 1: FOLHA A4 (PDF EXECUTIVO) -->
+                  <div v-if="tipoDocumentoExemplo === 'pdf_a4'" class="a4-document-sheet">
+                    <div class="a4-brand-topbar" :style="{ background: corDemoMarca }"></div>
+
+                    <div class="a4-sheet-content">
+                      <!-- Cabeçalho Oficial -->
+                      <div class="a4-header-row">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                          <img src="/encomed-icon.svg" alt="" style="width: 36px; height: 36px; object-fit: contain;" />
+                          <div>
+                            <h2 class="a4-pharmacy-title" :style="{ color: corDemoMarca }">DROGARIA AEROPORTO LTDA</h2>
+                            <p class="a4-pharmacy-meta">CNPJ: 12.345.678/0001-90 • Farmacêutico Resp.: Dr. Miguel Laube (CRF-SP 48.912)</p>
+                          </div>
+                        </div>
+
+                        <div style="text-align: right;">
+                          <span class="a4-report-badge">RELATÓRIO GERENCIAL</span>
+                          <div class="a4-report-title">ENCOMENDAS &amp; RECEBÍVEIS</div>
+                          <div class="a4-report-date">Emissão: 30/10/2026 • 23:25 • Pág. 1/1</div>
+                        </div>
+                      </div>
+
+                      <!-- 4 Cards de Resumo Gerencial (KPIs) -->
+                      <div class="a4-kpis-grid">
+                        <div class="a4-kpi-card">
+                          <span class="a4-kpi-sub">Total de Encomendas</span>
+                          <strong class="a4-kpi-num">38 pedidos</strong>
+                        </div>
+                        <div class="a4-kpi-card">
+                          <span class="a4-kpi-sub">Faturamento Previsto</span>
+                          <strong class="a4-kpi-num" style="color: #059669;">R$ 11.450,00</strong>
+                        </div>
+                        <div class="a4-kpi-card">
+                          <span class="a4-kpi-sub">Sinais Pagos (Recebidos)</span>
+                          <strong class="a4-kpi-num" style="color: #2563eb;">R$ 9.607,50</strong>
+                        </div>
+                        <div class="a4-kpi-card a4-kpi-highlight">
+                          <span class="a4-kpi-sub">Saldo a Receber na Retirada</span>
+                          <strong class="a4-kpi-num" style="color: #d97706;">R$ 1.842,50</strong>
+                        </div>
+                      </div>
+
+                      <!-- Tabela de Itens Formatada -->
+                      <table class="a4-data-table">
+                        <thead>
+                          <tr>
+                            <th>Data</th>
+                            <th>Rastreio</th>
+                            <th>Paciente / WhatsApp</th>
+                            <th>Medicamento Encomendado</th>
+                            <th style="text-align: right;">Total</th>
+                            <th style="text-align: right;">Sinal</th>
+                            <th style="text-align: right;">A Receber</th>
+                            <th style="text-align: center;">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>30/10 14:20</td>
+                            <td><code class="a4-code">ENC-2026-412</code></td>
+                            <td><strong>Maria Aparecida Silva</strong><br /><small style="color: #64748b;">(11) 98765-4321</small></td>
+                            <td>OZEMPIC 1MG CANETA INJ<br /><small class="sim-cat-tag">TERMOLÁBIL</small></td>
+                            <td style="text-align: right; font-weight: 700;">R$ 985,00</td>
+                            <td style="text-align: right; color: #059669;">R$ 900,00</td>
+                            <td style="text-align: right; font-weight: 800; color: #d97706;">R$ 85,00</td>
+                            <td style="text-align: center;"><span class="a4-status-pill status-chegou">Chegou</span></td>
+                          </tr>
+                          <tr>
+                            <td>30/10 11:05</td>
+                            <td><code class="a4-code">ENC-2026-408</code></td>
+                            <td><strong>Carlos Eduardo Mendes</strong><br /><small style="color: #64748b;">(11) 99123-8844</small></td>
+                            <td>LOSARTANA POTÁSSICA 50MG<br /><small class="sim-cat-tag">CONTÍNUO</small></td>
+                            <td style="text-align: right; font-weight: 700;">R$ 24,90</td>
+                            <td style="text-align: right; color: #059669;">R$ 24,90</td>
+                            <td style="text-align: right; color: #64748b;">R$ 0,00</td>
+                            <td style="text-align: center;"><span class="a4-status-pill status-feito">Pedido Feito</span></td>
+                          </tr>
+                          <tr>
+                            <td>29/10 17:40</td>
+                            <td><code class="a4-code">ENC-2026-395</code></td>
+                            <td><strong>Fernanda Costa Oliveira</strong><br /><small style="color: #64748b;">(11) 97411-2090</small></td>
+                            <td>VENVANSE 30MG C/ 28 CÁPS<br /><small class="sim-cat-tag">PORT. 344</small></td>
+                            <td style="text-align: right; font-weight: 700;">R$ 468,00</td>
+                            <td style="text-align: right; color: #059669;">R$ 300,00</td>
+                            <td style="text-align: right; font-weight: 800; color: #d97706;">R$ 168,00</td>
+                            <td style="text-align: center;"><span class="a4-status-pill status-chegou">Chegou</span></td>
+                          </tr>
+                          <tr>
+                            <td>29/10 10:15</td>
+                            <td><code class="a4-code">ENC-2026-390</code></td>
+                            <td><strong>João Pedro Ramos</strong><br /><small style="color: #64748b;">(11) 98112-4433</small></td>
+                            <td>XIGDUO XR 5/1000MG 60 COMP<br /><small class="sim-cat-tag">DIABETES</small></td>
+                            <td style="text-align: right; font-weight: 700;">R$ 189,00</td>
+                            <td style="text-align: right; color: #059669;">R$ 189,00</td>
+                            <td style="text-align: right; color: #64748b;">R$ 0,00</td>
+                            <td style="text-align: center;"><span class="a4-status-pill status-entregue">Entregue</span></td>
+                          </tr>
+                        </tbody>
+                      </table>
+
+                      <!-- Rodapé da Folha com Selo LGPD e Assinatura Digital -->
+                      <div class="a4-footer-row">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; color: #475569; font-size: 0.72rem;">
+                          <ShieldCheck :size="16" style="color: #059669;" />
+                          <span>Documento emitido com conformidade LGPD (Art. 18) e trilha de auditoria digital rastreável.</span>
+                        </div>
+                        <div style="font-family: monospace; font-size: 0.68rem; color: #94a3b8;">
+                          AUTENTICAÇÃO: SHA256-7F8A2B...9C41E0
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- DOCUMENTO 2: BOBINA TÉRMICA 80MM (CUPOM DE BALCÃO) -->
+                  <div v-else class="receipt-thermal-wrapper">
+                    <div class="receipt-thermal-paper">
+                      <div class="receipt-header">
+                        <h3 class="receipt-title">DROGARIA AEROPORTO</h3>
+                        <p class="receipt-meta">Av. Santos Dumont, 1420 - Matriz</p>
+                        <p class="receipt-meta">CNPJ: 12.345.678/0001-90</p>
+                        <div class="receipt-divider">================================</div>
+                        <strong class="receipt-highlight">COMPROVANTE DE ENCOMENDA</strong>
+                        <div class="receipt-meta">Rastreio: <strong>ENC-2026-412</strong></div>
+                        <div class="receipt-meta">Data: 30/10/2026 14:20:15</div>
+                      </div>
+
+                      <div class="receipt-divider">--------------------------------</div>
+                      <div class="receipt-customer">
+                        <div>CLIENTE: MARIA APARECIDA SILVA</div>
+                        <div>TEL/WHATSAPP: (11) 98765-4321</div>
+                        <div>ATENDENTE: CARLOS (BALCÃO 02)</div>
+                      </div>
+
+                      <div class="receipt-divider">--------------------------------</div>
+                      <div class="receipt-items">
+                        <div style="display: flex; justify-content: space-between;">
+                          <span>1x OZEMPIC 1MG CANETA INJ</span>
+                          <strong>R$ 985,00</strong>
+                        </div>
+                        <small style="color: #475569;">* Medicamento Termolábil (Geladeira)</small>
+                      </div>
+
+                      <div class="receipt-divider">================================</div>
+                      <div class="receipt-totals">
+                        <div style="display: flex; justify-content: space-between;">
+                          <span>VALOR TOTAL:</span>
+                          <span>R$ 985,00</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-weight: bold;">
+                          <span>SINAL PAGO (PIX):</span>
+                          <span>R$ 900,00</span>
+                        </div>
+                        <div class="receipt-divider">--------------------------------</div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.95rem; font-weight: 800;">
+                          <span>SALDO NA RETIRADA:</span>
+                          <span>R$ 85,00</span>
+                        </div>
+                      </div>
+
+                      <div class="receipt-divider">================================</div>
+                      <div class="receipt-barcode">
+                        ||||| ||||||| ||| |||||| ||||| ||||||
+                        <div style="font-size: 0.68rem; letter-spacing: 2px;">ENC-2026-412</div>
+                      </div>
+
+                      <div class="receipt-footer">
+                        <p>Você receberá um aviso no seu WhatsApp assim que o produto chegar na farmácia!</p>
+                        <p>Apresente este cupom no balcão de retirada.</p>
+                        <small>EncoMed Sistemas • Gestão Farmacêutica</small>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1795,6 +2334,560 @@ onBeforeUnmount(() => {
   border: 1px solid #e2e8f0;
   border-radius: 16px;
   padding: 1.35rem;
+}
+
+/* ====================================================================
+   ESTILOS: CENTRAL DE PEDIDOS & COTAÇÃO (COMPRAS)
+   ==================================================================== */
+.tab-urgent.active {
+  background-color: #fef2f2 !important;
+  color: #dc2626 !important;
+  border-color: #fca5a5 !important;
+}
+
+.card-urgent-highlight {
+  border-left: 4px solid #dc2626 !important;
+  background: #fffafa !important;
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.08);
+}
+
+.btn-urgent-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+  border-radius: 9999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-urgent-pill:hover {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+.btn-urgent-pill.is-urgent-active {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  border-color: #dc2626 !important;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);
+  animation: pulseUrgentBtn 1.8s infinite;
+}
+
+@keyframes pulseUrgentBtn {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+.badge-urgent-pulse {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+}
+
+.badge-qty {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.sim-order-kpi-box {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.85rem;
+  margin: 0.85rem 0;
+}
+
+.kpi-mini-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kpi-label {
+  font-size: 0.68rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.kpi-val {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+/* ====================================================================
+   ESTILOS: RECONCILIAÇÃO DE XML COM IA (TABELA ELEGANTE DE ALTO CONTRASTE)
+   ==================================================================== */
+.sim-xml-header-clean {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.sim-xml-table-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1rem;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.03);
+}
+
+.sim-xml-table-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #475569;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid #edf2f7;
+}
+
+.sim-xml-table-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sim-xml-table-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 0.75rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  transition: all 0.15s ease;
+}
+
+.sim-xml-table-row:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.sim-xml-table-row.row-active-match {
+  border-color: #a7f3d0;
+  background: #f0fdf4;
+}
+
+.sim-xml-table-row.row-ignored {
+  background: #fafafa;
+  opacity: 0.85;
+}
+
+.sim-checkbox-round {
+  width: 20px;
+  height: 20px;
+  accent-color: #059669;
+  cursor: pointer;
+}
+
+.xml-source-tag {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 0.03em;
+}
+
+.xml-source-title {
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: #0f172a;
+  font-family: monospace;
+}
+
+.xml-target-tag {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #059669;
+}
+
+.xml-target-title {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.text-muted-row {
+  color: #94a3b8 !important;
+  font-weight: 500 !important;
+}
+
+.badge-ai-confidence {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.badge-ai-none {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.status-pill-neutral {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.sim-xml-confirm-bar-clean {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  margin-top: 0.65rem;
+  flex-wrap: wrap;
+}
+
+/* ====================================================================
+   ESTILOS: PRÉ-VISUALIZAÇÃO DE DOCUMENTO FORMATADO (A4 & TÉRMICO)
+   ==================================================================== */
+.sim-report-preview-container {
+  margin-top: 1.5rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
+}
+
+.preview-mode-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #edf2f7;
+  flex-wrap: wrap;
+}
+
+.preview-kicker {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #2563eb;
+  text-transform: uppercase;
+}
+
+.preview-format-tabs {
+  display: flex;
+  gap: 0.5rem;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 9999px;
+}
+
+.preview-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: transparent;
+  color: #64748b;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.preview-tab-btn.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+/* FOLHA A4 (PDF EXECUTIVO) */
+.a4-document-sheet {
+  max-width: 820px;
+  margin: 0 auto;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+  font-family: inherit;
+}
+
+.a4-brand-topbar {
+  height: 6px;
+  width: 100%;
+  transition: background 0.2s ease;
+}
+
+.a4-sheet-content {
+  padding: 1.75rem 2rem;
+}
+
+.a4-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 2px solid #0f172a;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.a4-pharmacy-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  transition: color 0.2s ease;
+}
+
+.a4-pharmacy-meta {
+  margin: 2px 0 0;
+  font-size: 0.74rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.a4-report-badge {
+  display: inline-block;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+.a4-report-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin-top: 2px;
+}
+
+.a4-report-date {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.a4-kpis-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 680px) {
+  .a4-kpis-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.a4-kpi-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.a4-kpi-highlight {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.a4-kpi-sub {
+  font-size: 0.68rem;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.a4-kpi-num {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.a4-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  margin-bottom: 1.5rem;
+}
+
+.a4-data-table th {
+  background: #f1f5f9;
+  color: #334155;
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  padding: 0.65rem 0.5rem;
+  border-bottom: 1px solid #cbd5e1;
+  text-align: left;
+}
+
+.a4-data-table td {
+  padding: 0.7rem 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  color: #1e293b;
+  vertical-align: middle;
+}
+
+.a4-code {
+  font-family: monospace;
+  font-weight: 700;
+  color: #2563eb;
+  background: #eff6ff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+}
+
+.a4-status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.status-chegou { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+.status-feito { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+.status-entregue { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+
+.a4-footer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 1rem;
+  border-top: 1px dashed #cbd5e1;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* BOBINA TÉRMICA 80MM (CUPOM DE BALCÃO) */
+.receipt-thermal-wrapper {
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+  background: #f1f5f9;
+  border-radius: 14px;
+}
+
+.receipt-thermal-paper {
+  width: 320px;
+  background: #ffffff;
+  padding: 1.5rem 1.25rem;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.76rem;
+  color: #1e293b;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
+  border: 1px dashed #94a3b8;
+  line-height: 1.4;
+}
+
+.receipt-header {
+  text-align: center;
+}
+
+.receipt-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+.receipt-meta {
+  font-size: 0.72rem;
+  color: #475569;
+}
+
+.receipt-divider {
+  text-align: center;
+  color: #64748b;
+  margin: 6px 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.receipt-highlight {
+  display: block;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  margin: 3px 0;
+}
+
+.receipt-customer,
+.receipt-items,
+.receipt-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.receipt-barcode {
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: bold;
+  letter-spacing: 3px;
+  margin: 6px 0;
+  font-family: monospace;
+}
+
+.receipt-footer {
+  text-align: center;
+  font-size: 0.68rem;
+  color: #64748b;
+  margin-top: 6px;
 }
 
 /* ====================================================================
