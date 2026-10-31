@@ -1665,34 +1665,130 @@ onBeforeUnmount(() => {
       </section>
     </main>
 
-    <!-- FOOTER OFICIAL DO SAAS ENCOMED -->
+    <!-- ================================================================ -->
+    <!-- FOOTER INSTITUCIONAL COMPLETO (INSPIRADO NO PADRÃO CACAU SHOW)   -->
+    <!-- ================================================================ -->
     <footer class="landing-footer" role="contentinfo">
-      <div class="landing-shell footer-layout">
-        <div class="footer-brand-col">
-          <img
-            src="/encomed-logo.svg"
-            alt="Logo EncoMed"
-            style="height: 38px; width: auto; object-fit: contain; background: transparent;"
-          />
-          <div>
-            <span class="footer-company-name">EncoMed</span>
-            <span class="footer-tagline">
-              Sistema de Encomendas, Conciliação NF-e por IA e Gestão de Medicamentos
+      <div class="landing-shell">
+        <!-- Faixa Superior de Credenciais e Selos Institucionais -->
+        <div class="footer-badges-strip">
+          <div class="footer-brand-header">
+            <img
+              src="/encomed-logo.svg"
+              alt="Logo EncoMed"
+              class="footer-logo-img"
+            />
+            <span class="footer-tagline-text">
+              Tecnologia Farmacêutica • Gestão de Encomendas &amp; Balcão
             </span>
+          </div>
+
+          <div class="footer-badges-list">
+            <div class="footer-badge-item">
+              <ShieldCheck :size="15" class="text-emerald" />
+              <span>Canal LGPD Ativo</span>
+            </div>
+            <div class="footer-badge-item">
+              <Lock :size="15" class="text-blue" />
+              <span>Multi-Tenant RLS</span>
+            </div>
+            <div class="footer-badge-item">
+              <FileText :size="15" class="text-purple" />
+              <span>Validação SEFAZ NF-e</span>
+            </div>
+            <div class="footer-badge-item">
+              <Clock :size="15" class="text-amber" />
+              <span>Disponibilidade 99.9%</span>
+            </div>
           </div>
         </div>
 
-        <div class="footer-security-col">
-          <span class="security-indicator">
-            <Lock :size="13" aria-hidden="true" />
-            <span>Criptografia TLS • Isolamento Multi-Tenant RLS • Conformidade LGPD</span>
-          </span>
-          <button
-            @click="acessarPlataforma"
-            class="footer-operator-link touch-target"
-          >
-            Portal do Farmacêutico &amp; Equipe →
-          </button>
+        <!-- Grade Principal de 4 Colunas com Informações Úteis -->
+        <div class="footer-main-grid">
+          <!-- Coluna 1: Disclaimers Legais e Farmacêuticos -->
+          <div class="footer-col footer-col-disclaimer">
+            <h4 class="footer-col-title">AVISOS LEGAIS &amp; REGULATÓRIOS</h4>
+            <p class="footer-disclaimer-text">
+              O EncoMed é uma solução de software para suporte à gestão operacional de encomendas, compras e controle de fluxo em farmácias e drogarias.
+            </p>
+            <p class="footer-disclaimer-text">
+              A conferência de prescrições, controle sanitário e a dispensação de medicamentos controlados (Portaria SVS/MS nº 344/1998) são atos privativos do Farmacêutico Responsável Técnico, observada a legislação vigente da ANVISA e do Conselho Regional de Farmácia (CRF).
+            </p>
+            <p class="footer-disclaimer-text footer-disclaimer-meta">
+              EncoMed Sistemas Farmacêuticos • CNPJ: 00.000.000/0001-00<br />
+              São Paulo, SP — Brasil.
+            </p>
+          </div>
+
+          <!-- Coluna 2: Módulos do Sistema -->
+          <div class="footer-col">
+            <h4 class="footer-col-title">MÓDULOS</h4>
+            <ul class="footer-links-list">
+              <li><button type="button" @click="rolarParaSecao('simulador-interativo')" class="footer-link-btn">Encomendas de Balcão</button></li>
+              <li><button type="button" @click="rolarParaSecao('simulador-interativo')" class="footer-link-btn">Central de Pedidos &amp; Cotação</button></li>
+              <li><button type="button" @click="rolarParaSecao('simulador-interativo')" class="footer-link-btn">Importação de XML NF-e</button></li>
+              <li><button type="button" @click="rolarParaSecao('simulador-interativo')" class="footer-link-btn">Avisos Automáticos WhatsApp</button></li>
+              <li><button type="button" @click="rolarParaSecao('simulador-interativo')" class="footer-link-btn">Relatórios A4 &amp; Cupom 80mm</button></li>
+              <li><button type="button" @click="rolarParaSecao('funcionalidades-saas')" class="footer-link-btn">Histórico de Pacientes</button></li>
+              <li><button type="button" @click="rolarParaSecao('funcionalidades-saas')" class="footer-link-btn">Controle de Sinais &amp; Caixa</button></li>
+            </ul>
+          </div>
+
+          <!-- Coluna 3: Políticas e Segurança -->
+          <div class="footer-col">
+            <h4 class="footer-col-title">POLÍTICAS &amp; LGPD</h4>
+            <ul class="footer-links-list">
+              <li><span class="footer-link-text">Termos de Uso da Plataforma</span></li>
+              <li><span class="footer-link-text">Política de Privacidade</span></li>
+              <li><span class="footer-link-text">Sigilo Farmacêutico (Art. 11)</span></li>
+              <li><span class="footer-link-text">Direitos do Titular (Art. 18)</span></li>
+              <li><span class="footer-link-text">Trilha Imutável de Auditoria</span></li>
+              <li><span class="footer-link-text">Segurança de Dados Clínicos</span></li>
+              <li><span class="footer-link-text">Canal do Encarregado (DPO)</span></li>
+            </ul>
+          </div>
+
+          <!-- Coluna 4: Suporte, Atendimento & Slogan Institucional -->
+          <div class="footer-col footer-col-support">
+            <h4 class="footer-col-title">ATENDIMENTO</h4>
+            <ul class="footer-links-list">
+              <li><span class="footer-link-text">Segunda a Sábado: 08h às 20h</span></li>
+              <li><span class="footer-link-text">Suporte Técnico Farmacêutico</span></li>
+              <li><span class="footer-link-text">suporte@encomed.com.br</span></li>
+              <li>
+                <button
+                  type="button"
+                  @click="acessarPlataforma"
+                  class="footer-portal-pill-btn"
+                >
+                  <LogIn :size="14" />
+                  <span>{{ estaLogado ? 'Abrir Painel EncoMed' : 'Portal da Equipe' }}</span>
+                </button>
+              </li>
+            </ul>
+
+            <!-- Slogan Humanizado no Estilo da Cacau Show -->
+            <div class="footer-human-slogan-wrap">
+              <span class="footer-human-slogan">cuidando de quem cuida.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Faixa Inferior de Copyright e Atalhos -->
+        <div class="footer-bottom-bar">
+          <div class="footer-copyright-text">
+            © 2026 EncoMed. Todos os direitos reservados. Feito no Brasil com isolamento e privacidade por design.
+          </div>
+
+          <div class="footer-bottom-links">
+            <button type="button" @click="rolarParaSecao('topo')" class="footer-mini-link">Início</button>
+            <span class="footer-mini-sep">•</span>
+            <button type="button" @click="rolarParaSecao('simulador-interativo')" class="footer-mini-link">Simulador</button>
+            <span class="footer-mini-sep">•</span>
+            <button type="button" @click="rolarParaSecao('funcionalidades-saas')" class="footer-mini-link">Módulos</button>
+            <span class="footer-mini-sep">•</span>
+            <button type="button" @click="rolarParaSecao('arquitetura-seguranca')" class="footer-mini-link">Segurança</button>
+          </div>
         </div>
       </div>
     </footer>
@@ -3613,67 +3709,244 @@ onBeforeUnmount(() => {
   }
 }
 
-/* FOOTER */
+/* ====================================================================
+   FOOTER INSTITUCIONAL COMPLETO (INSPIRADO NO PADRÃO CACAU SHOW)
+   ==================================================================== */
 .landing-footer {
-  background: #ffffff;
-  border-top: 1px solid #e2e8f0;
-  padding: 2rem 0;
+  background: #0b1120;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  padding: 3.5rem 0 2rem;
 }
 
-.footer-layout {
+/* 1. Faixa Superior com Selos Institucionais */
+.footer-badges-strip {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1.5rem;
+  gap: 2rem;
+  padding-bottom: 2.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex-wrap: wrap;
 }
 
-.footer-brand-col {
+.footer-brand-header {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 1.15rem;
 }
 
-.footer-company-name {
-  display: block;
-  font-size: 0.98rem;
+.footer-logo-img {
+  height: 38px;
+  width: auto;
+  object-fit: contain;
+  background: transparent;
+}
+
+.footer-tagline-text {
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.footer-badges-list {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.footer-badge-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  padding: 0.45rem 1rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.footer-badge-item:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.28);
+  transform: translateY(-2px);
+  color: #ffffff;
+}
+
+.text-amber {
+  color: #f59e0b;
+}
+
+/* 2. Grade Principal de 4 Colunas */
+.footer-main-grid {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr 1fr 1.15fr;
+  gap: 2.5rem;
+  padding: 2.75rem 0 2.25rem;
+}
+
+.footer-col-title {
+  font-family: var(--font-heading, 'Plus Jakarta Sans', sans-serif);
+  font-size: 0.75rem;
   font-weight: 800;
-  color: #0f172a;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  text-transform: uppercase;
+  margin: 0 0 1.25rem;
 }
 
-.footer-tagline {
-  display: block;
+.footer-disclaimer-text {
+  font-size: 0.79rem;
+  color: #94a3b8;
+  line-height: 1.65;
+  margin: 0 0 0.85rem;
+}
+
+.footer-disclaimer-meta {
+  color: #64748b;
+  font-size: 0.74rem;
+  margin-top: 1rem;
+}
+
+.footer-links-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.footer-link-btn,
+.footer-link-text {
+  font-size: 0.84rem;
+  color: #cbd5e1;
+  text-decoration: none;
+  transition: all 0.18s ease;
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-align: left;
+  display: inline-block;
+  cursor: pointer;
+}
+
+.footer-link-btn:hover {
+  color: #ffffff;
+  transform: translateX(4px);
+}
+
+.footer-portal-pill-btn {
+  margin-top: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #2563eb;
+  color: #ffffff;
+  padding: 0.55rem 1.15rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+
+.footer-portal-pill-btn:hover {
+  background: #1d4ed8;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+}
+
+.footer-human-slogan-wrap {
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.footer-human-slogan {
+  font-family: var(--font-heading, 'Plus Jakarta Sans', sans-serif);
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-style: italic;
+  background: linear-gradient(135deg, #60a5fa 0%, #34d399 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* 3. Faixa Inferior de Copyright e Links */
+.footer-bottom-bar {
+  padding-top: 1.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.footer-copyright-text {
   font-size: 0.78rem;
   color: #64748b;
 }
 
-.footer-security-col {
+.footer-bottom-links {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  flex-wrap: wrap;
+  gap: 0.65rem;
 }
 
-.security-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.78rem;
-  color: #475569;
-  font-weight: 600;
-}
-
-.footer-operator-link {
+.footer-mini-link {
   background: transparent;
   border: none;
-  font-size: 0.84rem;
-  font-weight: 700;
-  color: #2563eb;
+  padding: 0;
+  font-size: 0.78rem;
+  color: #94a3b8;
   cursor: pointer;
+  transition: color 0.15s ease;
 }
 
-.footer-operator-link:hover {
-  text-decoration: underline;
+.footer-mini-link:hover {
+  color: #ffffff;
+}
+
+.footer-mini-sep {
+  font-size: 0.7rem;
+  color: #475569;
+}
+
+/* Responsividade do Footer */
+@media (max-width: 980px) {
+  .footer-main-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .footer-badges-strip {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.25rem;
+  }
+
+  .footer-main-grid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+
+  .footer-bottom-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
 }
 
 /* ANIMAÇÕES */
