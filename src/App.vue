@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, watch, computed } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from './stores/auth';
 import { useEncomendasStore } from './stores/encomendas';
@@ -19,6 +19,7 @@ import {
   PlusCircle,
   AlertOctagon,
   Cookie,
+  Loader2,
 } from 'lucide-vue-next';
 
 const route = useRoute();
@@ -66,9 +67,29 @@ watch(
   }
 );
 
-async function handleLogout() {
-  await authStore.logout();
-  router.push({ name: 'landing' });
+const showLogoutModal = ref(false);
+const executandoLogout = ref(false);
+
+function solicitarLogout() {
+  showLogoutModal.value = true;
+}
+
+function cancelarLogout() {
+  if (executandoLogout.value) return;
+  showLogoutModal.value = false;
+}
+
+async function confirmarLogout() {
+  executandoLogout.value = true;
+  try {
+    await authStore.logout();
+  } catch (err) {
+    console.warn('[Logout Error]:', err);
+  } finally {
+    executandoLogout.value = false;
+    showLogoutModal.value = false;
+    await router.push({ name: 'landing' });
+  }
 }
 
 async function encerrarSuporteBreakGlass() {
@@ -240,7 +261,7 @@ async function encerrarSuporteBreakGlass() {
           </button>
 
           <button
-            @click="handleLogout"
+            @click="solicitarLogout"
             class="btn-logout"
             title="Sair do sistema (Logout)"
             id="btn-sidebar-logout"
@@ -305,4 +326,63 @@ async function encerrarSuporteBreakGlass() {
 
   <!-- Banner Global de Cookies & Privacidade LGPD -->
   <CookieBanner />
+
+  <!-- Modal de Confirmação de Saída / Logout Seguro -->
+  <transition name="modal-fade">
+    <div
+      v-if="showLogoutModal"
+      class="logout-confirm-backdrop"
+      @click.self="cancelarLogout"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="logout-confirm-title"
+    >
+      <div class="logout-confirm-card">
+        <div class="logout-confirm-icon-box">
+          <LogOut :size="24" />
+        </div>
+
+        <h3 id="logout-confirm-title" class="logout-confirm-title">
+          Encerrar Sessão da Drogaria?
+        </h3>
+
+        <p class="logout-confirm-description">
+          Você está prestes a sair do perfil operacional de <strong>{{ nomeEmpresaExibicao }}</strong>. Para acessar o painel de encomendas e estoque novamente, será necessário informar suas credenciais corporativas.
+        </p>
+
+        <div class="logout-user-summary">
+          <div class="user-avatar-sm">
+            {{ authStore.currentUser.nome.charAt(0) }}
+          </div>
+          <div class="user-summary-text">
+            <span class="user-summary-name">{{ authStore.currentUser.nome }}</span>
+            <span class="user-summary-sub">{{ authStore.currentTenant.nome_empresa }} &bull; {{ authStore.currentUser.perfil === 'super_admin' ? 'Super Admin' : authStore.currentUser.perfil }}</span>
+          </div>
+        </div>
+
+        <div class="logout-confirm-actions">
+          <button
+            type="button"
+            @click="cancelarLogout"
+            class="btn-logout-cancel"
+            :disabled="executandoLogout"
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="button"
+            @click="confirmarLogout"
+            class="btn-logout-confirm"
+            :disabled="executandoLogout"
+            id="btn-confirmar-logout-modal"
+          >
+            <Loader2 v-if="executandoLogout" :size="16" class="animate-spin" />
+            <LogOut v-else :size="16" />
+            <span>{{ executandoLogout ? 'Encerrando...' : 'Confirmar e Sair' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </transition>
 </template>

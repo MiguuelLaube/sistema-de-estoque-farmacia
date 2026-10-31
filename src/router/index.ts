@@ -118,11 +118,11 @@ router.beforeEach(async (to, _from, next) => {
     return next({ name: 'landing' });
   }
 
-  if (to.name === 'login' && !authStore.passwordRecoveryMode && authStore.mfaStage === 'none') {
+  if (to.name === 'login') {
     if (authStore.isAuthenticated) {
       return next(authStore.isSuperAdmin ? { name: 'plataforma' } : { name: 'dashboard' });
     } else {
-      return next({ name: 'landing', query: { login: 'true' } });
+      return next({ name: 'landing' });
     }
   }
 

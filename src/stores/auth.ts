@@ -1549,6 +1549,7 @@ export const useAuthStore = defineStore('auth', () => {
     mfaFactorId.value = '';
     mfaQrCode.value = '';
     mfaSecret.value = '';
+    passwordRecoveryMode.value = false;
     breakGlassTenantId.value = null;
     superAdminValidatedSessionToken = null;
   }
