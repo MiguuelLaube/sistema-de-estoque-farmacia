@@ -30,6 +30,8 @@ import {
   Copy,
   AlertTriangle,
   Settings,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-vue-next';
 
 const router = useRouter();
@@ -37,6 +39,13 @@ const authStore = useAuthStore();
 
 const showLoginModal = ref(false);
 const estaLogado = computed(() => authStore.isAuthenticated);
+
+// Controle da Gaveta do Simulador ("Ambiente de Teste")
+const simuladorAberto = ref(true);
+
+function alternarSimulador() {
+  simuladorAberto.value = !simuladorAberto.value;
+}
 
 function acessarPlataforma() {
   if (estaLogado.value) {
@@ -47,6 +56,9 @@ function acessarPlataforma() {
 }
 
 function rolarParaSecao(id: string) {
+  if (id === 'simulador-interativo') {
+    simuladorAberto.value = true;
+  }
   const el = document.getElementById(id);
   if (el) {
     el.scrollIntoView({ behavior: 'smooth' });
@@ -600,28 +612,63 @@ onBeforeUnmount(() => {
           <!-- 2. "CAIXINHA" INTERATIVA AO VIVO DO SAAS ENCOMED               -->
           <!-- ============================================================== -->
           <div id="simulador-interativo" class="interactive-showcase-wrapper">
-            <div class="interactive-window-card">
-              <!-- Barra Superior Estilo App Window -->
-              <div class="window-topbar">
-                <div class="window-dots" aria-hidden="true">
-                  <span class="w-dot dot-red"></span>
-                  <span class="w-dot dot-amber"></span>
-                  <span class="w-dot dot-green"></span>
+            <div class="interactive-window-card" :class="{ 'window-collapsed': !simuladorAberto }">
+              <!-- Barra Superior Estilo App Window (Funciona como gaveta) -->
+              <div
+                class="window-topbar"
+                @click="alternarSimulador"
+                :title="simuladorAberto ? 'Clique para recolher o ambiente de teste' : 'Clique para abrir o ambiente de teste'"
+              >
+                <!-- Botões de Janela / Gaveta -->
+                <div class="window-dots" role="group" aria-label="Controles da janela">
+                  <button
+                    type="button"
+                    class="w-dot dot-red"
+                    @click.stop="alternarSimulador"
+                    title="Recolher gaveta"
+                    aria-label="Recolher gaveta"
+                  ></button>
+                  <button
+                    type="button"
+                    class="w-dot dot-amber"
+                    @click.stop="alternarSimulador"
+                    title="Minimizar / Recolher gaveta"
+                    aria-label="Recolher gaveta"
+                  ></button>
+                  <button
+                    type="button"
+                    class="w-dot dot-green"
+                    @click.stop="alternarSimulador"
+                    title="Expandir / Abrir gaveta"
+                    aria-label="Expandir gaveta"
+                  ></button>
                 </div>
 
+                <!-- Nome Oficial no Topo: Apenas "EncoMed" -->
                 <div class="window-brand-center">
                   <img src="/encomed-icon.svg" alt="EncoMed" style="height: 20px; width: 20px; object-fit: contain;" />
-                  <span><strong>EncoMed</strong> — Ambiente Interativo de Demonstração</span>
+                  <span class="window-brand-title">EncoMed</span>
                 </div>
 
-                <div class="window-live-pill">
-                  <span class="pulse-dot"></span>
-                  <span>Clique nos botões abaixo!</span>
-                </div>
+                <!-- Botão Gaveta na Direita -->
+                <button
+                  type="button"
+                  @click.stop="alternarSimulador"
+                  class="window-drawer-toggle-btn"
+                  :title="simuladorAberto ? 'Recolher ambiente de teste' : 'Abrir ambiente de teste'"
+                >
+                  <span class="pulse-dot" v-if="simuladorAberto"></span>
+                  <span>{{ simuladorAberto ? 'Recolher Gaveta' : 'Abrir Ambiente de Teste' }}</span>
+                  <ChevronUp v-if="simuladorAberto" :size="14" />
+                  <ChevronDown v-else :size="14" />
+                </button>
               </div>
 
-              <!-- Seletor de Módulos da Caixinha -->
-              <div class="simulator-mode-bar">
+              <!-- Corpo do Simulador com Efeito Gaveta Simples e Suave -->
+              <Transition name="drawer-slide">
+                <div v-show="simuladorAberto" class="simulator-drawer-body">
+                  <!-- Seletor de Módulos da Caixinha -->
+                  <div class="simulator-mode-bar">
                 <button
                   type="button"
                   @click="abaSimulador = 'status'"
@@ -1356,9 +1403,11 @@ onBeforeUnmount(() => {
                 </div>
               </div>
             </div>
-          </div>
+          </Transition>
         </div>
-      </section>
+      </div>
+    </div>
+  </section>
 
       <!-- ================================================================ -->
       <!-- 3. TODAS AS FUNCIONALIDADES DO SAAS ENCOMED (6 MÓDULOS COMPLETOS) -->
@@ -1888,6 +1937,12 @@ onBeforeUnmount(() => {
   border-radius: 24px;
   box-shadow: 0 24px 55px -12px rgba(15, 23, 42, 0.12);
   overflow: hidden;
+  transition: all 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.interactive-window-card.window-collapsed {
+  box-shadow: 0 4px 18px -2px rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
 }
 
 .window-topbar {
@@ -1899,18 +1954,40 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 0.75rem;
   flex-wrap: wrap;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s ease, border-radius 0.3s ease;
+}
+
+.window-topbar:hover {
+  background: #1e293b;
+}
+
+.interactive-window-card.window-collapsed .window-topbar {
+  border-radius: 16px;
 }
 
 .window-dots {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: 7px;
 }
 
 .w-dot {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
 }
+
+.w-dot:hover {
+  transform: scale(1.18);
+  opacity: 0.88;
+}
+
 .dot-red { background: #ef4444; }
 .dot-amber { background: #f59e0b; }
 .dot-green { background: #10b981; }
@@ -1919,8 +1996,56 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  font-size: 0.83rem;
-  color: #e2e8f0;
+}
+
+.window-brand-title {
+  font-family: var(--font-heading, 'Plus Jakarta Sans', sans-serif);
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #f8fafc;
+  letter-spacing: -0.01em;
+}
+
+.window-drawer-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #f1f5f9;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.window-drawer-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: scale(1.03);
+}
+
+/* Transição de Gaveta Simples e Limpa */
+.drawer-slide-enter-active,
+.drawer-slide-leave-active {
+  transition: all 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.drawer-slide-enter-from,
+.drawer-slide-leave-to {
+  max-height: 0 !important;
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.drawer-slide-enter-to,
+.drawer-slide-leave-from {
+  max-height: 3000px;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .window-live-pill {
