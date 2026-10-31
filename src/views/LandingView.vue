@@ -1615,32 +1615,50 @@ onBeforeUnmount(() => {
       </section>
 
       <!-- ================================================================ -->
-      <!-- 6. BANNER CTA FINAL COM MARCA ENCOMED                            -->
+      <!-- 6. SEÇÃO INSTITUCIONAL & ACESSO À PLATAFORMA (ESTILO EDITORIAL)  -->
       <!-- ================================================================ -->
-      <section class="banner-access-section" aria-label="Acesso ao sistema EncoMed">
+      <section class="editorial-brand-section reveal-on-scroll" aria-label="Conheça o EncoMed">
         <div class="landing-shell">
-          <div class="access-banner-card">
-            <div class="access-text-group">
-              <div style="display: inline-flex; align-items: center; gap: 0.6rem; background: rgba(255,255,255,0.12); padding: 5px 12px; border-radius: 9999px; margin-bottom: 0.85rem;">
-                <img src="/encomed-icon.svg" alt="EncoMed" style="height: 20px; width: 20px; object-fit: contain;" />
-                <span style="font-size: 0.76rem; font-weight: 700; letter-spacing: 0.04em; color: #dbeafe;">ENCOMED • PRONTO PARA OPERAÇÃO</span>
-              </div>
-              <h2 class="access-h2">
-                Eleve o padrão de atendimento e controle de encomendas da sua farmácia
-              </h2>
-              <p class="access-sub">
-                Acesse agora com suas credenciais corporativas e gerencie encomendas, compras via XML com IA, WhatsApp e relatórios em um único lugar.
+          <div class="editorial-brand-card">
+            <div class="editorial-brand-header">
+              <img src="/encomed-icon.svg" alt="EncoMed" class="editorial-brand-logo" />
+              <h2 class="editorial-brand-title">Descubra o Mundo EncoMed</h2>
+            </div>
+
+            <div class="editorial-brand-body">
+              <p>
+                No <strong>EncoMed</strong>, cada detalhe foi desenvolvido para transformar a rotina do balcão em uma experiência ágil, organizada e profundamente humana. São <strong>encomendas de balcão</strong>, <strong>pedidos consolidados de cotação</strong>, <strong>conferência inteligente de notas fiscais</strong> e <strong>notificações por WhatsApp</strong> que combinam pontualidade, clareza e respeito ao cliente. Além disso, nossa central de relatórios conta com opções completas para emissão em folha A4 e bobina térmica de 80mm, unindo funcionalidade e controle diário.
+              </p>
+
+              <p>
+                Aqui, o cuidado com a saúde se traduz em organização prática: dos medicamentos de uso contínuo aos <strong>termolábeis</strong> e <strong>controlados da Portaria 344</strong>. Tudo preparado com regras sanitárias claras e a atenção que só quem vive a realidade do balcão farmacêutico pode oferecer.
+              </p>
+
+              <p>
+                Deseja fortalecer o relacionamento com seus pacientes e garantir que nenhuma venda se perca? No <strong>EncoMed</strong>, você encontra recursos intuitivos para acompanhar adiantamentos no caixa, histórico de compras e segurança com conformidade LGPD. Somos apaixonados por simplificar a rotina farmacêutica. Afinal, cuidar do bem-estar das pessoas com pontualidade e transparência é o que nos move todos os dias.
+              </p>
+
+              <p class="editorial-closing-phrase">
+                Descubra o mundo <strong>EncoMed</strong> e proporcione para sua drogaria uma gestão tranquila, ágil e repleta de confiança no atendimento.
               </p>
             </div>
-            <div class="access-btn-group">
-              <button
-                @click="acessarPlataforma"
-                class="btn-primary-pill touch-target btn-access-large"
-                id="btn-banner-acessar"
-              >
-                <LogIn :size="18" aria-hidden="true" />
-                <span>{{ estaLogado ? 'Ir para o Painel EncoMed' : 'Acessar Plataforma EncoMed' }}</span>
-              </button>
+
+            <div class="editorial-brand-actions">
+              <div class="editorial-trust-badge">
+                <ShieldCheck :size="16" class="text-emerald" />
+                <span>Plataforma corporativa com isolamento de dados por drogaria e conformidade LGPD (Lei nº 13.709/2018).</span>
+              </div>
+
+              <div class="editorial-buttons-group">
+                <button
+                  @click="acessarPlataforma"
+                  class="btn-editorial-access"
+                  id="btn-banner-acessar"
+                >
+                  <LogIn :size="16" aria-hidden="true" />
+                  <span>{{ estaLogado ? 'Ir para o Painel EncoMed' : 'Acessar Plataforma EncoMed' }}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -3458,50 +3476,141 @@ onBeforeUnmount(() => {
   margin: 0;
 }
 
-/* BANNER CTA */
-.banner-access-section {
+/* ====================================================================
+   ESTILO EDITORIAL INSTITUCIONAL (PADRÃO CACAU SHOW)
+   ==================================================================== */
+.editorial-brand-section {
   padding: 3.5rem 0 4.5rem;
 }
 
-.access-banner-card {
-  background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
-  border-radius: 24px;
+.editorial-brand-card {
+  background: #fbf9f5;
+  border: 1px solid #ede5d8;
+  border-radius: 20px;
   padding: 2.75rem 3rem;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.03);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s ease;
+}
+
+.editorial-brand-card:hover {
+  transform: translateY(-3px);
+  border-color: #dfd4c3;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
+}
+
+.editorial-brand-header {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 1.5rem;
+}
+
+.editorial-brand-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.editorial-brand-title {
+  font-family: var(--font-heading, 'Plus Jakarta Sans', sans-serif);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #1c1917;
+  margin: 0;
+  letter-spacing: -0.015em;
+}
+
+.editorial-brand-body {
+  color: #44403c;
+  font-size: 0.94rem;
+  line-height: 1.7;
+}
+
+.editorial-brand-body p {
+  margin: 0 0 1.15rem;
+}
+
+.editorial-brand-body p strong {
+  color: #1c1917;
+  font-weight: 700;
+}
+
+.editorial-closing-phrase {
+  font-size: 0.96rem;
+  color: #292524;
+  font-weight: 600;
+  margin-bottom: 0 !important;
+}
+
+.editorial-brand-actions {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e7ded0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 2rem;
-  color: #ffffff;
-  box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.35);
+  gap: 1.5rem;
+  flex-wrap: wrap;
 }
 
-@media (max-width: 820px) {
-  .access-banner-card {
-    flex-direction: column;
-    text-align: center;
-    padding: 2.25rem 1.5rem;
+.editorial-trust-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: #57534e;
+  font-weight: 500;
+}
+
+.editorial-buttons-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.btn-editorial-access {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  background: #1c1917;
+  color: #ffffff;
+  padding: 0.75rem 1.75rem;
+  border-radius: 9999px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px rgba(28, 25, 23, 0.15);
+}
+
+.btn-editorial-access:hover {
+  background: #2563eb;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.25);
+}
+
+@media (max-width: 768px) {
+  .editorial-brand-card {
+    padding: 2rem 1.5rem;
   }
-}
 
-.access-h2 {
-  font-family: var(--font-heading, 'Plus Jakarta Sans', sans-serif);
-  font-size: 1.55rem;
-  font-weight: 800;
-  color: #ffffff;
-  margin: 0 0 0.45rem;
-}
+  .editorial-brand-title {
+    font-size: 1.3rem;
+  }
 
-.access-sub {
-  font-size: 0.94rem;
-  color: #cbd5e1;
-  max-width: 600px;
-  margin: 0;
-}
+  .editorial-brand-actions {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.25rem;
+  }
 
-.btn-access-large {
-  padding: 0.8rem 1.85rem !important;
-  font-size: 0.95rem !important;
-  white-space: nowrap;
+  .btn-editorial-access {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 /* FOOTER */
