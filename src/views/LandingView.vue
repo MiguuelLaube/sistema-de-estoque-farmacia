@@ -28,8 +28,8 @@ import {
   Play,
   RotateCcw,
   Copy,
-  Truck,
   AlertTriangle,
+  Settings,
 } from 'lucide-vue-next';
 
 const router = useRouter();
@@ -865,24 +865,10 @@ onBeforeUnmount(() => {
                             <span class="badge badge-qty">📦 {{ item.quantidade }} un.</span>
                           </div>
                         </div>
-
-                        <!-- BOTÃO DE URGÊNCIA EXCLUSIVO DOS PEDIDOS DE COMPRA -->
-                        <div style="display: flex; align-items: center; gap: 0.4rem;">
-                          <button
-                            type="button"
-                            @click="alternarUrgenciaPedido(item)"
-                            class="btn-urgent-pill"
-                            :class="{ 'is-urgent-active': item.urgente }"
-                            title="Clique para marcar/desmarcar prioridade urgente na cotação"
-                          >
-                            <Zap :size="13" />
-                            <span>{{ item.urgente ? '⚡ Urgente Ativo' : 'Marcar Urgente' }}</span>
-                          </button>
-                        </div>
                       </div>
 
-                      <!-- Botões de Status do Pedido de Compra -->
-                      <div class="sim-status-buttons-row" style="grid-template-columns: repeat(3, 1fr);" role="group" aria-label="Alterar status do pedido de compra">
+                      <!-- Botões de Status do Pedido de Compra (Mesmo design da tela de pedidos normal - Segunda Print) -->
+                      <div class="sim-pedido-actions-row" role="group" aria-label="Alterar status do pedido de compra">
                         <button
                           type="button"
                           @click="clicarStatusPedido(item, 'Aguardando')"
@@ -890,7 +876,7 @@ onBeforeUnmount(() => {
                           :class="{ 'active-aguardo': item.status === 'Aguardando' }"
                         >
                           <Clock :size="13" />
-                          <span>Aguardando Cotação</span>
+                          <span>Aguardo</span>
                         </button>
 
                         <button
@@ -899,8 +885,8 @@ onBeforeUnmount(() => {
                           class="pedido-status-pill sim-clickable-pill"
                           :class="{ 'active-feito': item.status === 'Pedido Feito' }"
                         >
-                          <Truck :size="13" />
-                          <span>Pedido Feito</span>
+                          <Check :size="13" />
+                          <span>Feito</span>
                         </button>
 
                         <button
@@ -910,7 +896,29 @@ onBeforeUnmount(() => {
                           :class="{ 'active-chegou': item.status === 'Chegou' }"
                         >
                           <Package :size="13" />
-                          <span>Chegou na Loja</span>
+                          <span>Chegou</span>
+                        </button>
+
+                        <!-- Botão Marcar como Emergência / Urgência com design idêntico à tela de pedidos normal -->
+                        <button
+                          type="button"
+                          @click="alternarUrgenciaPedido(item)"
+                          class="btn-icon-urgent"
+                          :class="{ 'active-urgent': item.urgente }"
+                          :title="item.urgente ? 'Remover urgência' : 'Marcar como emergência'"
+                          aria-label="Marcar como emergência"
+                        >
+                          <Zap :size="15" />
+                        </button>
+
+                        <!-- Ícone de Opções / Configuração -->
+                        <button
+                          type="button"
+                          class="btn-icon-gear"
+                          title="Opções do pedido"
+                          aria-label="Opções do pedido"
+                        >
+                          <Settings :size="15" />
                         </button>
                       </div>
                     </div>
@@ -2367,39 +2375,100 @@ onBeforeUnmount(() => {
   box-shadow: 0 4px 14px rgba(220, 38, 38, 0.08);
 }
 
-.btn-urgent-pill {
+.sim-pedido-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed #e2e8f0;
+  flex-wrap: wrap;
+}
+
+.sim-pedido-actions-row .pedido-status-pill {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  background: #f8fafc;
-  color: #64748b;
-  border: 1px solid #cbd5e1;
-  border-radius: 9999px;
-  padding: 0.35rem 0.85rem;
-  font-size: 0.72rem;
-  font-weight: 700;
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  border: 1.5px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #475569;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.btn-urgent-pill:hover {
-  background: #fef2f2;
-  color: #dc2626;
-  border-color: #fca5a5;
+.sim-pedido-actions-row .pedido-status-pill:hover {
+  background-color: #f8fafc;
+  color: #0f172a;
+  border-color: #94a3b8;
 }
 
-.btn-urgent-pill.is-urgent-active {
-  background: #dc2626 !important;
-  color: #ffffff !important;
-  border-color: #dc2626 !important;
-  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);
-  animation: pulseUrgentBtn 1.8s infinite;
+.sim-pedido-actions-row .pedido-status-pill.active-aguardo {
+  background-color: #fffbeb !important;
+  border-color: #f59e0b !important;
+  color: #b45309 !important;
+  font-weight: 600;
 }
 
-@keyframes pulseUrgentBtn {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.04); }
-  100% { transform: scale(1); }
+.sim-pedido-actions-row .pedido-status-pill.active-feito {
+  background-color: #eff6ff !important;
+  border-color: #60a5fa !important;
+  color: #1d4ed8 !important;
+  font-weight: 600;
+}
+
+.sim-pedido-actions-row .pedido-status-pill.active-chegou {
+  background-color: #ecfdf5 !important;
+  border-color: #34d399 !important;
+  color: #047857 !important;
+  font-weight: 600;
+}
+
+.sim-pedido-actions-row .btn-icon-urgent {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1.5px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.sim-pedido-actions-row .btn-icon-urgent:hover {
+  background-color: #f8fafc;
+}
+
+.sim-pedido-actions-row .btn-icon-urgent.active-urgent {
+  background-color: #fef2f2 !important;
+  border-color: #fca5a5 !important;
+  color: #ef4444 !important;
+}
+
+.sim-pedido-actions-row .btn-icon-gear {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sim-pedido-actions-row .btn-icon-gear:hover {
+  background-color: #f1f5f9;
+  color: #334155;
 }
 
 .badge-urgent-pulse {
