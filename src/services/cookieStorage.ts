@@ -11,6 +11,14 @@ export interface ConsentimentoCookies {
   atualizado_em: string;    // Data ISO do consentimento
 }
 
+export interface InfoCookieAtivo {
+  nome: string;
+  categoria: 'Essencial' | 'Preferências' | 'Analítico';
+  finalidade: string;
+  expiracao: string;
+  ativo: boolean;
+}
+
 const COOKIE_CONSENT_KEY = 'encomed_cookie_consent';
 
 /**
@@ -180,6 +188,11 @@ export function salvarConsentimentoLGPD(consent: Partial<ConsentimentoCookies>):
     // silencioso
   }
 
+  // Notifica ouvintes globais na janela para atualização reativa
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('cookie-consent-updated', { detail: finalConsent }));
+  }
+
   return finalConsent;
 }
 
@@ -188,9 +201,59 @@ export function salvarConsentimentoLGPD(consent: Partial<ConsentimentoCookies>):
  */
 export function revogarConsentimentoLGPD(): void {
   deleteCookie(COOKIE_CONSENT_KEY);
+  deleteCookie('encomed_theme_preference');
+  deleteCookie('encomed_analytics_consent');
   try {
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem(COOKIE_CONSENT_KEY);
+      localStorage.removeItem('encomed_theme_preference');
     }
   } catch {}
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('cookie-consent-updated', { detail: null }));
+  }
+}
+
+/**
+ * Retorna lista estruturada dos cookies técnicos e funcionais do sistema para auditoria
+ */
+export function obterInventarioCookies(consent: ConsentimentoCookies | null): InfoCookieAtivo[] {
+  return [
+    {
+      nome: 'encomed_cookie_consent',
+      categoria: 'Essencial',
+      finalidade: 'Registro de consentimento LGPD do titular (Art. 7º e 18)',
+      expiracao: '365 dias',
+      ativo: !!consent,
+    },
+    {
+      nome: 'sb-access-token / sb-refresh-token',
+      categoria: 'Essencial',
+      finalidade: 'Tokens criptografados de autenticação Supabase com isolamento Row Level Security',
+      expiracao: 'Sessão / 30 dias',
+      ativo: true,
+    },
+    {
+      nome: 'encomed_session_active',
+      categoria: 'Essencial',
+      finalidade: 'Identificador seguro de estação conectada e proteção CSRF',
+      expiracao: '7 dias',
+      ativo: true,
+    },
+    {
+      nome: 'encomed_theme_preference',
+      categoria: 'Preferências',
+      finalidade: 'Armazenamento da identidade visual, temas e layout da farmácia',
+      expiracao: '180 dias',
+      ativo: consent?.preferencias ?? true,
+    },
+    {
+      nome: 'encomed_analytics_metrics',
+      categoria: 'Analítico',
+      finalidade: 'Métricas agregadas anônimas de latência e estabilidade do sistema',
+      expiracao: '90 dias',
+      ativo: consent?.analiticos ?? false,
+    },
+  ];
 }

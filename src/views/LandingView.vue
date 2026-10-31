@@ -433,6 +433,12 @@ function simularCliqueExportacao(formato: 'PDF' | 'Excel (.xlsx)') {
   }, 3500);
 }
 
+function abrirGerenciadorCookies() {
+  if (typeof window !== 'undefined' && typeof (window as any).abrirGerenciadorCookies === 'function') {
+    (window as any).abrirGerenciadorCookies();
+  }
+}
+
 // ============================================================================
 // SCROLL REVEAL OBSERVER
 // ============================================================================
@@ -1750,6 +1756,17 @@ onBeforeUnmount(() => {
             <ul class="footer-links-list">
               <li><span class="footer-link-text">Termos de Uso da Plataforma</span></li>
               <li><span class="footer-link-text">Política de Privacidade</span></li>
+              <li>
+                <button
+                  type="button"
+                  @click="abrirGerenciadorCookies"
+                  class="footer-link-text footer-cookie-link-btn"
+                  style="background: transparent; border: none; padding: 0; color: inherit; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px;"
+                  id="btn-footer-gerenciar-cookies"
+                >
+                  Gerenciar Cookies &amp; LGPD
+                </button>
+              </li>
               <li><span class="footer-link-text">Sigilo Farmacêutico (Art. 11)</span></li>
               <li><span class="footer-link-text">Direitos do Titular (Art. 18)</span></li>
               <li><span class="footer-link-text">Trilha Imutável de Auditoria</span></li>

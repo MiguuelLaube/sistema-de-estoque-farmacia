@@ -151,8 +151,103 @@ textarea {
   padding: 1.15rem 1.25rem;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  min-height: 68px;
   border-bottom: 1px solid var(--border-color);
+  transition: all var(--transition-fast);
+}
+
+.brand-logo-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  overflow: hidden;
+}
+
+.brand-logo-emblem {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: all var(--transition-fast);
+}
+
+.brand-monogram {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: linear-gradient(135deg, var(--color-primary, #2563eb) 0%, color-mix(in srgb, var(--color-primary, #2563eb) 75%, #000) 100%);
+  color: #ffffff;
+}
+
+.monogram-letter {
+  font-family: var(--font-heading);
+  font-weight: 900;
+  font-size: 1.25rem;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+}
+
+.monogram-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-accent-brand, #38bdf8);
+  box-shadow: 0 0 6px var(--color-accent-brand, #38bdf8);
+}
+
+.brand-custom-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 4px;
+  background: #ffffff;
+}
+
+.brand-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  flex: 1;
+}
+
+.brand-name {
+  font-family: var(--font-heading);
+  font-size: 1.02rem;
+  font-weight: 800;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
+  margin: 0;
+  white-space: normal;
+  word-break: break-word;
+  color: var(--text-main);
+  transition: color var(--transition-fast);
+}
+
+.brand-tagline {
+  font-size: 0.74rem;
+  font-weight: 500;
+  line-height: 1.2;
+  margin: 3px 0 0 0;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--transition-fast);
 }
 
 .tenant-logo-badge {
@@ -386,28 +481,107 @@ textarea {
   color: #ef4444;
 }
 
+.btn-footer-tool {
+  background: transparent;
+  border: none;
+  outline: none !important;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0.4rem;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.btn-footer-tool:hover {
+  background: var(--color-primary-alpha);
+  color: var(--color-primary);
+}
+
+/* Selo EncoMed na Barra Lateral */
+.sidebar-encomed-seal {
+  padding: 0.65rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+
+.sidebar-encomed-icon {
+  height: 18px;
+  width: 18px;
+  object-fit: contain;
+  background: transparent;
+}
+
+.sidebar-encomed-text {
+  font-family: var(--font-heading);
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.encomed-brand-prefix {
+  color: var(--text-main);
+  transition: color var(--transition-fast);
+}
+
+.encomed-brand-suffix {
+  color: var(--color-primary, #2563eb);
+}
+
 /* Temas de Barra Lateral (Identidade Visual Completa) */
 [data-sidebar-theme='escuro'] .app-sidebar {
   background-color: var(--color-secondary, #0f172a);
-  border-right-color: rgba(255, 255, 255, 0.08);
+  border-right: none !important;
+  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.08), 2px 0 10px rgba(0, 0, 0, 0.15);
   color: #cbd5e1;
 }
 
 [data-sidebar-theme='escuro'] .sidebar-header,
 [data-sidebar-theme='escuro'] .sidebar-quick-action,
+[data-sidebar-theme='escuro'] .sidebar-encomed-seal,
 [data-sidebar-theme='escuro'] .sidebar-footer {
-  border-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
+[data-sidebar-theme='escuro'] .brand-name,
 [data-sidebar-theme='escuro'] .tenant-meta .brand-title,
-[data-sidebar-theme='escuro'] .user-info .user-name {
-  color: #f8fafc;
+[data-sidebar-theme='escuro'] .user-info .user-name,
+[data-sidebar-theme='escuro'] .encomed-brand-prefix {
+  color: #f8fafc !important;
 }
 
+[data-sidebar-theme='escuro'] .brand-tagline,
 [data-sidebar-theme='escuro'] .tenant-meta .brand-plan,
 [data-sidebar-theme='escuro'] .sidebar-section-title,
 [data-sidebar-theme='escuro'] .user-info .user-role {
   color: #94a3b8 !important;
+}
+
+[data-sidebar-theme='escuro'] .brand-logo-emblem {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+[data-sidebar-theme='escuro'] .user-avatar {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+[data-sidebar-theme='escuro'] .btn-footer-tool {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+[data-sidebar-theme='escuro'] .btn-footer-tool:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
 }
 
 [data-sidebar-theme='escuro'] .nav-link {
@@ -460,25 +634,62 @@ textarea {
 [data-sidebar-theme='marca'] .app-sidebar {
   background: linear-gradient(180deg, var(--color-secondary, #1e3a8a) 0%, color-mix(in srgb, var(--color-secondary, #1e3a8a) 85%, #000000) 100%);
   background-color: var(--color-secondary, #1e3a8a);
-  border-right-color: rgba(255, 255, 255, 0.12);
+  border-right: none !important;
+  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.10), 2px 0 10px rgba(0, 0, 0, 0.18);
   color: #e2e8f0;
 }
 
 [data-sidebar-theme='marca'] .sidebar-header,
 [data-sidebar-theme='marca'] .sidebar-quick-action,
+[data-sidebar-theme='marca'] .sidebar-encomed-seal,
 [data-sidebar-theme='marca'] .sidebar-footer {
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.10) !important;
 }
 
+[data-sidebar-theme='marca'] .brand-name,
 [data-sidebar-theme='marca'] .tenant-meta .brand-title,
-[data-sidebar-theme='marca'] .user-info .user-name {
-  color: #ffffff;
+[data-sidebar-theme='marca'] .user-info .user-name,
+[data-sidebar-theme='marca'] .encomed-brand-prefix {
+  color: #ffffff !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
+[data-sidebar-theme='marca'] .brand-tagline,
 [data-sidebar-theme='marca'] .tenant-meta .brand-plan,
 [data-sidebar-theme='marca'] .sidebar-section-title,
 [data-sidebar-theme='marca'] .user-info .user-role {
-  color: rgba(255, 255, 255, 0.72) !important;
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+
+[data-sidebar-theme='marca'] .brand-logo-emblem {
+  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+[data-sidebar-theme='marca'] .brand-monogram {
+  background: #ffffff;
+  color: var(--color-secondary, #1e3a8a);
+}
+
+[data-sidebar-theme='marca'] .monogram-dot {
+  background: var(--color-primary, #2563eb);
+  box-shadow: 0 0 6px var(--color-primary, #2563eb);
+}
+
+[data-sidebar-theme='marca'] .user-avatar {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+[data-sidebar-theme='marca'] .btn-footer-tool {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+[data-sidebar-theme='marca'] .btn-footer-tool:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
 }
 
 [data-sidebar-theme='marca'] .nav-link {
@@ -1704,6 +1915,55 @@ textarea {
 
 .sub-tab-btn:hover:not(.active) {
   color: #0f172a;
+}
+
+/* Barra de Navegação Ergonômica de Configurações (Pills Responsivos sem Quebras Rígidas) */
+.config-nav-pill-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  background: #ffffff;
+  border: 1px solid var(--border-card);
+  padding: 0.45rem 0.6rem;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  margin-bottom: 1.5rem;
+  width: 100%;
+}
+
+.config-nav-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.05rem;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #475569;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.config-nav-tab-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: var(--color-primary-border);
+}
+
+.config-nav-tab-btn.active {
+  background: var(--color-primary);
+  color: #ffffff !important;
+  border-color: var(--color-primary);
+  box-shadow: 0 3px 10px var(--color-primary-alpha);
+  font-weight: 700;
+}
+
+.config-nav-tab-btn.active svg {
+  color: #ffffff !important;
 }
 
 .pedido-item-card {

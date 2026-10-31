@@ -40,6 +40,23 @@ onMounted(() => {
     (window as any).abrirGerenciadorCookies = () => {
       modalPreferenciasAberto.value = true;
     };
+    (window as any).reabrirBannerCookies = () => {
+      visivel.value = true;
+    };
+
+    window.addEventListener('cookie-consent-updated', (event: any) => {
+      if (event?.detail) {
+        consentimento.value = event.detail;
+      } else {
+        consentimento.value = {
+          essenciais: true,
+          preferencias: true,
+          analiticos: false,
+          atualizado_em: '',
+        };
+        visivel.value = true;
+      }
+    });
   }
 });
 

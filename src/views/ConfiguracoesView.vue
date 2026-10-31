@@ -38,7 +38,15 @@ import {
   PackageOpen,
   ClipboardList,
   Check,
+  Tag,
 } from 'lucide-vue-next';
+import {
+  carregarConsentimentoLGPD,
+  salvarConsentimentoLGPD,
+  revogarConsentimentoLGPD,
+  obterInventarioCookies,
+  type ConsentimentoCookies,
+} from '../services/cookieStorage';
 import {
   consultarStatusWhatsAppProxy,
   obterQrCodeWhatsAppProxy,
@@ -79,6 +87,17 @@ watch(
 onMounted(() => {
   if (activeConfigTab.value === 'whatsapp') {
     carregarQrCode();
+  }
+  const salvo = carregarConsentimentoLGPD();
+  if (salvo) {
+    consentimentoCookies.value = salvo;
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('cookie-consent-updated', (event: any) => {
+      if (event?.detail) {
+        consentimentoCookies.value = event.detail;
+      }
+    });
   }
 });
 
@@ -713,9 +732,47 @@ async function salvarPoliticas() {
   );
 }
 
+const consentimentoCookies = ref<ConsentimentoCookies>({
+  essenciais: true,
+  preferencias: true,
+  analiticos: false,
+  atualizado_em: '',
+});
+
+const inventarioCookies = computed(() => {
+  return obterInventarioCookies(consentimentoCookies.value);
+});
+
 function abrirGerenciadorCookiesModal() {
   if (typeof window !== 'undefined' && typeof (window as any).abrirGerenciadorCookies === 'function') {
     (window as any).abrirGerenciadorCookies();
+  }
+}
+
+function salvarCookiesDireto() {
+  consentimentoCookies.value = salvarConsentimentoLGPD({
+    essenciais: true,
+    preferencias: consentimentoCookies.value.preferencias,
+    analiticos: consentimentoCookies.value.analiticos,
+  });
+  exibirFeedback('sucesso', 'Preferências de cookies salvas com sucesso em conformidade com a LGPD!');
+}
+
+function revogarCookiesDireto() {
+  revogarConsentimentoLGPD();
+  consentimentoCookies.value = {
+    essenciais: true,
+    preferencias: false,
+    analiticos: false,
+    atualizado_em: '',
+  };
+  exibirFeedback('sucesso', 'Consentimento revogado! Cookies não essenciais foram excluídos.');
+}
+
+function reabrirAvisoCookies() {
+  if (typeof window !== 'undefined' && typeof (window as any).reabrirBannerCookies === 'function') {
+    (window as any).reabrirBannerCookies();
+    exibirFeedback('sucesso', 'Banner flutuante de cookies reaberto na base da tela.');
   }
 }
 
@@ -766,83 +823,85 @@ async function removerClassificacao(id: string) {
         border: `1px solid ${feedbackMensagem.tipo === 'sucesso' ? '#a7f3d0' : '#fecaca'}`,
       }"
     >
-      <span>{{ feedbackMensagem.tipo === 'sucesso' ? '✅' : '⚠️' }}</span>
+      <CheckCircle2 v-if="feedbackMensagem.tipo === 'sucesso'" :size="16" />
+      <span v-else style="display: inline-flex; width: 6px; height: 6px; border-radius: 50%; background: #dc2626;"></span>
       <span>{{ feedbackMensagem.texto }}</span>
     </div>
 
-    <!-- Configuration Tabs -->
-    <div class="sub-tabs-container" style="margin-bottom: 1.5rem; flex-wrap: wrap;">
+    <!-- Barra de Navegação Ergonômica de Configurações -->
+    <nav class="config-nav-pill-bar" aria-label="Abas de Configurações do Sistema">
       <button
+        type="button"
         @click="activeConfigTab = 'visual'"
-        class="sub-tab-btn"
+        class="config-nav-tab-btn"
         :class="{ active: activeConfigTab === 'visual' }"
-        style="display: inline-flex; align-items: center; gap: 6px;"
       >
         <Palette :size="16" />
         <span>Identidade Visual</span>
       </button>
 
       <button
+        type="button"
         @click="activeConfigTab = 'whatsapp'"
-        class="sub-tab-btn"
+        class="config-nav-tab-btn"
         :class="{ active: activeConfigTab === 'whatsapp' }"
-        style="display: inline-flex; align-items: center; gap: 6px;"
       >
         <MessageSquare :size="16" />
-        <span>Mensagens WhatsApp & API</span>
+        <span>Mensagens WhatsApp &amp; API</span>
       </button>
 
       <button
         v-if="authStore.isAdmin"
+        type="button"
         @click="activeConfigTab = 'cupom'"
-        class="sub-tab-btn"
+        class="config-nav-tab-btn"
         :class="{ active: activeConfigTab === 'cupom' }"
-        style="display: inline-flex; align-items: center; gap: 6px;"
       >
         <Printer :size="16" />
         <span>Modelo de Impressão (80mm)</span>
       </button>
 
       <button
+        type="button"
         @click="activeConfigTab = 'classificacoes'"
-        class="sub-tab-btn"
+        class="config-nav-tab-btn"
         :class="{ active: activeConfigTab === 'classificacoes' }"
-        style="display: inline-flex; align-items: center; gap: 6px;"
       >
+        <Tag :size="16" />
         <span>Categorias / Classificações</span>
       </button>
 
       <button
+        type="button"
         @click="activeConfigTab = 'funcionarios'"
-        class="sub-tab-btn"
+        class="config-nav-tab-btn"
         :class="{ active: activeConfigTab === 'funcionarios' }"
-        style="display: inline-flex; align-items: center; gap: 6px;"
       >
         <UserCheck :size="16" />
         <span>Funcionários / Balconistas</span>
       </button>
 
       <button
+        type="button"
         @click="activeConfigTab = 'usuarios'"
-        class="sub-tab-btn"
+        class="config-nav-tab-btn"
         :class="{ active: activeConfigTab === 'usuarios' }"
-        style="display: inline-flex; align-items: center; gap: 6px;"
       >
         <Users :size="16" />
-        <span>Equipe & Perfis</span>
+        <span>Equipe &amp; Perfis</span>
       </button>
 
       <button
         v-if="authStore.isAdmin"
+        type="button"
         @click="activeConfigTab = 'retencao'"
-        class="sub-tab-btn"
+        class="config-nav-tab-btn"
         :class="{ active: activeConfigTab === 'retencao' }"
-        style="display: inline-flex; align-items: center; gap: 6px;"
       >
         <ShieldCheck :size="16" />
-        <span>Privacidade & Alçadas</span>
+        <span>Privacidade &amp; Alçadas</span>
       </button>
-    </div>
+    </nav>
 
     <!-- ================================================================== -->
     <!-- TAB 1: ESTÚDIO COMPLETO DE IDENTIDADE VISUAL                       -->
@@ -1093,9 +1152,9 @@ async function removerClassificacao(id: string) {
               <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 <button
                   v-for="sb in ([
-                    { val: 'claro', label: '☀️ Claro Clínico' },
-                    { val: 'escuro', label: '🌙 Escuro Noturno' },
-                    { val: 'marca', label: '🎨 Cor Secundária da Marca' },
+                    { val: 'claro', label: 'Claro Clínico' },
+                    { val: 'escuro', label: 'Escuro Noturno' },
+                    { val: 'marca', label: 'Cor da Marca' },
                   ] as const)"
                   :key="sb.val"
                   type="button"
@@ -1229,13 +1288,30 @@ async function removerClassificacao(id: string) {
                 style="padding: 0.85rem 0.65rem; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid rgba(148, 163, 184, 0.2);"
               >
                 <div>
-                  <!-- Sidebar Header: Nome da Empresa com destaque elegante, sem logo em cima -->
-                  <div style="padding-bottom: 0.75rem; margin-bottom: 0.75rem; border-bottom: 1px solid rgba(148, 163, 184, 0.2);">
-                    <div style="font-weight: 800; font-size: 0.82rem; line-height: 1.2; word-break: break-word;">
-                      {{ previewNomeEmpresa }}
+                  <!-- Mini Sidebar Header: Logotipo & Nome Corporativo -->
+                  <div style="padding-bottom: 0.65rem; margin-bottom: 0.65rem; border-bottom: 1px solid rgba(148, 163, 184, 0.2); display: flex; align-items: center; gap: 6px;">
+                    <div
+                      :style="{
+                        background: formEstiloSidebar === 'marca' ? '#ffffff' : formCorPrimaria,
+                        color: formEstiloSidebar === 'marca' ? (formCorSecundaria || '#1e3a8a') : '#ffffff',
+                      }"
+                      style="width: 24px; height: 24px; min-width: 24px; border-radius: 6px; font-weight: 900; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.15);"
+                    >
+                      {{ (previewNomeEmpresa || 'E').charAt(0).toUpperCase() }}
                     </div>
-                    <div style="font-size: 0.6rem; opacity: 0.72; margin-top: 2px; line-height: 1.2;">
-                      {{ formSloganSistema || 'Gestão de Encomendas' }}
+                    <div style="overflow: hidden; min-width: 0;">
+                      <div
+                        :style="{ color: formEstiloSidebar === 'claro' ? '#0f172a' : '#ffffff' }"
+                        style="font-weight: 800; font-size: 0.76rem; line-height: 1.15; word-break: break-word;"
+                      >
+                        {{ previewNomeEmpresa }}
+                      </div>
+                      <div
+                        :style="{ color: formEstiloSidebar === 'claro' ? '#64748b' : 'rgba(255,255,255,0.72)' }"
+                        style="font-size: 0.58rem; margin-top: 1px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                      >
+                        {{ formSloganSistema || 'Gestão de Encomendas' }}
+                      </div>
                     </div>
                   </div>
 
@@ -1785,8 +1861,9 @@ async function removerClassificacao(id: string) {
                       class="form-input"
                       style="font-size: 0.8rem;"
                     />
-                    <small v-if="whatsappChaveConfigurada" style="color: #059669; font-size: 0.72rem;">
-                      🔒 Chave armazenada com segurança — por proteção ela nunca é exibida novamente.
+                    <small v-if="whatsappChaveConfigurada" style="color: #059669; font-size: 0.72rem; display: flex; align-items: center; gap: 4px; margin-top: 3px;">
+                      <Lock :size="12" />
+                      <span>Chave armazenada com segurança — por proteção ela nunca é exibida novamente.</span>
                     </small>
                   </div>
                 </div>
@@ -2194,27 +2271,150 @@ async function removerClassificacao(id: string) {
         </button>
       </div>
 
-      <!-- Seção LGPD: Gerenciamento de Cookies e Consentimento -->
-      <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color, #e2e8f0);">
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
-          <div>
-            <div style="font-weight: 600; font-size: 0.95rem; color: #0f172a; display: flex; align-items: center; gap: 0.4rem;">
-              <CookieIcon :size="16" style="color: #d97706;" />
-              <span>Cookies &amp; Consentimento LGPD</span>
+      <!-- Seção LGPD: Gerenciamento Completo de Cookies e Consentimento -->
+      <div class="card" style="margin-top: 2rem;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.15rem; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 0.65rem;">
+            <div style="width: 34px; height: 34px; border-radius: 9px; background: #fef3c7; border: 1px solid #fde68a; display: flex; align-items: center; justify-content: center;">
+              <CookieIcon :size="18" style="color: #d97706;" />
             </div>
-            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
-              Gerencie a autorização de cookies de sessão corporativa, segurança e preferências locais desta estação.
+            <div>
+              <h3 style="font-size: 1.02rem; margin: 0; color: #0f172a; font-weight: 700;">Gerenciador de Cookies &amp; Consentimento LGPD</h3>
+              <p style="font-size: 0.76rem; color: #64748b; margin: 2px 0 0 0;">Controle direto e auditoria técnica de cookies em estrita conformidade com a Lei nº 13.709/2018 (Art. 7º, 11 e 18).</p>
             </div>
           </div>
-          <button
-            type="button"
-            @click="abrirGerenciadorCookiesModal"
-            class="btn-outline-neutral"
-            style="border-radius: 9999px; padding: 0.4rem 1rem; font-size: 0.82rem; font-weight: 600;"
-          >
-            <Settings2 :size="14" />
-            <span>Gerenciar Cookies</span>
-          </button>
+
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span
+              v-if="consentimentoCookies.atualizado_em"
+              style="font-size: 0.74rem; background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; font-weight: 700; padding: 0.25rem 0.65rem; border-radius: 9999px;"
+            >
+              Consentimento Gravado
+            </span>
+            <button
+              type="button"
+              @click="abrirGerenciadorCookiesModal"
+              class="btn-outline-neutral"
+              style="border-radius: 9999px; padding: 0.35rem 0.85rem; font-size: 0.8rem; font-weight: 600;"
+            >
+              <Settings2 :size="14" />
+              <span>Abrir Janela Modal</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Categorias de Cookies com Toggles -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0.85rem; margin-bottom: 1.25rem;">
+          <!-- 1. Essenciais -->
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.9rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+              <span style="font-size: 0.86rem; font-weight: 700; color: #0f172a;">Estritamente Necessários</span>
+              <span style="font-size: 0.68rem; background: #e0f2fe; color: #0369a1; font-weight: 700; padding: 2px 7px; border-radius: 9999px;">Sempre Ativo</span>
+            </div>
+            <p style="font-size: 0.75rem; color: #64748b; line-height: 1.4; margin: 0;">
+              Autenticação segura, tokens Supabase com RLS e proteção CSRF. Indispensável para funcionamento da farmácia.
+            </p>
+          </div>
+
+          <!-- 2. Preferências -->
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.9rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+              <span style="font-size: 0.86rem; font-weight: 700; color: #0f172a;">Preferências &amp; Layout</span>
+              <label style="display: inline-flex; align-items: center; cursor: pointer;">
+                <input
+                  type="checkbox"
+                  v-model="consentimentoCookies.preferencias"
+                  style="accent-color: var(--color-primary); width: 16px; height: 16px;"
+                />
+              </label>
+            </div>
+            <p style="font-size: 0.75rem; color: #64748b; line-height: 1.4; margin: 0;">
+              Grava temas personalizados, cor da barra lateral e densidade visual para carregar instantaneamente.
+            </p>
+          </div>
+
+          <!-- 3. Analíticos -->
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.9rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+              <span style="font-size: 0.86rem; font-weight: 700; color: #0f172a;">Desempenho &amp; Estabilidade</span>
+              <label style="display: inline-flex; align-items: center; cursor: pointer;">
+                <input
+                  type="checkbox"
+                  v-model="consentimentoCookies.analiticos"
+                  style="accent-color: var(--color-primary); width: 16px; height: 16px;"
+                />
+              </label>
+            </div>
+            <p style="font-size: 0.75rem; color: #64748b; line-height: 1.4; margin: 0;">
+              Métricas agregadas anônimas de tempo de resposta para monitoramento técnico de latência e estabilidade da API.
+            </p>
+          </div>
+        </div>
+
+        <!-- Tabela de Inventário Transparente de Cookies -->
+        <div style="border: 1px solid var(--border-card); border-radius: 10px; overflow: hidden; margin-bottom: 1.25rem;">
+          <div style="background: #f1f5f9; padding: 0.5rem 0.85rem; font-size: 0.75rem; font-weight: 700; color: #475569; display: flex; justify-content: space-between;">
+            <span>INVENTÁRIO DE COOKIES ATIVOS</span>
+            <span>TRANSPARÊNCIA LGPD (ART. 18)</span>
+          </div>
+          <div style="max-height: 160px; overflow-y: auto;">
+            <div
+              v-for="ck in inventarioCookies"
+              :key="ck.nome"
+              style="padding: 0.5rem 0.85rem; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; font-size: 0.76rem; gap: 0.5rem;"
+            >
+              <div style="display: flex; flex-direction: column;">
+                <span style="font-family: monospace; font-weight: 700; color: #0f172a;">{{ ck.nome }}</span>
+                <span style="color: #64748b; font-size: 0.7rem;">{{ ck.finalidade }}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
+                <span style="font-size: 0.68rem; background: #e2e8f0; color: #334155; padding: 1px 6px; border-radius: 4px;">{{ ck.expiracao }}</span>
+                <span
+                  :style="{ background: ck.ativo ? '#ecfdf5' : '#f1f5f9', color: ck.ativo ? '#047857' : '#94a3b8' }"
+                  style="font-size: 0.68rem; font-weight: 700; padding: 1px 6px; border-radius: 4px;"
+                >
+                  {{ ck.ativo ? 'Autorizado' : 'Inativo' }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Ações do Gerenciador de Cookies -->
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;">
+          <div style="font-size: 0.75rem; color: #64748b;">
+            <span v-if="consentimentoCookies.atualizado_em">
+              Última autorização em: {{ new Date(consentimentoCookies.atualizado_em).toLocaleString('pt-BR') }}
+            </span>
+            <span v-else>Nenhum consentimento gravado nesta estação.</span>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button
+              type="button"
+              @click="reabrirAvisoCookies"
+              class="btn-outline-neutral"
+              style="border-radius: 9999px; padding: 0.4rem 0.95rem; font-size: 0.8rem; font-weight: 600;"
+            >
+              Reabrir Aviso Flutuante
+            </button>
+            <button
+              type="button"
+              @click="revogarCookiesDireto"
+              class="btn-outline-neutral"
+              style="border-radius: 9999px; padding: 0.4rem 0.95rem; font-size: 0.8rem; font-weight: 600; color: #dc2626 !important; border-color: #fca5a5;"
+            >
+              Revogar Consentimento
+            </button>
+            <button
+              type="button"
+              @click="salvarCookiesDireto"
+              class="btn-primary-pill"
+              style="padding: 0.4rem 1.15rem; font-size: 0.8rem;"
+            >
+              Salvar Preferências
+            </button>
+          </div>
         </div>
       </div>
     </div>

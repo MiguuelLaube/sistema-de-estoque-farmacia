@@ -18,6 +18,7 @@ import {
   LogOut,
   PlusCircle,
   AlertOctagon,
+  Cookie,
 } from 'lucide-vue-next';
 
 const route = useRoute();
@@ -32,6 +33,26 @@ const nomeEmpresaExibicao = computed(() => {
   const nome = authStore.currentConfig.nome_sistema || authStore.currentTenant.nome_empresa || 'Minha Drogaria';
   return nome.replace(/\s+SaaS/gi, '').trim();
 });
+
+const inicialEmpresa = computed(() => {
+  const nome = nomeEmpresaExibicao.value.trim();
+  return nome ? nome.charAt(0).toUpperCase() : 'E';
+});
+
+const temLogoCustomizado = computed(() => {
+  const url = authStore.currentConfig.logo_url;
+  return !!url && url !== '/encomed-logo.png' && !url.includes('encomed-logo');
+});
+
+const logoEmpresaUrl = computed(() => {
+  return authStore.currentConfig.logo_url || '';
+});
+
+function abrirGerenciadorCookies() {
+  if (typeof window !== 'undefined' && typeof (window as any).abrirGerenciadorCookies === 'function') {
+    (window as any).abrirGerenciadorCookies();
+  }
+}
 
 onMounted(() => {
   authStore.applyTheme();
@@ -66,21 +87,31 @@ async function encerrarSuporteBreakGlass() {
   <div v-else class="app-container">
     <!-- Sidebar Navigation -->
     <aside class="app-sidebar">
-      <!-- Sidebar Header: Nome da Empresa com destaque elegante, sem logo em cima -->
-      <div class="sidebar-header" style="padding: 1.15rem 1.25rem; display: flex; flex-direction: column; justify-content: center; min-height: 64px;">
-        <div class="tenant-meta" style="width: 100%;">
-          <div
-            class="brand-title"
-            :title="nomeEmpresaExibicao"
-            style="font-size: 1.05rem; font-weight: 800; color: var(--text-main); font-family: var(--font-heading); line-height: 1.3; white-space: normal; word-break: break-word;"
-          >
-            {{ nomeEmpresaExibicao }}
+      <!-- Sidebar Header: Logotipo & Identidade Visual da Empresa/Drogaria -->
+      <div class="sidebar-header">
+        <div class="brand-logo-container">
+          <!-- Emblema / Monograma Corporativo Farmacêutico -->
+          <div class="brand-logo-emblem" :title="nomeEmpresaExibicao">
+            <img
+              v-if="temLogoCustomizado"
+              :src="logoEmpresaUrl"
+              :alt="nomeEmpresaExibicao"
+              class="brand-custom-img"
+            />
+            <div v-else class="brand-monogram">
+              <span class="monogram-letter">{{ inicialEmpresa }}</span>
+              <span class="monogram-dot"></span>
+            </div>
           </div>
-          <div
-            class="brand-plan"
-            style="font-size: 0.76rem; color: var(--text-muted); font-weight: 500; margin-top: 3px;"
-          >
-            {{ authStore.isSuperAdmin && !authStore.breakGlassTenantId ? 'Painel de Governança' : (authStore.currentConfig.slogan_sistema || 'Gestão de Encomendas') }}
+
+          <!-- Metadados da Empresa (Nome com destaque de Logo e Tagline) -->
+          <div class="brand-info">
+            <h2 class="brand-name" :title="nomeEmpresaExibicao">
+              {{ nomeEmpresaExibicao }}
+            </h2>
+            <p class="brand-tagline">
+              {{ authStore.isSuperAdmin && !authStore.breakGlassTenantId ? 'Painel de Governança' : (authStore.currentConfig.slogan_sistema || 'Gestão de Encomendas') }}
+            </p>
           </div>
         </div>
       </div>
@@ -177,15 +208,15 @@ async function encerrarSuporteBreakGlass() {
       <!-- Logo do site EncoMed apenas abaixo de Nova Encomenda -->
       <div
         v-if="authStore.currentConfig.visual_opcoes?.exibir_selo_encomed !== false"
-        style="padding: 0.65rem 1.25rem; display: flex; align-items: center; justify-content: center; gap: 0.45rem; border-top: 1px solid var(--border-color);"
+        class="sidebar-encomed-seal"
       >
-        <img src="/encomed-icon.svg" alt="EncoMed" style="height: 18px; width: 18px; object-fit: contain; background: transparent;" />
-        <span style="font-family: var(--font-heading); font-size: 0.88rem; font-weight: 800; letter-spacing: -0.01em;">
-          <span style="color: var(--text-main);">Enco</span><span style="color: var(--color-primary, #2563eb);">Med</span>
+        <img src="/encomed-icon.svg" alt="EncoMed" class="sidebar-encomed-icon" />
+        <span class="sidebar-encomed-text">
+          <span class="encomed-brand-prefix">Enco</span><span class="encomed-brand-suffix">Med</span>
         </span>
       </div>
 
-      <!-- Active User Profile & Role Indicator -->
+      <!-- Active User Profile, Cookie Manager & Logout -->
       <div class="sidebar-footer">
         <div class="user-profile-widget">
           <div class="user-avatar">
@@ -197,14 +228,26 @@ async function encerrarSuporteBreakGlass() {
           </div>
         </div>
 
-        <button
-          @click="handleLogout"
-          class="btn-logout"
-          title="Sair do sistema (Logout)"
-          id="btn-sidebar-logout"
-        >
-          <LogOut :size="16" />
-        </button>
+        <div style="display: flex; align-items: center; gap: 0.25rem;">
+          <button
+            type="button"
+            @click="abrirGerenciadorCookies"
+            class="btn-footer-tool"
+            title="Gerenciar Cookies & Privacidade LGPD"
+            id="btn-sidebar-cookies"
+          >
+            <Cookie :size="15" />
+          </button>
+
+          <button
+            @click="handleLogout"
+            class="btn-logout"
+            title="Sair do sistema (Logout)"
+            id="btn-sidebar-logout"
+          >
+            <LogOut :size="16" />
+          </button>
+        </div>
       </div>
     </aside>
 
