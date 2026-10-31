@@ -154,6 +154,7 @@ export const useAuthStore = defineStore('auth', () => {
       mensagem_whatsapp_cobranca: '',
       mensagem_whatsapp_entregue: '',
       auto_whatsapp_pedido: false,
+      auto_whatsapp_pedido_feito: false,
       auto_whatsapp_entregue: false,
       base_legal_padrao: 'execucao_contrato',
       bloquear_entrega_com_saldo: false,

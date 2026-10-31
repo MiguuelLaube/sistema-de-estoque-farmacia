@@ -28,7 +28,7 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
-  MessageSquare,
+  X,
 } from 'lucide-vue-next';
 import type { TipoModeloWhatsApp } from '../services/evolutionApi';
 import HistoricoClienteModal from '../components/HistoricoClienteModal.vue';
@@ -917,9 +917,9 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
             </div>
           </div>
 
-          <!-- BLOCO MINIMALISTA DE NOTIFICAÇÕES (STATUS CHEGOU & COBRANÇA) -->
+          <!-- BLOCO MINIMALISTA DE NOTIFICAÇÕES (AGUARDANDO, PEDIDO FEITO, CHEGOU & COBRANÇA) -->
           <div
-            v-if="order.status === 'Chegou' || (order.valor_total > order.valor_pago && order.status === 'Entregue')"
+            v-if="order.status === 'Aguardando' || order.status === 'Pedido Feito' || order.status === 'Chegou' || (order.valor_total > order.valor_pago && order.status === 'Entregue')"
             style="
               background: #f8fafc;
               border: 1px solid var(--border-color);
@@ -931,10 +931,130 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
               gap: 0.5rem;
               transition: all 0.2s ease;
             "
-            :id="'card-aviso-chegada-' + order.id"
+            :id="'card-aviso-' + order.id"
           >
-            <!-- OPÇÃO 1: AVISO DE RETIRADA / CHEGADA (quando status === 'Chegou') -->
-            <div v-if="order.status === 'Chegou'">
+            <!-- OPÇÃO 1A: AGUARDANDO PEDIDO -->
+            <div v-if="order.status === 'Aguardando'">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; margin-bottom: 0.35rem;">
+                <span
+                  class="badge"
+                  style="
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    font-size: 0.72rem;
+                    font-weight: 700;
+                    padding: 2px 8px;
+                    border-radius: 9999px;
+                    border: 1px solid #fde68a;
+                    background: #fffbeb;
+                    color: #92400e;
+                  "
+                >
+                  <Clock :size="12" style="color: #d97706;" />
+                  <span>Aguardando Compra</span>
+                </span>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr auto; gap: 0.4rem;">
+                <button
+                  type="button"
+                  @click="enviarModeloWhatsappCard(order, 'pedido')"
+                  :disabled="enviandoAvisoId === order.id + '-pedido'"
+                  class="btn-primary-pill"
+                  style="
+                    justify-content: center;
+                    padding: 0.36rem 0.65rem;
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                  "
+                  title="Enviar modelo de Confirmação de Pedido via WhatsApp"
+                >
+                  <Loader2 v-if="enviandoAvisoId === order.id + '-pedido'" class="animate-spin" :size="13" />
+                  <Send v-else :size="13" />
+                  <span>{{ enviandoAvisoId === order.id + '-pedido' ? 'Enviando...' : 'Confirmar no Zap' }}</span>
+                </button>
+
+                <button
+                  type="button"
+                  @click="copyOrderSummary(order)"
+                  class="btn-outline-neutral"
+                  style="
+                    padding: 0.36rem 0.65rem;
+                    font-size: 0.75rem;
+                    background: #ffffff;
+                    border-radius: 9999px;
+                  "
+                  title="Copiar resumo da encomenda"
+                >
+                  <Copy :size="13" />
+                  <span>Copiar Resumo</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- OPÇÃO 1B: PEDIDO FEITO AO FORNECEDOR -->
+            <div v-else-if="order.status === 'Pedido Feito'">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; margin-bottom: 0.35rem;">
+                <span
+                  class="badge"
+                  style="
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    font-size: 0.72rem;
+                    font-weight: 700;
+                    padding: 2px 8px;
+                    border-radius: 9999px;
+                    border: 1px solid #bfdbfe;
+                    background: #eff6ff;
+                    color: #1d4ed8;
+                  "
+                >
+                  <CheckCircle :size="12" style="color: #2563eb;" />
+                  <span>Pedido Feito ao Distribuidor</span>
+                </span>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr auto; gap: 0.4rem;">
+                <button
+                  type="button"
+                  @click="enviarModeloWhatsappCard(order, 'pedido')"
+                  :disabled="enviandoAvisoId === order.id + '-pedido'"
+                  class="btn-primary-pill"
+                  style="
+                    justify-content: center;
+                    padding: 0.36rem 0.65rem;
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                  "
+                  title="Avisar cliente no WhatsApp que o pedido foi feito ao fornecedor"
+                >
+                  <Loader2 v-if="enviandoAvisoId === order.id + '-pedido'" class="animate-spin" :size="13" />
+                  <Send v-else :size="13" />
+                  <span>{{ enviandoAvisoId === order.id + '-pedido' ? 'Enviando...' : 'Avisar Pedido no Zap' }}</span>
+                </button>
+
+                <button
+                  type="button"
+                  @click="copyOrderSummary(order)"
+                  class="btn-outline-neutral"
+                  style="
+                    padding: 0.36rem 0.65rem;
+                    font-size: 0.75rem;
+                    background: #ffffff;
+                    border-radius: 9999px;
+                  "
+                  title="Copiar resumo da encomenda"
+                >
+                  <Copy :size="13" />
+                  <span>Copiar Resumo</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- OPÇÃO 1C: AVISO DE RETIRADA / CHEGADA (quando status === 'Chegou') -->
+            <div v-else-if="order.status === 'Chegou'">
               <!-- Status do Aviso de Chegada -->
               <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; margin-bottom: 0.35rem;">
                 <div style="display: flex; align-items: center; gap: 0.4rem; min-width: 0; flex-wrap: wrap;">
@@ -1034,7 +1154,7 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
 
             <!-- OPÇÃO 2: LEMBRETE DE SALDO RESTANTE (quando houver saldo pendente) -->
             <div
-              v-if="order.valor_total > order.valor_pago"
+              v-if="order.valor_total > order.valor_pago && (order.status === 'Chegou' || order.status === 'Entregue')"
               :style="{
                 borderTop: order.status === 'Chegou' ? '1px dashed #e2e8f0' : 'none',
                 paddingTop: order.status === 'Chegou' ? '0.45rem' : '0',
@@ -1077,42 +1197,12 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
             </div>
           </div>
 
-          <!-- Bottom Action Buttons: Modelos WhatsApp (Aguardando/Pedido), Imprimir Cupom & Trash Delete -->
-          <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.35rem; padding-top: 0.65rem; border-top: 1px solid #f1f5f9;">
-            <div
-              v-if="order.status === 'Aguardando' || order.status === 'Pedido Feito'"
-              style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem;"
-            >
-              <button
-                type="button"
-                @click="enviarModeloWhatsappCard(order, 'pedido')"
-                :disabled="enviandoAvisoId === order.id + '-pedido'"
-                class="btn-outline-emerald"
-                style="height: 34px; padding: 0 0.5rem; font-size: 0.74rem; justify-content: center;"
-                title="Enviar modelo de Confirmação de Pedido via WhatsApp"
-              >
-                <Loader2 v-if="enviandoAvisoId === order.id + '-pedido'" class="animate-spin" :size="12" />
-                <MessageSquare v-else :size="12" />
-                <span>{{ enviandoAvisoId === order.id + '-pedido' ? 'Enviando...' : 'Confirmar Zap' }}</span>
-              </button>
-
-              <button
-                type="button"
-                @click="copyOrderSummary(order)"
-                class="btn-outline-neutral"
-                style="height: 34px; padding: 0 0.5rem; font-size: 0.74rem; justify-content: center; color: #2563eb; border-color: #bfdbfe; background: #eff6ff;"
-                title="Copiar resumo da encomenda"
-              >
-                <Copy :size="12" />
-                <span>Copiar Resumo</span>
-              </button>
-            </div>
-
-            <div style="display: flex; gap: 0.5rem; width: 100%;">
-              <button
-                type="button"
-                @click="openCupom(order)"
-                class="btn-outline-neutral"
+          <!-- Bottom Action Buttons: Imprimir Cupom & Trash Delete -->
+          <div style="display: flex; gap: 0.5rem; width: 100%; margin-top: 0.35rem; padding-top: 0.65rem; border-top: 1px solid #f1f5f9;">
+            <button
+              type="button"
+              @click="openCupom(order)"
+              class="btn-outline-neutral"
                 style="
                   flex: 1;
                   height: 36px;
@@ -1163,7 +1253,6 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
                 <Trash2 :size="15" />
               </button>
             </div>
-          </div>
         </div>
       </div>
     </div>
@@ -1363,8 +1452,8 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
             <Printer :size="18" style="color: #2563eb;" />
             <span>Imprimir Cupom</span>
           </div>
-          <button @click="showCupomModal = false" style="background: none; border: none; cursor: pointer; color: #94a3b8;">
-            ✕
+          <button @click="showCupomModal = false" style="background: none; border: none; cursor: pointer; color: #94a3b8; display: inline-flex; align-items: center; justify-content: center;">
+            <X :size="18" />
           </button>
         </div>
 

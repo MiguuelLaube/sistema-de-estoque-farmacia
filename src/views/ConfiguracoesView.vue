@@ -338,6 +338,7 @@ const formMsgWhatsappEntregue = ref(
 );
 const formEvolutionAtivo = ref(authStore.currentConfig.evolution_api_ativo !== false);
 const formAutoWhatsappPedido = ref(Boolean(authStore.currentConfig.auto_whatsapp_pedido));
+const formAutoWhatsappPedidoFeito = ref(Boolean(authStore.currentConfig.auto_whatsapp_pedido_feito));
 const formAutoWhatsappEntregue = ref(Boolean(authStore.currentConfig.auto_whatsapp_entregue));
 const formOcultarMedicamentosNotificacao = ref(Boolean(authStore.currentConfig.ocultar_medicamentos_notificacao));
 
@@ -547,6 +548,7 @@ watch(
     formMsgWhatsappCobranca.value = cfg.mensagem_whatsapp_cobranca || MODELOS_PADRAO_WHATSAPP.cobranca;
     formMsgWhatsappEntregue.value = cfg.mensagem_whatsapp_entregue || MODELOS_PADRAO_WHATSAPP.entregue;
     formAutoWhatsappPedido.value = Boolean(cfg.auto_whatsapp_pedido);
+    formAutoWhatsappPedidoFeito.value = Boolean(cfg.auto_whatsapp_pedido_feito);
     formAutoWhatsappEntregue.value = Boolean(cfg.auto_whatsapp_entregue);
 
     formHeaderTitle.value = cfg.header_title || 'DROGARIA';
@@ -594,6 +596,7 @@ async function salvarWhatsapp() {
     mensagem_whatsapp_cobranca: formMsgWhatsappCobranca.value,
     mensagem_whatsapp_entregue: formMsgWhatsappEntregue.value,
     auto_whatsapp_pedido: formAutoWhatsappPedido.value,
+    auto_whatsapp_pedido_feito: formAutoWhatsappPedidoFeito.value,
     auto_whatsapp_entregue: formAutoWhatsappEntregue.value,
     ocultar_medicamentos_notificacao: formOcultarMedicamentosNotificacao.value,
     evolution_api_ativo: formEvolutionAtivo.value,
@@ -1618,7 +1621,16 @@ async function removerClassificacao(id: string) {
                 type="checkbox"
                 style="width: 17px; height: 17px; accent-color: #2563eb;"
               />
-              <span><strong>Disparo automático no Cadastro:</strong> enviar o Modelo 2 assim que uma nova encomenda for registrada</span>
+              <span><strong>Disparo automático de Aguardando / Cadastro:</strong> avisar no WhatsApp assim que uma nova encomenda for registrada ou marcada como <em>"Aguardando"</em></span>
+            </label>
+
+            <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-size: 0.86rem;">
+              <input
+                v-model="formAutoWhatsappPedidoFeito"
+                type="checkbox"
+                style="width: 17px; height: 17px; accent-color: #1d4ed8;"
+              />
+              <span><strong>Disparo automático de Pedido Feito:</strong> avisar no WhatsApp quando o status for alterado para <em>"Pedido Feito"</em></span>
             </label>
 
             <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-size: 0.86rem;">
@@ -1642,7 +1654,7 @@ async function removerClassificacao(id: string) {
               />
               <div>
                 <div style="font-size: 0.88rem; font-weight: 700; color: #0f172a;">
-                  🛡️ Sigilo Farmacêutico nas Notificações (LGPD Art. 11)
+                  Sigilo Farmacêutico nas Notificações (LGPD Art. 11)
                 </div>
                 <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
                   Oculta automaticamente o nome comercial do medicamento em todos os modelos da API, substituindo por <em>"sua encomenda"</em> na tela de bloqueio do paciente.
@@ -1676,7 +1688,7 @@ async function removerClassificacao(id: string) {
                 class="badge"
                 :class="statusInstancia === 'open' ? 'badge-chegou' : 'badge-aguardando'"
               >
-                {{ statusInstancia === 'open' ? '🟢 Conectado a esta Drogaria' : '🟡 Desconectado / Aguardando' }}
+                {{ statusInstancia === 'open' ? 'Conectado a esta Drogaria' : 'Desconectado / Aguardando' }}
               </span>
             </div>
           </div>
@@ -1802,7 +1814,7 @@ async function removerClassificacao(id: string) {
                   border: `1px solid ${testeResultado.sucesso ? '#a7f3d0' : '#fecaca'}`,
                 }"
               >
-                <div>{{ testeResultado.sucesso ? '✅' : '❌' }} <strong>{{ testeResultado.mensagem }}</strong></div>
+                <div><strong>{{ testeResultado.mensagem }}</strong></div>
                 <div v-if="testeResultado.textoEnviado" style="margin-top: 6px; font-size: 0.77rem; opacity: 0.9; white-space: pre-line; background: rgba(255,255,255,0.65); padding: 6px 8px; border-radius: 6px;">
                   {{ testeResultado.textoEnviado }}
                 </div>

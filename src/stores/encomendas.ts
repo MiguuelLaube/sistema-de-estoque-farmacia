@@ -223,7 +223,7 @@ export const useEncomendasStore = defineStore('encomendas', () => {
     nomeCliente: string;
     variaveis: Record<string, string>;
   } | null {
-    const cliente = clientesStore.allClientes.find((c) => c.id === encomenda.cliente_id);
+    const cliente = clientesStore.allClientes.find((c) => c.id === encomenda.cliente_id) || encomenda.cliente;
     if (!cliente || !cliente.telefone) return null;
 
     const cfg = authStore.currentConfig;
@@ -333,7 +333,20 @@ export const useEncomendasStore = defineStore('encomendas', () => {
       }
 
       if (alterou) {
+        const statusAntes = enc.status;
         recalcularStatus(enc);
+        if (enc.status !== statusAntes) {
+          const cfg = authStore.currentConfig;
+          if (enc.status === 'Chegou') {
+            dispararNotificacaoChegadaEvolution(enc).catch(() => {});
+          } else if (
+            enc.status === 'Pedido Feito' &&
+            cfg?.evolution_api_ativo &&
+            (cfg?.auto_whatsapp_pedido_feito ?? cfg?.auto_whatsapp_pedido)
+          ) {
+            dispararNotificacaoModeloEvolution(enc, 'pedido', false).catch(() => {});
+          }
+        }
       }
     }
   }
@@ -585,13 +598,28 @@ export const useEncomendasStore = defineStore('encomendas', () => {
       }
     }
 
+    const cfg = authStore.currentConfig;
     if (novoStatus === 'Chegou' && eraOutroStatus) {
       dispararNotificacaoChegadaEvolution(enc).catch(() => {});
     } else if (
+      novoStatus === 'Pedido Feito' &&
+      eraOutroStatus &&
+      cfg?.evolution_api_ativo &&
+      (cfg?.auto_whatsapp_pedido_feito ?? cfg?.auto_whatsapp_pedido)
+    ) {
+      dispararNotificacaoModeloEvolution(enc, 'pedido', false).catch(() => {});
+    } else if (
+      novoStatus === 'Aguardando' &&
+      eraOutroStatus &&
+      cfg?.evolution_api_ativo &&
+      cfg?.auto_whatsapp_pedido
+    ) {
+      dispararNotificacaoModeloEvolution(enc, 'pedido', false).catch(() => {});
+    } else if (
       novoStatus === 'Entregue' &&
       eraOutroStatus &&
-      authStore.currentConfig?.evolution_api_ativo &&
-      authStore.currentConfig?.auto_whatsapp_entregue
+      cfg?.evolution_api_ativo &&
+      cfg?.auto_whatsapp_entregue
     ) {
       dispararNotificacaoModeloEvolution(enc, 'entregue', false).catch(() => {});
     }
@@ -725,10 +753,10 @@ export const useEncomendasStore = defineStore('encomendas', () => {
   }
 
   function obterResumoEncomenda(encomenda: Encomenda): string {
-    const cliente = clientesStore.allClientes.find((c) => c.id === encomenda.cliente_id);
+    const cliente = clientesStore.allClientes.find((c) => c.id === encomenda.cliente_id) || encomenda.cliente;
     const itensStr = encomenda.itens?.map((i) => `• ${i.quantidade}x ${i.descricao} - R$ ${i.subtotal.toFixed(2)}`).join('\n') || '';
     const saldo = Math.max(0, encomenda.valor_total - encomenda.valor_pago);
-    return `📋 RESUMO DA ENCOMENDA [${encomenda.codigo_rastreio}]\nCliente: ${cliente?.nome || 'N/A'}\nTelefone: ${cliente?.telefone || 'N/A'}\n\nItens:\n${itensStr}\n\nTotal: R$ ${encomenda.valor_total.toFixed(2)}\nValor Pago: R$ ${encomenda.valor_pago.toFixed(2)}\nSaldo a Cobrar: R$ ${saldo.toFixed(2)}\nStatus: ${encomenda.status}`;
+    return `RESUMO DA ENCOMENDA [${encomenda.codigo_rastreio}]\nCliente: ${cliente?.nome || 'N/A'}\nTelefone: ${cliente?.telefone || 'N/A'}\n\nItens:\n${itensStr}\n\nTotal: R$ ${encomenda.valor_total.toFixed(2)}\nValor Pago: R$ ${encomenda.valor_pago.toFixed(2)}\nSaldo a Cobrar: R$ ${saldo.toFixed(2)}\nStatus: ${encomenda.status}`;
   }
 
   function gerarLinkWhatsApp(encomenda: Encomenda, modelo: TipoModeloWhatsApp = 'chegada'): string {

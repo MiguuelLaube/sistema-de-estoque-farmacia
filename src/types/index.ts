@@ -70,6 +70,7 @@ export interface ConfigTenant {
   mensagem_whatsapp_cobranca?: string;
   mensagem_whatsapp_entregue?: string;
   auto_whatsapp_pedido?: boolean;
+  auto_whatsapp_pedido_feito?: boolean;
   auto_whatsapp_entregue?: boolean;
   base_legal_padrao: string;
   bloquear_entrega_com_saldo: boolean;
