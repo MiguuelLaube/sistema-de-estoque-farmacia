@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { useComprasStore } from '../stores/compras';
 import { useEncomendasStore } from '../stores/encomendas';
+import { useConfirmDialog } from '../composables/useConfirmDialog';
 import type { StatusCompra, CompraItem } from '../types';
 import {
   parsearXmlNfe,
@@ -36,6 +37,7 @@ import {
 const authStore = useAuthStore();
 const comprasStore = useComprasStore();
 const encomendasStore = useEncomendasStore();
+const dialog = useConfirmDialog();
 
 // Modals
 const showNovoItemModal = ref(false);
@@ -215,7 +217,14 @@ async function salvarEdicaoItem() {
 }
 
 async function excluirItem(id: string) {
-  if (confirm('Deseja realmente remover este item da lista de compras?')) {
+  const confirmou = await dialog.confirm({
+    title: 'Remover da Lista de Compras',
+    message: 'Deseja realmente remover este item da lista de compras?',
+    confirmText: 'Sim, remover',
+    cancelText: 'Cancelar',
+    tipo: 'perigo',
+  });
+  if (confirmou) {
     await comprasStore.removerItemCompra(id);
     showEditarItemModal.value = false;
   }
@@ -230,11 +239,19 @@ function abrirModalNovoItem() {
 
 async function salvarNovoItem() {
   if (!novoItemNome.value.trim()) {
-    alert('Informe o nome do medicamento.');
+    await dialog.alert({
+      title: 'Atenção',
+      message: 'Informe o nome do medicamento.',
+      tipo: 'aviso',
+    });
     return;
   }
   if (!novoItemClassificacaoId.value) {
-    alert('Selecione uma classificação.');
+    await dialog.alert({
+      title: 'Atenção',
+      message: 'Selecione uma classificação.',
+      tipo: 'aviso',
+    });
     return;
   }
 
@@ -250,7 +267,11 @@ async function salvarNovoItem() {
       false
     );
   } catch (err: any) {
-    alert(err?.message || 'Não foi possível salvar o item de compra.');
+    await dialog.alert({
+      title: 'Erro ao Salvar',
+      message: err?.message || 'Não foi possível salvar o item de compra.',
+      tipo: 'perigo',
+    });
     return;
   }
 
@@ -262,20 +283,43 @@ async function criarNovaClassificacao() {
   const nomeUpper = novaClassificacaoNome.value.trim().toUpperCase();
   const existe = comprasStore.currentClassificacoes.some((c) => c.nome === nomeUpper);
   if (existe) {
-    alert('Classificação já cadastrada!');
+    await dialog.alert({
+      title: 'Atenção',
+      message: 'Classificação já cadastrada!',
+      tipo: 'aviso',
+    });
     return;
   }
   const criada = await comprasStore.adicionarClassificacao(nomeUpper);
   if (!criada) {
-    alert(comprasStore.erroOperacao || 'Não foi possível cadastrar a categoria.');
+    await dialog.alert({
+      title: 'Erro ao Cadastrar',
+      message: comprasStore.erroOperacao || 'Não foi possível cadastrar a categoria.',
+      tipo: 'perigo',
+    });
     return;
   }
   novaClassificacaoNome.value = '';
 }
 
 async function removerClassificacao(id: string) {
+  const cat = comprasStore.currentClassificacoes.find((c) => c.id === id);
+  const confirmou = await dialog.confirm({
+    title: 'Excluir Classificação',
+    message: `Deseja realmente remover a categoria "${cat?.nome || 'selecionada'}"?`,
+    confirmText: 'Excluir',
+    cancelText: 'Cancelar',
+    tipo: 'perigo',
+  });
+  if (!confirmou) return;
   const ok = await comprasStore.removerClassificacao(id);
-  if (!ok) alert(comprasStore.erroOperacao || 'Não foi possível excluir a categoria.');
+  if (!ok) {
+    await dialog.alert({
+      title: 'Erro ao Excluir',
+      message: comprasStore.erroOperacao || 'Não foi possível excluir a categoria.',
+      tipo: 'perigo',
+    });
+  }
 }
 
 function abrirImportacaoXML() {
@@ -284,11 +328,19 @@ function abrirImportacaoXML() {
 
 async function lerArquivoXmlComIA(file: File) {
   if (!file.name.toLowerCase().endsWith('.xml')) {
-    alert('Por favor, selecione um arquivo válido com extensão .xml');
+    await dialog.alert({
+      title: 'Arquivo Inválido',
+      message: 'Por favor, selecione um arquivo válido com extensão .xml',
+      tipo: 'aviso',
+    });
     return;
   }
   if (file.size > 5 * 1024 * 1024) {
-    alert('O arquivo XML excede o tamanho máximo permitido (5 MB).');
+    await dialog.alert({
+      title: 'Arquivo Muito Grande',
+      message: 'O arquivo XML excede o tamanho máximo permitido (5 MB).',
+      tipo: 'aviso',
+    });
     return;
   }
 
@@ -299,7 +351,11 @@ async function lerArquivoXmlComIA(file: File) {
     const conteudo = await file.text();
     const extraidos = parsearXmlNfe(conteudo);
     if (extraidos.length === 0) {
-      alert('Nenhum produto foi localizado no XML selecionado.');
+      await dialog.alert({
+        title: 'Nenhum Produto',
+        message: 'Nenhum produto foi localizado no XML selecionado.',
+        tipo: 'aviso',
+      });
       return;
     }
 
@@ -312,7 +368,11 @@ async function lerArquivoXmlComIA(file: File) {
     xmlMotorIa.value = analise.motorUtilizado;
     showImportXmlModal.value = true;
   } catch (err: any) {
-    alert(`Falha ao ler XML: ${err.message || 'Arquivo mal formatado.'}`);
+    await dialog.alert({
+      title: 'Erro de Leitura XML',
+      message: `Falha ao ler XML: ${err.message || 'Arquivo mal formatado.'}`,
+      tipo: 'perigo',
+    });
   } finally {
     xmlAnalisandoIa.value = false;
   }
@@ -343,12 +403,16 @@ function solicitarConfirmacaoIndividual(match: ProdutoExtraidoXml) {
 }
 
 // Solicita confirmação explícita para todos os itens auto-selecionados pela IA
-function solicitarConfirmacaoSelecionados() {
+async function solicitarConfirmacaoSelecionados() {
   const selecionadosValidos = xmlCorrespondencias.value.filter(
     (m) => m.selecionado && m.itemCorrespondente && m.itemCorrespondente.status !== 'Chegou'
   );
   if (selecionadosValidos.length === 0) {
-    alert('Selecione ao menos um medicamento identificado para mudar o status para "Chegou".');
+    await dialog.alert({
+      title: 'Seleção Vazia',
+      message: 'Selecione ao menos um medicamento identificado para mudar o status para "Chegou".',
+      tipo: 'aviso',
+    });
     return;
   }
   itensAlvoConfirmacao.value = selecionadosValidos;
@@ -479,7 +543,7 @@ function exportarPlanilhaExcel() {
       v-if="feedbackBanner"
       style="padding: 0.75rem 1.15rem; border-radius: 9999px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; align-self: flex-start;"
     >
-      <span>✅</span>
+      <CheckCircle :size="15" />
       <span>{{ feedbackBanner }}</span>
     </div>
 
@@ -961,7 +1025,7 @@ function exportarPlanilhaExcel() {
           </div>
 
           <div style="padding: 0.65rem 0.9rem; border-radius: 10px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; font-size: 0.8rem; margin-bottom: 1rem;">
-            🤖 <strong>Seleção Automática Inteligente:</strong> A IA já marcou automaticamente os medicamentos compatíveis que chegaram nesta nota. Revise a seleção abaixo e clique em <strong>"Revisar e Confirmar Chegada"</strong> — nenhum status será alterado sem a sua confirmação.
+            <strong>Seleção Automática Inteligente:</strong> A IA já marcou automaticamente os medicamentos compatíveis que chegaram nesta nota. Revise a seleção abaixo e clique em <strong>"Revisar e Confirmar Chegada"</strong> — nenhum status será alterado sem a sua confirmação.
           </div>
 
           <div class="table-container" style="max-height: 360px; overflow-y: auto;">
@@ -1019,21 +1083,21 @@ function exportarPlanilhaExcel() {
                       class="badge"
                       style="background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; font-size: 0.71rem;"
                     >
-                      ⚠️ Dosagem Divergente
+                      Dosagem Divergente
                     </span>
                     <span
                       v-else-if="it.tipoMatch === 'exato'"
                       class="badge badge-chegou"
                       style="font-size: 0.71rem;"
                     >
-                      ✨ IA {{ Math.round(it.confiancaIa * 100) }}% Exato
+                      IA {{ Math.round(it.confiancaIa * 100) }}% Exato
                     </span>
                     <span
                       v-else-if="it.tipoMatch === 'ia_semantico'"
                       class="badge badge-pedido-feito"
                       style="font-size: 0.71rem;"
                     >
-                      🤖 IA {{ Math.round(it.confiancaIa * 100) }}% Semântico
+                      IA {{ Math.round(it.confiancaIa * 100) }}% Semântico
                     </span>
                     <span
                       v-else-if="it.tipoMatch === 'aproximado'"

@@ -5,6 +5,7 @@ import { useAuthStore } from './stores/auth';
 import { useEncomendasStore } from './stores/encomendas';
 import CookieBanner from './components/CookieBanner.vue';
 import PrimeiroAcessoModal from './components/PrimeiroAcessoModal.vue';
+import AppDialogModal from './components/AppDialogModal.vue';
 import {
   LayoutDashboard,
   PackageOpen,
@@ -326,6 +327,9 @@ async function encerrarSuporteBreakGlass() {
 
   <!-- Banner Global de Cookies & Privacidade LGPD -->
   <CookieBanner />
+
+  <!-- Pop-up Global de Avisos e Confirmações Personalizado -->
+  <AppDialogModal />
 
   <!-- Modal de Confirmação de Saída / Logout Seguro -->
   <transition name="modal-fade">

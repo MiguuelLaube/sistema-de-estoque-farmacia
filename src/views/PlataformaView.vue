@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { useConfirmDialog } from '../composables/useConfirmDialog';
 import type { Tenant, AssinaturaTenant, StatusAssinatura, CicloCobranca, MetodoPagamentoSaaS } from '../types';
 import {
   ShieldCheck,
@@ -42,6 +43,7 @@ import { gerarHtmlEmailCriarSenha } from '../utils/emailTemplates';
 
 const router = useRouter();
 const authStore = useAuthStore();
+const dialog = useConfirmDialog();
 
 const activePlatformTab = ref<'tenants' | 'assinaturas' | 'cores' | 'seguranca' | 'auditoria'>('tenants');
 const feedbackMsg = ref<{ tipo: 'sucesso' | 'erro'; texto: string } | null>(null);
@@ -164,7 +166,14 @@ async function certificarEsteDispositivo() {
 }
 
 async function revogarDispositivoConfiavel(id: string, nome: string) {
-  if (!confirm(`Revogar o certificado de confiança do dispositivo "${nome}"?`)) return;
+  const confirmou = await dialog.confirm({
+    title: 'Revogar Dispositivo',
+    message: `Revogar o certificado de confiança do dispositivo "${nome}"?`,
+    confirmText: 'Revogar',
+    cancelText: 'Cancelar',
+    tipo: 'perigo',
+  });
+  if (!confirmou) return;
   await authStore.revogarDispositivo(id);
   notificar('sucesso', `Dispositivo "${nome}" revogado.`);
 }
@@ -276,9 +285,13 @@ async function gerarNovaSenhaProvisoria(tenant: Tenant) {
     return;
   }
 
-  const confirmar = window.confirm(
-    `Deseja gerar uma NOVA senha provisória para "${tenant.nome_empresa}" (${tenant.email_admin})?\n\nA senha anterior será substituída e a farmácia definirá sua senha definitiva no próximo acesso.`
-  );
+  const confirmar = await dialog.confirm({
+    title: 'Gerar Senha Provisória',
+    message: `Deseja gerar uma NOVA senha provisória para "${tenant.nome_empresa}" (${tenant.email_admin})?\n\nA senha anterior será substituída e a farmácia definirá sua senha definitiva no próximo acesso.`,
+    confirmText: 'Gerar Nova Senha',
+    cancelText: 'Cancelar',
+    tipo: 'aviso',
+  });
   if (!confirmar) return;
 
   const res = await authStore.redefinirSenhaProvisoriaTenant(tenant.id, tenant.email_admin);
@@ -1059,7 +1072,7 @@ function restaurarCoresPadraoSuperAdmin() {
                   "
                   title="Clique para cadastrar o e-mail do administrador desta empresa"
                 >
-                  <span>⚠️ Sem e-mail cadastrado (clique para definir)</span>
+                  <span>Sem e-mail cadastrado (clique para definir)</span>
                 </div>
 
                 <div

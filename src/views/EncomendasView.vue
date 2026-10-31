@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useEncomendasStore } from '../stores/encomendas';
 import { useClientesStore } from '../stores/clientes';
+import { useConfirmDialog } from '../composables/useConfirmDialog';
 import type { Encomenda, StatusEncomenda, Funcionario } from '../types';
 import {
   Package,
@@ -38,6 +39,7 @@ const router = useRouter();
 const authStore = useAuthStore();
 const encomendasStore = useEncomendasStore();
 const clientesStore = useClientesStore();
+const dialog = useConfirmDialog();
 
 // Status Tabs & Filter
 type TabKey = 'Aguardando' | 'Pedido Feito' | 'Chegou' | 'Entregue' | 'Pesquisa';
@@ -201,9 +203,16 @@ function requestTogglePaid(order: Encomenda) {
 }
 
 // Delete Order Click
-function requestDeleteOrder(orderId: string) {
-  if (confirm('Tem certeza que deseja apagar esta encomenda?')) {
-    encomendasStore.removerEncomenda(orderId);
+async function requestDeleteOrder(orderId: string) {
+  const confirmou = await dialog.confirm({
+    title: 'Apagar Encomenda',
+    message: 'Tem certeza que deseja apagar esta encomenda?',
+    confirmText: 'Sim, apagar',
+    cancelText: 'Cancelar',
+    tipo: 'perigo',
+  });
+  if (confirmou) {
+    await encomendasStore.removerEncomenda(orderId);
   }
 }
 
@@ -234,7 +243,11 @@ async function confirmEmployeeAction(employee: Funcionario) {
       funcionarioNome: employee.nome,
     });
     if (!res.sucesso) {
-      alert(res.mensagem || 'Operação bloqueada pelas políticas de alçada da loja.');
+      await dialog.alert({
+        title: 'Operação Bloqueada',
+        message: res.mensagem || 'Operação bloqueada pelas políticas de alçada da loja.',
+        tipo: 'aviso',
+      });
     }
   } else if (type === 'togglePaid' && paidTarget !== undefined) {
     await encomendasStore.alternarPago(orderId, paidTarget, employee.nome);
@@ -286,16 +299,24 @@ function confirmApagarEntregues() {
 }
 
 // Clipboard Actions
-function copyArrivalMessage(order: Encomenda) {
+async function copyArrivalMessage(order: Encomenda) {
   const text = encomendasStore.obterTextoAvisoChegada(order);
-  navigator.clipboard.writeText(text);
-  alert('Mensagem copiada para a área de transferência!');
+  await navigator.clipboard.writeText(text);
+  await dialog.alert({
+    title: 'Texto Copiado',
+    message: 'Mensagem de aviso de chegada copiada para a área de transferência!',
+    tipo: 'sucesso',
+  });
 }
 
-function copyOrderSummary(order: Encomenda) {
+async function copyOrderSummary(order: Encomenda) {
   const text = encomendasStore.obterResumoEncomenda(order);
-  navigator.clipboard.writeText(text);
-  alert('Resumo copiado para a área de transferência!');
+  await navigator.clipboard.writeText(text);
+  await dialog.alert({
+    title: 'Resumo Copiado',
+    message: 'Resumo da encomenda copiado para a área de transferência!',
+    tipo: 'sucesso',
+  });
 }
 // Disparo de qualquer modelo de WhatsApp configurado via API (com fallback wa.me)
 const enviandoAvisoId = ref<string | null>(null);
@@ -309,7 +330,11 @@ async function enviarModeloWhatsappCard(order: Encomenda, modelo: TipoModeloWhat
   const cfg = authStore.currentConfig;
   const cliente = clientesStore.allClientes.find((c) => c.id === order.cliente_id) || order.cliente;
   if (!cliente || !cliente.telefone) {
-    alert('Cliente não possui telefone cadastrado para disparo.');
+    await dialog.alert({
+      title: 'Telefone Ausente',
+      message: 'Cliente não possui telefone cadastrado para disparo.',
+      tipo: 'aviso',
+    });
     return;
   }
 
@@ -338,18 +363,30 @@ async function enviarModeloWhatsappCard(order: Encomenda, modelo: TipoModeloWhat
         entregue: 'Comprovante de entrega',
         personalizado: 'Mensagem',
       };
-      alert(`${titulos[modelo]} enviado com sucesso pela API para ${cliente.nome}!`);
+      await dialog.alert({
+        title: 'Disparo Concluído',
+        message: `${titulos[modelo]} enviado com sucesso pela API para ${cliente.nome}!`,
+        tipo: 'sucesso',
+      });
     } else {
-      const abrirManual = confirm(
-        `Falha no disparo pela API: ${res.mensagem}\n\nDeseja abrir esta mensagem pré-formatada no WhatsApp Web?`
-      );
+      const abrirManual = await dialog.confirm({
+        title: 'Falha no Envio Automático',
+        message: `Falha no disparo pela API: ${res.mensagem}\n\nDeseja abrir esta mensagem pré-formatada no WhatsApp Web?`,
+        confirmText: 'Abrir no WhatsApp',
+        cancelText: 'Cancelar',
+        tipo: 'aviso',
+      });
       if (abrirManual) {
         const link = encomendasStore.gerarLinkWhatsApp(order, modelo);
         if (link) window.open(link, '_blank', 'noopener,noreferrer');
       }
     }
   } catch {
-    alert('Não foi possível conectar ao serviço de mensageria no momento.');
+    await dialog.alert({
+      title: 'Serviço Indisponível',
+      message: 'Não foi possível conectar ao serviço de mensageria no momento.',
+      tipo: 'perigo',
+    });
   } finally {
     enviandoAvisoId.value = null;
   }

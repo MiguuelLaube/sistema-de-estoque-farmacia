@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { useComprasStore } from '../stores/compras';
+import { useConfirmDialog } from '../composables/useConfirmDialog';
 import type { VisualOpcoesTenant } from '../types';
 import {
   Palette,
@@ -61,6 +62,7 @@ import {
 
 const authStore = useAuthStore();
 const comprasStore = useComprasStore();
+const dialog = useConfirmDialog();
 
 const activeConfigTab = ref<'visual' | 'whatsapp' | 'cupom' | 'classificacoes' | 'funcionarios' | 'usuarios' | 'retencao'>('visual');
 const salvando = ref(false);
@@ -479,11 +481,14 @@ async function carregarQrCode() {
 
 async function desconectarContaWhatsApp() {
   const nomeLoja = authStore.currentConfig.header_title || authStore.currentTenant.nome_empresa || 'esta farmácia';
-  if (
-    !confirm(
-      `Deseja realmente desconectar a conta de WhatsApp vinculada à "${nomeLoja}"?\n\nEsta operação desconecta apenas a conta desta drogaria, mantendo as demais empresas 100% isoladas.`
-    )
-  ) {
+  const confirmou = await dialog.confirm({
+    title: 'Desconectar WhatsApp',
+    message: `Deseja realmente desconectar a conta de WhatsApp vinculada à "${nomeLoja}"?\n\nEsta operação desconecta apenas a conta desta drogaria, mantendo as demais empresas 100% isoladas.`,
+    confirmText: 'Desconectar',
+    cancelText: 'Cancelar',
+    tipo: 'perigo',
+  });
+  if (!confirmou) {
     return;
   }
 
@@ -709,7 +714,14 @@ async function adicionarFuncionario() {
 }
 
 async function removerFuncionario(id: string, nome: string) {
-  if (confirm(`Deseja realmente remover o funcionário "${nome}"?`)) {
+  const confirmou = await dialog.confirm({
+    title: 'Remover Funcionário',
+    message: `Deseja realmente remover o funcionário "${nome}"?`,
+    confirmText: 'Remover',
+    cancelText: 'Cancelar',
+    tipo: 'perigo',
+  });
+  if (confirmou) {
     authStore.erroOperacao = null;
     await authStore.removerFuncionario(id);
     if (authStore.erroOperacao) {

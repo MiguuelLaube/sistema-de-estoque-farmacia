@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { useEncomendasStore } from '../stores/encomendas';
 import { useClientesStore } from '../stores/clientes';
+import { useConfirmDialog } from '../composables/useConfirmDialog';
 import {
   DollarSign,
   FileSpreadsheet,
@@ -23,6 +24,7 @@ import { enviarModeloWhatsAppProxy, gerarLinkWaMeComModelo } from '../services/e
 const authStore = useAuthStore();
 const encomendasStore = useEncomendasStore();
 const clientesStore = useClientesStore();
+const dialog = useConfirmDialog();
 
 const activeRelatorioTab = ref<'financeiro' | 'produtos' | 'auditoria'>('financeiro');
 const feedbackExportacao = ref<string | null>(null);
@@ -290,7 +292,11 @@ async function dispararCobrancaWhatsapp(item: {
   resumoItens: string;
 }) {
   if (!item.cliente?.telefone) {
-    alert('Este cliente não possui telefone WhatsApp cadastrado.');
+    await dialog.alert({
+      title: 'Telefone Ausente',
+      message: 'Este cliente não possui telefone WhatsApp cadastrado.',
+      tipo: 'aviso',
+    });
     return;
   }
 
@@ -322,7 +328,13 @@ async function dispararCobrancaWhatsapp(item: {
     if (res.sucesso) {
       mostrarFeedback(`Lembrete de saldo enviado pela API para ${item.cliente.nome}!`);
     } else {
-      const abrirWeb = confirm(`Falha no envio automático (${res.mensagem}). Deseja abrir no WhatsApp Web?`);
+      const abrirWeb = await dialog.confirm({
+        title: 'Falha no Envio Automático',
+        message: `Falha no envio automático (${res.mensagem}). Deseja abrir no WhatsApp Web?`,
+        confirmText: 'Abrir WhatsApp Web',
+        cancelText: 'Cancelar',
+        tipo: 'aviso',
+      });
       if (abrirWeb) {
         const url = gerarLinkWaMeComModelo(item.cliente.telefone, 'cobranca', cfg, variaveis);
         if (url) window.open(url, '_blank', 'noopener,noreferrer');
@@ -373,7 +385,6 @@ async function dispararCobrancaWhatsapp(item: {
       v-if="feedbackExportacao"
       style="margin-bottom: 1.25rem; padding: 0.7rem 1.15rem; border-radius: 9999px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem;"
     >
-      <span>✅</span>
       <span>{{ feedbackExportacao }}</span>
     </div>
 

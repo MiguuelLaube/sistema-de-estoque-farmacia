@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useClientesStore } from '../stores/clientes';
 import { useEncomendasStore } from '../stores/encomendas';
+import { useConfirmDialog } from '../composables/useConfirmDialog';
 import HistoricoClienteModal from '../components/HistoricoClienteModal.vue';
 import type { Cliente } from '../types';
 import {
@@ -29,6 +30,7 @@ const router = useRouter();
 const authStore = useAuthStore();
 const clientesStore = useClientesStore();
 const encomendasStore = useEncomendasStore();
+const dialog = useConfirmDialog();
 
 // UI States
 const buscaTexto = ref('');
@@ -155,7 +157,11 @@ onMounted(() => {
 
 async function salvarCliente() {
   if (!formNome.value.trim() || !formTelefone.value.trim()) {
-    alert('Nome e Telefone são campos obrigatórios.');
+    await dialog.alert({
+      title: 'Campos Obrigatórios',
+      message: 'Nome e Telefone são campos obrigatórios.',
+      tipo: 'aviso',
+    });
     return;
   }
 
@@ -163,13 +169,21 @@ async function salvarCliente() {
 
   const cleanTel = formTelefone.value.replace(/\D/g, '');
   if (cleanTel.length < 10 || cleanTel.length > 11) {
-    alert('Informe um número de telefone/WhatsApp válido com DDD (10 ou 11 dígitos).');
+    await dialog.alert({
+      title: 'Telefone Inválido',
+      message: 'Informe um número de telefone/WhatsApp válido com DDD (10 ou 11 dígitos).',
+      tipo: 'aviso',
+    });
     return;
   }
 
   // BUG-10 FIX: Validação algorítmica dos dígitos verificadores do CPF quando preenchido
   if (formCpf.value.trim() && !clientesStore.validarCPF(formCpf.value)) {
-    alert('O CPF informado é inválido. Verifique os 11 dígitos ou deixe o campo em branco.');
+    await dialog.alert({
+      title: 'CPF Inválido',
+      message: 'O CPF informado é inválido. Verifique os 11 dígitos ou deixe o campo em branco.',
+      tipo: 'aviso',
+    });
     return;
   }
 
@@ -177,7 +191,11 @@ async function salvarCliente() {
     (c) => c.id !== clienteEmEdicao.value?.id && c.telefone.replace(/\D/g, '') === cleanTel
   );
   if (duplicado) {
-    alert(`Não é permitido cadastrar telefones duplicados. Já associado a: ${duplicado.nome}`);
+    await dialog.alert({
+      title: 'Telefone Duplicado',
+      message: `Não é permitido cadastrar telefones duplicados. Já associado a: ${duplicado.nome}`,
+      tipo: 'aviso',
+    });
     return;
   }
 
@@ -190,7 +208,11 @@ async function salvarCliente() {
         endereco: formEndereco.value.trim() || undefined,
       });
       if (!ok) {
-        alert(clientesStore.erroOperacao || 'Não foi possível atualizar o cliente.');
+        await dialog.alert({
+          title: 'Erro ao Atualizar',
+          message: clientesStore.erroOperacao || 'Não foi possível atualizar o cliente.',
+          tipo: 'perigo',
+        });
         return;
       }
     } else {
@@ -203,7 +225,11 @@ async function salvarCliente() {
       });
     }
   } catch (err: any) {
-    alert(err?.message || 'Não foi possível salvar o cliente.');
+    await dialog.alert({
+      title: 'Erro ao Gravar',
+      message: err?.message || 'Não foi possível salvar o cliente.',
+      tipo: 'perigo',
+    });
     return;
   }
 
@@ -211,9 +237,22 @@ async function salvarCliente() {
 }
 
 async function removerCliente(c: Cliente) {
-  if (confirm(`Deseja arquivar o cliente "${c.nome}"?\n\n(Para exercer o direito de esquecimento/anonimização conforme a LGPD, abra a edição do cliente e clique em "Anonimizar Titular")`)) {
+  const confirmou = await dialog.confirm({
+    title: 'Arquivar Cliente',
+    message: `Deseja arquivar o cliente "${c.nome}"?\n\n(Para exercer o direito de esquecimento/anonimização conforme a LGPD, abra a edição do cliente e clique em "Anonimizar Titular")`,
+    confirmText: 'Arquivar',
+    cancelText: 'Cancelar',
+    tipo: 'aviso',
+  });
+  if (confirmou) {
     const ok = await clientesStore.arquivarCliente(c.id);
-    if (!ok) alert(clientesStore.erroOperacao || 'Não foi possível arquivar o cliente.');
+    if (!ok) {
+      await dialog.alert({
+        title: 'Erro ao Arquivar',
+        message: clientesStore.erroOperacao || 'Não foi possível arquivar o cliente.',
+        tipo: 'perigo',
+      });
+    }
   }
 }
 
@@ -234,13 +273,21 @@ async function exportarDados(c: Cliente) {
 
 // LGPD Art. 18, IV e VI: Eliminação e anonimização irreversível
 async function anonimizarTitular(c: Cliente) {
-  const confirmacao = confirm(
-    `ATENÇÃO - AÇÃO IRREVERSÍVEL (LGPD Art. 18):\n\nConfirma a anonimização dos dados de "${c.nome}"?\n\nO nome, telefone, CPF e endereço serão apagados e substituídos por dados anônimos, preservando o histórico de encomendas.`
-  );
+  const confirmacao = await dialog.confirm({
+    title: 'Anonimização de Titular (LGPD)',
+    message: `ATENÇÃO - AÇÃO IRREVERSÍVEL (LGPD Art. 18):\n\nConfirma a anonimização dos dados de "${c.nome}"?\n\nO nome, telefone, CPF e endereço serão apagados e substituídos por dados anônimos, preservando o histórico de encomendas.`,
+    confirmText: 'Sim, Anonimizar Titular',
+    cancelText: 'Cancelar',
+    tipo: 'perigo',
+  });
   if (confirmacao) {
     const ok = await clientesStore.anonimizarCliente(c.id);
     if (!ok) {
-      alert(clientesStore.erroOperacao || 'Não foi possível anonimizar o titular.');
+      await dialog.alert({
+        title: 'Erro de Anonimização',
+        message: clientesStore.erroOperacao || 'Não foi possível anonimizar o titular.',
+        tipo: 'perigo',
+      });
       return;
     }
     showClienteModal.value = false;

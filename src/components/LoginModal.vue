@@ -2,6 +2,7 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { useConfirmDialog } from '../composables/useConfirmDialog';
 import {
   Lock,
   Mail,
@@ -33,6 +34,7 @@ const emit = defineEmits<{
 
 const router = useRouter();
 const authStore = useAuthStore();
+const dialog = useConfirmDialog();
 
 // Formulário de Login
 const email = ref('');
@@ -187,9 +189,13 @@ function abrirWhatsAppComercial() {
   window.open(`https://wa.me/5511999999999?text=${mensagem}`, '_blank', 'noopener,noreferrer');
 }
 
-function enviarSolicitacaoContato() {
+async function enviarSolicitacaoContato() {
   if (!contatoNomeFarmacia.value.trim() || !contatoTelefone.value.trim()) {
-    alert('Por favor, preencha o nome da drogaria e o telefone para contato.');
+    await dialog.alert({
+      title: 'Campos Obrigatórios',
+      message: 'Por favor, preencha o nome da drogaria e o telefone para contato.',
+      tipo: 'aviso',
+    });
     return;
   }
   contatoEnviadoSucesso.value = true;

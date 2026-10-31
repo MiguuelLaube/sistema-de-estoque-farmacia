@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useEncomendasStore } from '../stores/encomendas';
 import { useClientesStore } from '../stores/clientes';
+import { useConfirmDialog } from '../composables/useConfirmDialog';
 import {
   PackageOpen,
   Clock,
@@ -21,6 +22,7 @@ const router = useRouter();
 const authStore = useAuthStore();
 const encomendasStore = useEncomendasStore();
 const clientesStore = useClientesStore();
+const dialog = useConfirmDialog();
 
 const metricas = computed(() => encomendasStore.metricas);
 const totalClientes = computed(() => clientesStore.currentTenantClientes.length);
@@ -56,7 +58,11 @@ async function dispararAvisoBot(enc: any) {
   const cfg = authStore.currentConfig;
   const cliente = clientesStore.allClientes.find((c) => c.id === enc.cliente_id) || enc.cliente;
   if (!cliente || !cliente.telefone) {
-    alert('Cliente não possui telefone cadastrado.');
+    await dialog.alert({
+      title: 'Telefone Ausente',
+      message: 'Cliente não possui telefone cadastrado.',
+      tipo: 'aviso',
+    });
     return;
   }
 
@@ -75,14 +81,26 @@ async function dispararAvisoBot(enc: any) {
     const res = await encomendasStore.dispararNotificacaoModeloEvolution(enc, 'chegada', true);
 
     if (res.sucesso) {
-      alert(`✅ Mensagem de chegada enviada com sucesso pela API para ${cliente.nome}!`);
+      await dialog.alert({
+        title: 'Aviso Enviado',
+        message: `Mensagem de chegada enviada com sucesso pela API para ${cliente.nome}!`,
+        tipo: 'sucesso',
+      });
     } else {
-      alert(`❌ Falha no disparo automático: ${res.mensagem}\nAbrindo modelo configurado no WhatsApp Web.`);
+      await dialog.alert({
+        title: 'Falha no Disparo Automático',
+        message: `Falha no disparo automático: ${res.mensagem}\nAbrindo modelo configurado no WhatsApp Web.`,
+        tipo: 'aviso',
+      });
       const url = encomendasStore.gerarLinkWhatsApp(enc, 'chegada');
       if (url) window.open(url, '_blank', 'noopener,noreferrer');
     }
   } catch {
-    alert('Não foi possível conectar ao serviço de mensageria no momento.');
+    await dialog.alert({
+      title: 'Serviço Indisponível',
+      message: 'Não foi possível conectar ao serviço de mensageria no momento.',
+      tipo: 'perigo',
+    });
   } finally {
     enviandoAvisoId.value = null;
   }

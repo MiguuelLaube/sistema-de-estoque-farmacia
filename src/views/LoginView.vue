@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { useConfirmDialog } from '../composables/useConfirmDialog';
 import { supabase } from '../services/supabase';
 import {
   Lock,
@@ -23,6 +24,7 @@ import {
 
 const router = useRouter();
 const authStore = useAuthStore();
+const dialog = useConfirmDialog();
 
 const emailConviteModo = ref('');
 
@@ -166,9 +168,13 @@ function abrirWhatsAppComercial() {
   window.open(`https://wa.me/5511999999999?text=${mensagem}`, '_blank', 'noopener,noreferrer');
 }
 
-function enviarSolicitacaoContato() {
+async function enviarSolicitacaoContato() {
   if (!contatoNomeFarmacia.value.trim() || !contatoTelefone.value.trim()) {
-    alert('Por favor, preencha o nome da farmácia e o telefone para contato.');
+    await dialog.alert({
+      title: 'Campos Obrigatórios',
+      message: 'Por favor, preencha o nome da farmácia e o telefone para contato.',
+      tipo: 'aviso',
+    });
     return;
   }
   contatoEnviadoSucesso.value = true;
@@ -231,7 +237,7 @@ function fecharModalContato() {
       <!-- FLUXO 1: REDEFINIÇÃO DE SENHA VIA LINK DE RECUPERAÇÃO / CONVITE -->
       <form v-if="authStore.passwordRecoveryMode" @submit.prevent="handleRedefinirSenha" class="login-form-body">
         <div v-if="emailConviteModo" style="padding: 0.75rem 1rem; border-radius: 12px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; font-size: 0.82rem; line-height: 1.45;">
-          👋 <strong>Primeiro Acesso Farmácia:</strong> Crie sua senha de administrador para a conta <strong>{{ emailConviteModo }}</strong>.
+          <strong>Primeiro Acesso Farmácia:</strong> Crie sua senha de administrador para a conta <strong>{{ emailConviteModo }}</strong>.
         </div>
 
         <div class="form-field-group">

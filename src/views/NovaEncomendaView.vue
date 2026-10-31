@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth';
 import { useEncomendasStore } from '../stores/encomendas';
 import { useClientesStore } from '../stores/clientes';
 import { useMedicamentosMemoriaStore } from '../stores/medicamentosMemoria';
+import { useConfirmDialog } from '../composables/useConfirmDialog';
 import type { Funcionario, Cliente } from '../types';
 import {
   Package,
@@ -23,6 +24,7 @@ const authStore = useAuthStore();
 const encomendasStore = useEncomendasStore();
 const clientesStore = useClientesStore();
 const memoriaStore = useMedicamentosMemoriaStore();
+const dialog = useConfirmDialog();
 
 // Form State
 const selectedClientId = ref<string>('');
@@ -285,11 +287,13 @@ async function confirmCreateOrder(employee: Funcionario) {
     router.push('/encomendas');
   } catch (err) {
     console.error('Erro ao processar nova encomenda:', err);
-    alert(
-      (err as any)?.message
+    await dialog.alert({
+      title: 'Erro ao Gravar Encomenda',
+      message: (err as any)?.message
         ? `Erro ao registrar encomenda: ${(err as any).message}`
-        : 'Erro ao registrar encomenda. Por favor, verifique a conexão e tente novamente.'
-    );
+        : 'Erro ao registrar encomenda. Por favor, verifique a conexão e tente novamente.',
+      tipo: 'perigo',
+    });
   } finally {
     isCreating.value = false;
   }
@@ -356,7 +360,7 @@ onBeforeUnmount(() => {
           v-if="formErrorMsg"
           style="padding: 0.75rem 1rem; border-radius: 12px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: 0.84rem; font-weight: 600;"
         >
-          ⚠️ {{ formErrorMsg }}
+          {{ formErrorMsg }}
         </div>
 
         <!-- FIELD: Cliente -->
