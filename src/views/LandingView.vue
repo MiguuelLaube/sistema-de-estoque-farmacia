@@ -2059,8 +2059,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  position: relative;
+  min-height: 48px;
   cursor: pointer;
   user-select: none;
   transition: background 0.2s ease, border-radius 0.3s ease;
@@ -2078,6 +2078,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 7px;
+  z-index: 2;
 }
 
 .w-dot {
@@ -2100,9 +2101,16 @@ onBeforeUnmount(() => {
 .dot-green { background: #10b981; }
 
 .window-brand-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.55rem;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .window-brand-title {
@@ -2126,6 +2134,14 @@ onBeforeUnmount(() => {
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
+  z-index: 2;
+}
+
+@media (max-width: 540px) {
+  .window-brand-center {
+    position: static;
+    transform: none;
+  }
 }
 
 .window-drawer-toggle-btn:hover {
