@@ -338,10 +338,10 @@ async function enviarModeloWhatsappCard(order: Encomenda, modelo: TipoModeloWhat
         entregue: 'Comprovante de entrega',
         personalizado: 'Mensagem',
       };
-      alert(`✅ ${titulos[modelo]} enviado com sucesso pela API para ${cliente.nome}!`);
+      alert(`${titulos[modelo]} enviado com sucesso pela API para ${cliente.nome}!`);
     } else {
       const abrirManual = confirm(
-        `❌ Falha no disparo pela API: ${res.mensagem}\n\nDeseja abrir esta mensagem pré-formatada no WhatsApp Web?`
+        `Falha no disparo pela API: ${res.mensagem}\n\nDeseja abrir esta mensagem pré-formatada no WhatsApp Web?`
       );
       if (abrirManual) {
         const link = encomendasStore.gerarLinkWhatsApp(order, modelo);
@@ -897,130 +897,167 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
             </div>
           </div>
 
-          <!-- CARD DE IDENTIFICAÇÃO DE AVISO AO CLIENTE (STATUS CHEGOU) -->
+          <!-- BLOCO MINIMALISTA DE NOTIFICAÇÕES (STATUS CHEGOU & COBRANÇA) -->
           <div
-            v-if="order.status === 'Chegou'"
-            :style="{
-              background: order.cliente_avisado ? '#ecfdf5' : '#fffbeb',
-              borderColor: order.cliente_avisado ? '#a7f3d0' : '#fde68a',
-            }"
+            v-if="order.status === 'Chegou' || (order.valor_total > order.valor_pago && order.status === 'Entregue')"
             style="
+              background: #f8fafc;
+              border: 1px solid var(--border-color);
+              border-radius: 12px;
+              padding: 0.6rem 0.75rem;
+              margin-top: 0.25rem;
               display: flex;
               flex-direction: column;
-              gap: 0.65rem;
-              border: 1px solid;
-              border-radius: 10px;
-              padding: 0.75rem 0.85rem;
-              margin-top: 0.25rem;
+              gap: 0.5rem;
               transition: all 0.2s ease;
             "
             :id="'card-aviso-chegada-' + order.id"
           >
-            <!-- Topo do Card de Aviso: Status e Tag -->
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
-              <div style="display: flex; align-items: center; gap: 0.45rem;">
-                <div
-                  :style="{
-                    background: order.cliente_avisado ? '#10b981' : '#f59e0b',
-                    color: '#ffffff',
-                  }"
-                  style="
-                    width: 22px;
-                    height: 22px;
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    flex-shrink: 0;
-                  "
-                >
-                  <Check v-if="order.cliente_avisado" :size="13" />
-                  <AlertTriangle v-else :size="13" />
+            <!-- OPÇÃO 1: AVISO DE RETIRADA / CHEGADA (quando status === 'Chegou') -->
+            <div v-if="order.status === 'Chegou'">
+              <!-- Status do Aviso de Chegada -->
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; margin-bottom: 0.35rem;">
+                <div style="display: flex; align-items: center; gap: 0.4rem; min-width: 0; flex-wrap: wrap;">
+                  <span
+                    class="badge"
+                    :style="{
+                      background: order.cliente_avisado ? '#ecfdf5' : '#fffbeb',
+                      color: order.cliente_avisado ? '#065f46' : '#92400e',
+                      borderColor: order.cliente_avisado ? '#a7f3d0' : '#fde68a',
+                    }"
+                    style="
+                      display: inline-flex;
+                      align-items: center;
+                      gap: 4px;
+                      font-size: 0.72rem;
+                      font-weight: 700;
+                      padding: 2px 8px;
+                      border-radius: 9999px;
+                      border: 1px solid;
+                    "
+                  >
+                    <Check v-if="order.cliente_avisado" :size="12" style="color: #059669;" />
+                    <Clock v-else :size="12" style="color: #d97706;" />
+                    <span>{{ order.cliente_avisado ? 'Avisado da Chegada' : 'Aguardando Aviso' }}</span>
+                  </span>
+
+                  <span
+                    v-if="order.cliente_avisado && order.cliente_avisado_em"
+                    style="font-size: 0.69rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                    :title="order.cliente_avisado_por ? `Avisado por ${order.cliente_avisado_por}` : ''"
+                  >
+                    {{ formatHistoryDate(order.cliente_avisado_em) }}
+                  </span>
                 </div>
 
-                <div>
-                  <div
-                    :style="{
-                      color: order.cliente_avisado ? '#065f46' : '#92400e',
-                    }"
-                    style="font-size: 0.82rem; font-weight: 700; line-height: 1.2;"
-                  >
-                    {{ order.cliente_avisado ? 'Cliente já avisado da chegada' : 'Cliente AINDA NÃO foi avisado!' }}
-                  </div>
-                  <div
-                    v-if="order.cliente_avisado && order.cliente_avisado_em"
-                    style="font-size: 0.72rem; color: #047857; margin-top: 1px;"
-                  >
-                    Avisado {{ formatHistoryDate(order.cliente_avisado_em) }}
-                    <span v-if="order.cliente_avisado_por"> por {{ order.cliente_avisado_por }}</span>
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  @click="alternarAvisado(order)"
+                  style="
+                    background: none;
+                    border: none;
+                    padding: 0;
+                    font-size: 0.7rem;
+                    color: #64748b;
+                    cursor: pointer;
+                    text-decoration: underline;
+                    text-underline-offset: 2px;
+                    white-space: nowrap;
+                  "
+                  onmouseover="this.style.color='#0f172a'"
+                  onmouseout="this.style.color='#64748b'"
+                  :title="order.cliente_avisado ? 'Marcar que o cliente ainda não foi avisado' : 'Marcar como já avisado manualmente'"
+                >
+                  {{ order.cliente_avisado ? 'Desmarcar' : 'Marcar' }}
+                </button>
               </div>
 
-              <!-- Botão de alternar manualmente com clique -->
-              <button
-                type="button"
-                @click="alternarAvisado(order)"
-                :style="{
-                  background: order.cliente_avisado ? '#d1fae5' : '#fef3c7',
-                  color: order.cliente_avisado ? '#065f46' : '#b45309',
-                  borderColor: order.cliente_avisado ? '#6ee7b7' : '#fcd34d',
-                }"
-                style="
-                  border: 1px solid;
-                  border-radius: 9999px;
-                  padding: 2px 8px;
-                  font-size: 0.7rem;
-                  font-weight: 600;
-                  cursor: pointer;
-                  white-space: nowrap;
-                "
-                title="Alternar estado de aviso do cliente"
-              >
-                {{ order.cliente_avisado ? 'Desmarcar' : 'Marcar como avisado' }}
-              </button>
+              <!-- Ações da Opção 1: Avisar Chegada / Copiar -->
+              <div style="display: grid; grid-template-columns: 1fr auto; gap: 0.4rem;">
+                <button
+                  type="button"
+                  @click="enviarAvisoWhatsappRobo(order)"
+                  :disabled="enviandoAvisoId === order.id + '-chegada'"
+                  class="btn-primary-pill"
+                  style="
+                    justify-content: center;
+                    padding: 0.36rem 0.65rem;
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                    background: #059669;
+                    border-color: #059669;
+                  "
+                  :title="authStore.currentConfig.evolution_api_ativo ? 'Disparar WhatsApp pelo Robô informando que o pedido chegou' : 'Abrir conversa no WhatsApp informando que o pedido chegou'"
+                >
+                  <Loader2 v-if="enviandoAvisoId === order.id + '-chegada'" class="animate-spin" :size="13" />
+                  <Send v-else :size="13" />
+                  <span>{{ enviandoAvisoId === order.id + '-chegada' ? 'Disparando...' : (order.cliente_avisado ? 'Reenviar Chegada' : 'Avisar Chegada no Zap') }}</span>
+                </button>
+
+                <button
+                  type="button"
+                  @click="copyArrivalMessage(order)"
+                  class="btn-outline-neutral"
+                  style="
+                    padding: 0.36rem 0.65rem;
+                    font-size: 0.75rem;
+                    background: #ffffff;
+                    border-radius: 9999px;
+                  "
+                  title="Copiar texto padrão de notificação de chegada"
+                >
+                  <Copy :size="13" />
+                  <span>Copiar</span>
+                </button>
+              </div>
             </div>
 
-            <!-- Botões de Ação Rápida de Notificação -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem;">
+            <!-- OPÇÃO 2: LEMBRETE DE SALDO RESTANTE (quando houver saldo pendente) -->
+            <div
+              v-if="order.valor_total > order.valor_pago"
+              :style="{
+                borderTop: order.status === 'Chegou' ? '1px dashed #e2e8f0' : 'none',
+                paddingTop: order.status === 'Chegou' ? '0.45rem' : '0',
+              }"
+            >
               <button
                 type="button"
-                @click="enviarAvisoWhatsappRobo(order)"
-                :disabled="enviandoAvisoId === order.id + '-chegada'"
-                class="btn-primary-pill"
-                style="
-                  justify-content: center;
-                  padding: 0.35rem 0.65rem;
-                  font-size: 0.75rem;
-                  background: #10b981;
-                  box-shadow: none;
-                "
-                :title="authStore.currentConfig.evolution_api_ativo ? 'Disparar modelo de chegada via API' : 'Abrir conversa no WhatsApp Web'"
-              >
-                <Loader2 v-if="enviandoAvisoId === order.id + '-chegada'" class="animate-spin" :size="13" />
-                <Send v-else :size="13" />
-                <span>{{ enviandoAvisoId === order.id + '-chegada' ? 'Disparando...' : 'Avisar no Zap' }}</span>
-              </button>
-
-              <button
-                type="button"
-                @click="copyArrivalMessage(order)"
+                @click="enviarModeloWhatsappCard(order, 'cobranca')"
+                :disabled="enviandoAvisoId === order.id + '-cobranca'"
                 class="btn-outline-neutral"
                 style="
-                  justify-content: center;
-                  padding: 0.35rem 0.65rem;
+                  width: 100%;
+                  padding: 0.36rem 0.75rem;
                   font-size: 0.75rem;
-                  background: #ffffff;
+                  font-weight: 600;
+                  justify-content: center;
+                  border-radius: 9999px;
+                  border-color: #fde68a;
+                  background: #fffbeb;
+                  color: #92400e;
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 0.35rem;
+                  transition: all 0.15s ease;
                 "
-                title="Copiar texto padrão de notificação de chegada"
+                onmouseover="this.style.background='#fef3c7'"
+                onmouseout="this.style.background='#fffbeb'"
+                :title="`Enviar lembrete amigável no WhatsApp sobre o saldo restante de R$ ${(order.valor_total - order.valor_pago).toFixed(2).replace('.', ',')}`"
               >
-                <Copy :size="13" />
-                <span>Copiar Texto</span>
+                <Loader2 v-if="enviandoAvisoId === order.id + '-cobranca'" class="animate-spin" :size="12" />
+                <DollarSign v-else :size="12" />
+                <span>
+                  {{
+                    enviandoAvisoId === order.id + '-cobranca'
+                      ? 'Enviando lembrete...'
+                      : `Cobrar Saldo: R$ ${(order.valor_total - order.valor_pago).toFixed(2).replace('.', ',')}`
+                  }}
+                </span>
               </button>
             </div>
           </div>
 
-          <!-- Bottom Action Buttons: Modelos WhatsApp, Imprimir Cupom & Trash Delete -->
+          <!-- Bottom Action Buttons: Modelos WhatsApp (Aguardando/Pedido), Imprimir Cupom & Trash Delete -->
           <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.35rem; padding-top: 0.65rem; border-top: 1px solid #f1f5f9;">
             <div
               v-if="order.status === 'Aguardando' || order.status === 'Pedido Feito'"
@@ -1051,20 +1088,6 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
               </button>
             </div>
 
-            <button
-              v-if="order.valor_total > order.valor_pago && (order.status === 'Chegou' || order.status === 'Entregue')"
-              type="button"
-              @click="enviarModeloWhatsappCard(order, 'cobranca')"
-              :disabled="enviandoAvisoId === order.id + '-cobranca'"
-              class="btn-outline-neutral"
-              style="width: 100%; height: 33px; padding: 0 0.65rem; font-size: 0.74rem; justify-content: center; border-color: #fde68a; background: #fffbeb; color: #b45309;"
-              title="Enviar modelo de Lembrete e Saldo a Acertar no WhatsApp"
-            >
-              <Loader2 v-if="enviandoAvisoId === order.id + '-cobranca'" class="animate-spin" :size="12" />
-              <DollarSign v-else :size="12" />
-              <span>{{ enviandoAvisoId === order.id + '-cobranca' ? 'Enviando lembrete...' : 'Enviar Lembrete de Saldo no Zap' }}</span>
-            </button>
-
             <div style="display: flex; gap: 0.5rem; width: 100%;">
               <button
                 type="button"
@@ -1073,7 +1096,7 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
                 style="
                   flex: 1;
                   height: 36px;
-                  border-radius: 8px;
+                  border-radius: 9999px;
                   border: 1px solid #bfdbfe;
                   background: #ffffff;
                   color: #2563eb;
@@ -1101,7 +1124,7 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
                 style="
                   width: 42px;
                   height: 36px;
-                  border-radius: 8px;
+                  border-radius: 9999px;
                   border: 1px solid #fecaca;
                   background: #ffffff;
                   color: #ef4444;
