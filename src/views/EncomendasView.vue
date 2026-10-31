@@ -808,25 +808,45 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
             </div>
           </div>
 
-          <!-- Direct Status Selector Pills (Aguardando / Pedido Feito / Chegou / Entregue) -->
-          <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;">
+          <!-- Seletor Reto e Centralizado de Status da Encomenda (Grid 4 Colunas 100% Alinhado) -->
+          <div
+            style="
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 4px;
+              width: 100%;
+              margin-top: 4px;
+              box-sizing: border-box;
+            "
+          >
             <button
               v-for="st in (['Aguardando', 'Pedido Feito', 'Chegou', 'Entregue'] as StatusEncomenda[])"
               :key="st"
+              type="button"
               @click="requestStatusChange(order.id, st)"
               :style="{
-                background: order.status === st ? '#2563eb' : '#ffffff',
-                color: order.status === st ? '#ffffff' : '#64748b',
-                borderColor: order.status === st ? '#2563eb' : '#e2e8f0',
-                fontWeight: order.status === st ? 600 : 500,
+                background: order.status === st ? 'var(--color-primary, #2563eb)' : '#ffffff',
+                color: order.status === st ? '#ffffff' : '#475569',
+                borderColor: order.status === st ? 'var(--color-primary, #2563eb)' : '#cbd5e1',
+                fontWeight: order.status === st ? 700 : 600,
+                boxShadow: order.status === st ? '0 1px 3px rgba(37,99,235,0.2)' : 'none',
               }"
               style="
-                padding: 0.25rem 0.6rem;
+                width: 100%;
+                height: 32px;
+                padding: 0 2px;
                 border-radius: 8px;
                 border: 1px solid;
-                font-size: 0.74rem;
+                font-size: 0.72rem;
                 cursor: pointer;
                 transition: all 0.15s ease;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                white-space: nowrap;
+                letter-spacing: -0.01em;
+                box-sizing: border-box;
               "
               :id="'btn-status-' + st.replace(' ', '-').toLowerCase() + '-' + order.id"
             >
@@ -1174,7 +1194,7 @@ async function enviarAvisoWhatsappRobo(order: Encomenda) {
             margin-bottom: 0.75rem;
           "
         >
-          <span>✅</span>
+          <CheckCircle2 :size="16" style="color: #059669; flex-shrink: 0;" />
           <span>Ao marcar como "Entregue", a encomenda é automaticamente quitada e registrada como paga.</span>
         </div>
 
