@@ -1907,6 +1907,13 @@ onBeforeUnmount(() => {
   font-size: 0.78rem;
   font-weight: 600;
   color: #334155;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.highlight-chip:hover {
+  transform: translateY(-2px);
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.05);
 }
 
 /* ====================================================================
@@ -3203,14 +3210,17 @@ onBeforeUnmount(() => {
   padding: 1.65rem;
   display: flex;
   flex-direction: column;
-  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.25s ease;
 }
 
 .feature-mod-card:hover {
-  transform: translateY(-4px);
+  transform: translateY(-5px);
   background: #ffffff;
   border-color: #cbd5e1;
-  box-shadow: 0 14px 28px -8px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 16px 32px -8px rgba(15, 23, 42, 0.08), 0 4px 10px -2px rgba(15, 23, 42, 0.04);
 }
 
 .mod-icon-wrap {
@@ -3221,6 +3231,12 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   margin-bottom: 1rem;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+}
+
+.feature-mod-card:hover .mod-icon-wrap {
+  transform: scale(1.1) translateY(-2px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
 }
 
 .mod-title {
@@ -3289,11 +3305,15 @@ onBeforeUnmount(() => {
   border: 1px solid #e2e8f0;
   border-radius: 16px;
   padding: 1.65rem;
-  transition: transform 0.2s ease;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .step-card-item:hover {
-  transform: translateY(-3px);
+  transform: translateY(-5px);
+  border-color: #cbd5e1;
+  box-shadow: 0 16px 32px -8px rgba(15, 23, 42, 0.08), 0 4px 10px -2px rgba(15, 23, 42, 0.04);
 }
 
 .step-badge-number {
@@ -3310,6 +3330,17 @@ onBeforeUnmount(() => {
   font-weight: 800;
   margin-bottom: 0.9rem;
   border: 1px solid #bfdbfe;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.2s ease,
+              color 0.2s ease,
+              border-color 0.2s ease;
+}
+
+.step-card-item:hover .step-badge-number {
+  transform: scale(1.12);
+  background-color: #2563eb;
+  color: #ffffff;
+  border-color: #1d4ed8;
 }
 
 .step-heading {
@@ -3333,20 +3364,42 @@ onBeforeUnmount(() => {
 }
 
 .pillar-box {
-  padding: 1.5rem;
-  border-radius: 16px;
+  padding: 1.65rem 1.5rem;
+  border-radius: 18px;
   border: 1px solid #e2e8f0;
   background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.25s ease;
+  cursor: default;
+}
+
+.pillar-box:hover {
+  transform: translateY(-5px);
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 16px 32px -8px rgba(15, 23, 42, 0.08), 0 4px 10px -2px rgba(15, 23, 42, 0.04);
 }
 
 .pillar-icon-box {
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 1rem;
+  margin-bottom: 1.15rem;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.25s ease,
+              background-color 0.25s ease;
+}
+
+.pillar-box:hover .pillar-icon-box {
+  transform: scale(1.1) translateY(-2px);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
 }
 
 .bg-emerald-tint { background-color: #ecfdf5; }
@@ -3357,6 +3410,39 @@ onBeforeUnmount(() => {
 .text-purple { color: #7c3aed; }
 .bg-slate-tint { background-color: #e2e8f0; }
 .text-slate { color: #334155; }
+
+/* Destaque semântico individual no hover de cada card da seção de segurança */
+.pillar-box:nth-child(1):hover {
+  border-color: #a7f3d0;
+  box-shadow: 0 16px 32px -8px rgba(16, 185, 129, 0.14), 0 4px 10px -2px rgba(15, 23, 42, 0.04);
+}
+.pillar-box:nth-child(1):hover .pillar-icon-box {
+  background-color: #d1fae5;
+}
+
+.pillar-box:nth-child(2):hover {
+  border-color: #bfdbfe;
+  box-shadow: 0 16px 32px -8px rgba(37, 99, 235, 0.14), 0 4px 10px -2px rgba(15, 23, 42, 0.04);
+}
+.pillar-box:nth-child(2):hover .pillar-icon-box {
+  background-color: #dbeafe;
+}
+
+.pillar-box:nth-child(3):hover {
+  border-color: #ddd6fe;
+  box-shadow: 0 16px 32px -8px rgba(124, 58, 237, 0.14), 0 4px 10px -2px rgba(15, 23, 42, 0.04);
+}
+.pillar-box:nth-child(3):hover .pillar-icon-box {
+  background-color: #ede9fe;
+}
+
+.pillar-box:nth-child(4):hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 16px 32px -8px rgba(71, 85, 105, 0.14), 0 4px 10px -2px rgba(15, 23, 42, 0.04);
+}
+.pillar-box:nth-child(4):hover .pillar-icon-box {
+  background-color: #f1f5f9;
+}
 
 .pillar-box-h3 {
   font-size: 1rem;
